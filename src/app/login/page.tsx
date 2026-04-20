@@ -1,371 +1,208 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ShieldCheck,
-  Sparkles,
-  Lock,
-  Mail,
-  ArrowRight,
-  AlertCircle,
-  Loader2,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-} from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, Loader2, Building2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-
   const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
-  const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [lembrarEmail, setLembrarEmail] = useState(true);
-  const [capsLockAtivo, setCapsLockAtivo] = useState(false);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [campoTocado, setCampoTocado] = useState({
-    email: false,
-    senha: false,
-  });
-
-  useEffect(() => {
-    const emailSalvo = localStorage.getItem("docqualis_remember_email");
-    if (emailSalvo) {
-      setEmail(emailSalvo);
-      setLembrarEmail(true);
-    }
-  }, []);
-
-  const emailValido = useMemo(() => {
-    return /\S+@\S+\.\S+/.test(email);
-  }, [email]);
-
-  const senhaValida = useMemo(() => {
-    return senha.trim().length >= 6;
-  }, [senha]);
-
-  const formularioValido = emailValido && senhaValida;
-
-  const emailInvalido = campoTocado.email && email.length > 0 && !emailValido;
-  const senhaInvalida = campoTocado.senha && senha.length > 0 && !senhaValida;
-
-  const handleKeyState = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    setCapsLockAtivo(e.getModifierState("CapsLock"));
-  };
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErro(null);
-
-    setCampoTocado({
-      email: true,
-      senha: true,
-    });
-
-    if (!email || !senha) {
-      setErro("Por favor, preencha seu e-mail e senha para continuar.");
-      return;
-    }
-
-    if (!emailValido) {
-      setErro("Digite um e-mail válido.");
-      return;
-    }
-
-    if (!senhaValida) {
-      setErro("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    setIsLoading(true);
+    setLoading(true);
+    setError(null);
 
     try {
-      // CORREÇÃO: "as any" para evitar erro de build na Vercel com o Supabase Auth
-      const { data, error } = await (supabase.auth as any).signInWithPassword({
-        email: email.trim(),
-        password: senha,
+      // 1. Autenticação no Supabase
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      if (error) {
-        throw new Error("Credenciais inválidas. Verifique seu e-mail e senha.");
+      if (authError) {
+        throw new Error("E-mail ou senha incorretos.");
       }
 
-      if (lembrarEmail) {
-        localStorage.setItem("docqualis_remember_email", email.trim());
-      } else {
-        localStorage.removeItem("docqualis_remember_email");
-      }
-
-      if (data.user) {
+      if (data.session) {
+        // 2. Login de sucesso! Redireciona para o Painel Executivo
         router.push("/");
       }
     } catch (err: any) {
-      setErro(err?.message || "Não foi possível entrar no sistema.");
+      setError(err.message || "Ocorreu um erro ao tentar acessar.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-slate-50 animate-in fade-in duration-700">
-      {/* LADO ESQUERDO */}
-      <div className="hidden lg:flex w-1/2 bg-slate-900 relative overflow-hidden flex-col justify-between p-12">
-        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[100px] rounded-full pointer-events-none" />
-
-        <div className="relative z-10 flex items-center gap-3 text-white">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <span className="font-black text-2xl tracking-tight">
-            DocQualis<span className="text-blue-500">.</span>
-          </span>
+    <div className="min-h-screen flex font-sans bg-white">
+      
+      {/* LADO ESQUERDO - BRANDING (Visual SaaS) */}
+      <div className="hidden lg:flex w-1/2 bg-[#0f172a] relative flex-col justify-between overflow-hidden">
+        {/* Efeito de brilho no fundo */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
+          <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-[#2655e8]/20 blur-[120px]"></div>
+          <div className="absolute bottom-[10%] -right-[20%] w-[60%] h-[60%] rounded-full bg-indigo-500/20 blur-[100px]"></div>
         </div>
 
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 backdrop-blur-sm mb-6">
-            <CheckCircle2 className="w-4 h-4 text-blue-400" />
-            Plataforma Inteligente de Gestão da Qualidade
-          </div>
-
-          <h1 className="text-4xl font-black text-white leading-tight mb-6">
-            A evolução da Gestão da Qualidade na Saúde.
-          </h1>
-
-          <p className="text-lg text-slate-400 font-medium max-w-md leading-relaxed mb-12">
-            Controle de documentos, riscos, indicadores e melhoria contínua em
-            uma plataforma robusta, segura e aderente às melhores práticas de
-            compliance e acreditação.
-          </p>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 text-slate-300">
-              <ShieldCheck className="w-5 h-5 text-blue-500" />
-              <span className="font-medium">
-                Trilhas de auditoria automatizadas
-              </span>
+        <div className="p-12 relative z-10">
+          <div className="flex items-center gap-3 mb-16">
+            <div className="w-10 h-10 bg-[#2655e8] rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+              <Sparkles className="w-5 h-5" />
             </div>
-
-            <div className="flex items-center gap-3 text-slate-300">
-              <Lock className="w-5 h-5 text-blue-500" />
-              <span className="font-medium">
-                Segurança de acesso e compliance institucional
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative z-10 text-slate-500 text-sm font-medium">
-          &copy; {new Date().getFullYear()} DocQualis Enterprise. Todos os
-          direitos reservados.
-        </div>
-      </div>
-
-      {/* LADO DIREITO */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 relative">
-        <div className="w-full max-w-md bg-white p-8 sm:p-10 rounded-3xl shadow-[0_12px_40px_rgba(15,23,42,0.06)] border border-slate-100">
-          {/* Logo Mobile */}
-          <div className="flex lg:hidden items-center justify-center gap-2 mb-10">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <span className="font-black text-2xl tracking-tight text-slate-900">
-              DocQualis<span className="text-blue-600">.</span>
+            <span className="font-black text-2xl tracking-tight text-white">
+              DocQualis<span className="text-[#2655e8]">.</span>
             </span>
           </div>
 
-          <div className="mb-8 text-center lg:text-left">
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-              Bem-vindo de volta
-            </h2>
-            <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">
-              Acesse o painel executivo para continuar com segurança.
+          <div className="max-w-md">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-6">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              SaaS Multi-Tenant
+            </div>
+            <h1 className="text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight mb-6">
+              O ecossistema definitivo para Gestão da Qualidade.
+            </h1>
+            <p className="text-lg text-slate-400 font-medium leading-relaxed">
+              Conecte documentos, processos, riscos e indicadores em uma única plataforma estruturada para alta performance organizacional.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-12 relative z-10">
+          <div className="flex items-center gap-4 text-sm font-bold text-slate-400">
+            <span>ISO 9001</span>
+            <div className="w-1 h-1 rounded-full bg-slate-600"></div>
+            <span>ONA Nível 3</span>
+            <div className="w-1 h-1 rounded-full bg-slate-600"></div>
+            <span>LGPD Compliance</span>
+          </div>
+        </div>
+      </div>
+
+      {/* LADO DIREITO - FORMULÁRIO DE LOGIN */}
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 sm:p-12 relative">
+        
+        {/* Logo Mobile */}
+        <div className="flex lg:hidden items-center gap-3 mb-12 absolute top-8 left-8">
+          <div className="w-8 h-8 bg-[#2655e8] rounded-lg flex items-center justify-center text-white shadow-md">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <span className="font-black text-xl tracking-tight text-slate-900">
+            DocQualis<span className="text-[#2655e8]">.</span>
+          </span>
+        </div>
+
+        <div className="w-full max-w-[420px] animate-in fade-in slide-in-from-bottom-8 duration-700">
+          
+          <div className="mb-10 text-center lg:text-left">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Acessar Sistema</h2>
+            <p className="text-sm font-medium text-slate-500">
+              Insira suas credenciais corporativas para entrar no seu ambiente (workspace).
             </p>
           </div>
 
-          {erro && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm font-bold rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-              <span>{erro}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-6" noValidate>
-            {/* E-mail */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2"
-              >
-                E-mail Corporativo
-              </label>
-
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-                </div>
-
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (erro) setErro(null);
-                  }}
-                  onBlur={() =>
-                    setCampoTocado((prev) => ({ ...prev, email: true }))
-                  }
-                  aria-invalid={emailInvalido}
-                  className={`block w-full pl-11 pr-4 py-3.5 bg-slate-50 border rounded-2xl text-sm font-medium text-slate-900 outline-none transition-all shadow-inner placeholder:text-slate-400
-                    ${
-                      emailInvalido
-                        ? "border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                        : "border-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-                    }`}
-                  placeholder="voce@instituicao.com.br"
-                />
+          <form onSubmit={handleLogin} className="space-y-5">
+            {error && (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-sm font-bold text-red-600 flex items-start gap-3 animate-in fade-in">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <p>{error}</p>
               </div>
+            )}
 
-              {emailInvalido && (
-                <p className="mt-2 text-xs font-semibold text-red-600">
-                  Informe um e-mail válido.
-                </p>
-              )}
-            </div>
-
-            {/* Senha */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label
-                  htmlFor="senha"
-                  className="block text-[10px] font-black text-slate-400 uppercase tracking-widest"
-                >
-                  Senha de Acesso
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
+                  E-mail Corporativo
                 </label>
-
-                <Link
-                  href="/esqueci-senha"
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                >
-                  Esqueceu a senha?
-                </Link>
-              </div>
-
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="voce@hospital.com.br"
+                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                  />
                 </div>
-
-                <input
-                  id="senha"
-                  name="senha"
-                  type={mostrarSenha ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={senha}
-                  onChange={(e) => {
-                    setSenha(e.target.value);
-                    if (erro) setErro(null);
-                  }}
-                  onBlur={() =>
-                    setCampoTocado((prev) => ({ ...prev, senha: true }))
-                  }
-                  onKeyUp={handleKeyState}
-                  onKeyDown={handleKeyState}
-                  aria-invalid={senhaInvalida}
-                  className={`block w-full pl-11 pr-12 py-3.5 bg-slate-50 border rounded-2xl text-sm font-mono tracking-[0.18em] font-bold text-slate-900 outline-none transition-all shadow-inner placeholder:text-slate-400
-                    ${
-                      senhaInvalida
-                        ? "border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                        : "border-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-                    }`}
-                  placeholder="••••••••"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => setMostrarSenha((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-700 transition-colors"
-                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
-                  title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
-                >
-                  {mostrarSenha ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
               </div>
 
-              <div className="mt-2 min-h-[20px]">
-                {capsLockAtivo ? (
-                  <p className="text-xs font-semibold text-amber-600">
-                    Caps Lock ativado.
-                  </p>
-                ) : senhaInvalida ? (
-                  <p className="text-xs font-semibold text-red-600">
-                    A senha deve ter pelo menos 6 caracteres.
-                  </p>
-                ) : null}
+              <div>
+                <div className="flex items-center justify-between mb-2 pl-1 pr-2">
+                  <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500">
+                    Senha
+                  </label>
+                  <a href="#" className="text-xs font-bold text-[#2655e8] hover:underline">
+                    Esqueceu a senha?
+                  </a>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Opções */}
-            <div className="flex items-center justify-between gap-4">
-              <label className="inline-flex items-center gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={lembrarEmail}
-                  onChange={(e) => setLembrarEmail(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-slate-600">
-                  Lembrar meu e-mail
-                </span>
-              </label>
-
-              <div className="hidden sm:block text-[11px] font-semibold text-slate-400">
-                Acesso seguro
-              </div>
-            </div>
-
-            {/* Botão */}
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-blue-600/20 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99]"
+              disabled={loading || !email || !password}
+              className="w-full h-14 mt-4 bg-[#2655e8] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#2655e8]/30 hover:bg-[#1e40af] hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2 group"
             >
-              {isLoading ? (
+              {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Entrando...
+                  Autenticando...
                 </>
               ) : (
                 <>
-                  Acessar Sistema
-                  <ArrowRight className="w-4 h-4" />
+                  Entrar no Workspace
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
-
-            {/* Rodapé do card */}
-            <div className="pt-2">
-              <p className="text-center text-xs text-slate-400 leading-relaxed">
-                Ao acessar, você concorda com as políticas de segurança e uso da
-                plataforma institucional.
-              </p>
-            </div>
           </form>
+
+          <div className="mt-10 pt-8 border-t border-slate-100 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            Acesso seguro e criptografado de ponta a ponta.
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Componente local apenas para o icone de erro não quebrar caso não seja importado acima
+function AlertCircle(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
   );
 }
