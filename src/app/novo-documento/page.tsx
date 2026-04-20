@@ -51,10 +51,11 @@ export default function NovoDocumentoPage() {
   useEffect(() => {
     const fetchConfigs = async () => {
       setIsCarregandoConfigs(true);
+      // CORREÇÃO TYPESCRIPT PARA A VERCEL AQUI TAMBÉM:
       const [resTipos, resDir, resSetores] = await Promise.all([
-        supabase.from('config_tipos_doc').select('*').order('nome'),
-        supabase.from('config_diretorias').select('*').order('nome'),
-        supabase.from('config_setores').select('*').order('nome')
+        (supabase.from('config_tipos_doc').select('*') as any).order('nome'),
+        (supabase.from('config_diretorias').select('*') as any).order('nome'),
+        (supabase.from('config_setores').select('*') as any).order('nome')
       ]);
       
       if (resTipos.data) setDbTipos(resTipos.data);
@@ -138,7 +139,6 @@ export default function NovoDocumentoPage() {
 
       const listaVerificadores = verificadoresSelecionados.map(v => `${v.nome} (Até ${v.prazo})`).join('; ');
 
-      // A MÁGICA AQUI: Usando "|| null" para garantir que strings vazias não quebrem as datas no banco.
       const { error: dbError } = await supabase.from('documentos').insert([{
         codigo: codigoFinal, 
         titulo, 
