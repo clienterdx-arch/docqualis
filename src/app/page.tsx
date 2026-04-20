@@ -30,7 +30,7 @@ export default function GestaoDocumentosPage() {
 
   const fetchDocumentos = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase.from('documentos').select('*').order('created_at', { ascending: false });
+    const { data, error } = await (supabase.from('documentos').select('*') as any).order('created_at', { ascending: false });
     
     let docsFormatados: any[] = [];
     if (data) {
