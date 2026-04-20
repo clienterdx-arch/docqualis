@@ -13,6 +13,9 @@ import {
   ChevronDown,
   Sparkles,
   ClipboardSignature,
+  ShieldAlert,
+  AlertTriangle,
+  Target
 } from "lucide-react";
 
 // =========================================================================
@@ -41,6 +44,17 @@ const NAV_ITEMS: NavItem[] = [
     label: "Gestão de Processos",
     href: "/processos",
     icon: <Workflow className="w-5 h-5" aria-hidden="true" />,
+    activeFor: ["/modelagem"],
+  },
+  {
+    label: "Gestão de Riscos",
+    href: "/riscos",
+    icon: <ShieldAlert className="w-5 h-5" aria-hidden="true" />,
+  },
+  {
+    label: "Ocorrências & Eventos",
+    href: "/ocorrencias",
+    icon: <AlertTriangle className="w-5 h-5" aria-hidden="true" />,
   },
   {
     label: "Gestão de Registros",
@@ -52,6 +66,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/indicadores",
     icon: <LineChart className="w-5 h-5" aria-hidden="true" />,
     badge: "CAPA",
+  },
+  {
+    label: "Planej. Estratégico",
+    href: "/planejamento-estrategico",
+    icon: <Target className="w-5 h-5" aria-hidden="true" />,
+    badge: "BSC",
   },
 ];
 
@@ -103,10 +123,10 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       {item.badge && (
         <span
           className={[
-            "text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md",
+            "text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border",
             active
-              ? "bg-[#e0e7ff] text-[#2655e8]"
-              : "bg-slate-100 text-slate-500",
+              ? "bg-[#e0e7ff] text-[#2655e8] border-[#c7d2fe]"
+              : "bg-slate-50 text-slate-500 border-slate-200",
           ].join(" ")}
         >
           {item.badge}
@@ -149,7 +169,7 @@ function SearchBar() {
           type="search"
           placeholder="Buscar documentos, POPs, riscos, indicadores..."
           aria-label="Busca global"
-          className="w-full bg-slate-100 border border-transparent focus:border-[#e0e7ff] focus:bg-white text-sm rounded-full pl-10 pr-20 py-2 outline-none transition-all shadow-inner placeholder:text-slate-400"
+          className="w-full bg-slate-50 border border-slate-200 focus:border-[#e0e7ff] focus:bg-white text-sm rounded-full pl-10 pr-20 py-2 outline-none transition-all shadow-inner placeholder:text-slate-400"
         />
         <div
           className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1"
@@ -180,7 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isSettingsActive = pathname.startsWith("/configuracoes");
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden font-sans">
       {/* ── SIDEBAR ─────────────────────────────────────────── */}
       <aside
         role="navigation"
@@ -193,10 +213,26 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="w-8 h-8 bg-[#2655e8] rounded-lg flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
               <Sparkles className="w-4 h-4" aria-hidden="true" />
             </div>
-            <span className="font-black text-xl tracking-tight text-slate-800">
-              DocQualis<span className="text-[#2655e8]">.</span>
-            </span>
+            <div>
+              <div className="font-black text-xl tracking-tight text-slate-800 leading-none">
+                DocQualis<span className="text-[#2655e8]">.</span>
+              </div>
+            </div>
           </Link>
+        </div>
+
+        {/* Perfil Rapidamente Acessível */}
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-black text-sm shrink-0">
+              CE
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800 leading-tight">Sua Conta (CEO)</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Online</p>
+              </div>
+            </div>
         </div>
 
         {/* Nav Items */}
@@ -258,7 +294,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <div className="w-px h-6 bg-slate-200" role="separator" />
 
-            {/* Usuário */}
+            {/* Usuário Dropdown */}
             <button
               type="button"
               aria-label="Menu do usuário"
@@ -266,14 +302,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <div className="text-right hidden md:block">
                 <p className="text-sm font-bold text-slate-800 leading-tight">
-                  Sua Conta (CEO)
+                  Painel de Controle
                 </p>
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#2655e8]">
                   Administrador
                 </p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-[#2655e8] text-white flex items-center justify-center font-bold shadow-md ring-2 ring-white group-hover:ring-[#eef2ff] transition-all select-none">
-                CE
               </div>
               <ChevronDown
                 className="w-4 h-4 text-slate-400 group-hover:text-slate-700"

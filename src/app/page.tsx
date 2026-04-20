@@ -43,7 +43,6 @@ export default function GestaoDocumentosPage() {
       }));
     }
 
-    // LISTA DE PROCESSOS ZERADA
     const processosVigentes: any[] = [];
 
     setDocumentos([...docsFormatados, ...processosVigentes]);
@@ -202,7 +201,7 @@ export default function GestaoDocumentosPage() {
                     
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border whitespace-nowrap
-                        ${doc.isProcesso ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-100 text-slate-500 border-slate-100'}
+                        ${doc.isProcesso ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-100'}
                       `}>
                         {doc.tipo_documento || doc.tipoFluxo}
                       </span>
@@ -281,9 +280,7 @@ export default function GestaoDocumentosPage() {
         <PainelConfiguracaoAdmin setMensagemSistema={setMensagemSistema} />
       )}
 
-      {/* MODAIS E OVERLAYS */}
-
-      {/* Modal Exportar */}
+      {/* MODAL EXPORTAR */}
       {isExportModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in print:hidden">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
@@ -629,6 +626,7 @@ function DashboardBlock({ title, desc, count, icon, color, onClick, isLoading }:
     slate: "text-slate-600 bg-slate-50", 
     red: "text-red-600 bg-red-50" 
   };
+  
   return (
     <div onClick={onClick} className="bg-white rounded-2xl p-5 border border-slate-100 cursor-pointer hover:shadow-md transition-all flex flex-col justify-between h-32">
       <div className="flex justify-between items-start">
