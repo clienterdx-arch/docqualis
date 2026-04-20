@@ -230,7 +230,7 @@ function PremiumChart({ data, config, metaStyle, faixas }: any) {
 
       {/* Linhas Dinâmicas */}
       {lineSeries.map((series) => {
-        const pts = validData.filter(d => d[series.key] != null).map((d:any, i:number) => `${toX(i)},${toY(d[series.key])}`).join(" L ");
+        const pts = validData.filter((d: any) => d[series.key] != null).map((d:any, i:number) => `${toX(i)},${toY(d[series.key])}`).join(" L ");
         return pts ? <path key={`line-${series.key}`} d={`M ${pts}`} fill="none" stroke={series.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-700" /> : null;
       })}
 
