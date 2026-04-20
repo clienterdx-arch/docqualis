@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -397,10 +397,10 @@ function Toasts({
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
- * MAIN
+ * MAIN COMPONENT
  * ────────────────────────────────────────────────────────────────────────────*/
 
-export default function ProcessStudioPage() {
+function ProcessStudioContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const processId = searchParams.get("id");
@@ -702,7 +702,6 @@ export default function ProcessStudioPage() {
     if (!el) return;
 
     function onWheel(e: WheelEvent) {
-      // CORREÇÃO TYPESCRIPT: Garantir que viewportRef não é nulo dentro do evento
       const currentEl = viewportRef.current;
       if (!currentEl) return;
 
@@ -2684,5 +2683,20 @@ export default function ProcessStudioPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ProcessStudioPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-[100vh] w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <div className="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center shadow-sm">
+           <Workflow className="w-8 h-8 text-[#2655e8] animate-pulse" />
+        </div>
+        <div className="text-sm font-bold text-slate-500">Preparando estúdio de modelagem...</div>
+      </div>
+    }>
+      <ProcessStudioContent />
+    </Suspense>
   );
 }

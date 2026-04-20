@@ -1,243 +1,1482 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  Wrench, Activity, AlertTriangle, FileText, 
-  MessageSquare, Plus, Search, Filter, CheckCircle2, 
-  Clock, XCircle, ListTodo, Target, ChevronRight
+import React, { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  ClipboardList,
+  FileWarning,
+  HeartPulse,
+  MessageSquareWarning,
+  Plus,
+  Search,
+  ShieldAlert,
+  Trash2,
+  User,
+  XCircle,
 } from "lucide-react";
 
-// ==========================================
-// DADOS SIMULADOS (Inteligência Relacional)
-// ==========================================
-const mockOcorrencias = [
-  { id: "OC-26-001", tipo: "Evento Adverso", descricao: "Erro na administração de medicação (Troca de leito).", setor: "UTI Adulto", gravidade: "Alta", status: "Em Investigação", data: "12/04/2026" },
-  { id: "OC-26-002", tipo: "Manifestação", descricao: "Reclamação sobre tempo de espera superior a 2h na triagem.", setor: "Pronto Atendimento", gravidade: "Média", status: "Ações Abertas", data: "10/04/2026" },
-  { id: "OC-26-003", tipo: "Não Conformidade", descricao: "Geladeira de vacinas operando a 12°C (Fora do limite).", setor: "Farmácia", gravidade: "Crítica", status: "Ações Abertas", data: "09/04/2026" },
-  { id: "OC-26-004", tipo: "Não Conformidade", descricao: "Ausência de assinatura no termo de consentimento cirúrgico.", setor: "Centro Cirúrgico", gravidade: "Alta", status: "Concluído", data: "05/04/2026" },
+/* ──────────────────────────────────────────────────────────────────────────────
+ * TYPES
+ * ────────────────────────────────────────────────────────────────────────────*/
+
+type ModuloTipo =
+  | "NAO_CONFORMIDADE"
+  | "EVENTO_ADVERSO"
+  | "ELOGIO_RECLAMACAO";
+
+type StatusOcorrencia =
+  | "REGISTRO"
+  | "TRATATIVA"
+  | "CONCLUIDO"
+  | "CANCELADO";
+
+type Gravidade = "BAIXA" | "MODERADA" | "ALTA" | "GRAVE" | "SENTINELA";
+
+type PerfilAcesso =
+  | "NOTIFICADOR"
+  | "TRATADOR"
+  | "GESTOR"
+  | "QUALIDADE"
+  | "ADMIN";
+
+type ClassificacaoManifestacao = "ELOGIO" | "RECLAMACAO" | "SUGESTAO";
+
+type EventoClassificacao =
+  | "QUEDA"
+  | "MEDICACAO"
+  | "IDENTIFICACAO"
+  | "LESAO_PRESSAO"
+  | "INFECÇÃO"
+  | "PROCEDIMENTO"
+  | "OUTRO";
+
+type NaoConformidadeClassificacao =
+  | "PROCESSO"
+  | "DOCUMENTO"
+  | "TREINAMENTO"
+  | "ESTRUTURA"
+  | "EQUIPAMENTO"
+  | "FORNECEDOR"
+  | "OUTRO";
+
+type HistoricoItem = {
+  id: string;
+  data: string;
+  autor: string;
+  acao: string;
+  observacao?: string;
+};
+
+type PlanoAcaoItem = {
+  id: string;
+  descricao: string;
+  responsavel: string;
+  prazo: string;
+  status: "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO";
+};
+
+type Ocorrencia = {
+  id: string;
+  numero: string;
+  tipo: ModuloTipo;
+  status: StatusOcorrencia;
+  titulo: string;
+  descricao: string;
+  setor: string;
+  areaNotificante: string;
+  dataOcorrencia: string;
+  dataRegistro: string;
+  localOcorrencia: string;
+  anonimo: boolean;
+  envolvePaciente: boolean;
+  identificacaoRestrita: boolean;
+  nomeNotificador?: string;
+  perfilResponsavel: PerfilAcesso;
+  responsavelTratativa: string;
+  prioridade: "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
+  gravidade?: Gravidade;
+  danoPaciente?: boolean;
+  classificacaoEvento?: EventoClassificacao;
+  classificacaoNC?: NaoConformidadeClassificacao;
+  classificacaoManifestacao?: ClassificacaoManifestacao;
+  pacienteCodigo?: string;
+  causaRaiz?: string;
+  acaoImediata?: string;
+  planoAcao: PlanoAcaoItem[];
+  conclusao?: string;
+  motivoCancelamento?: string;
+  prazoTratativa?: string;
+  historico: HistoricoItem[];
+};
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * MOCK
+ * ────────────────────────────────────────────────────────────────────────────*/
+
+const SETORES = [
+  "Qualidade",
+  "Pronto Atendimento",
+  "UTI Adulto",
+  "Centro Cirúrgico",
+  "Internação",
+  "Farmácia",
+  "SADT",
+  "Recepção",
+  "Ouvidoria",
 ];
 
-const mockAcoes = [
-  { id: "ACT-101", ocorrenciaId: "OC-26-003", oQue: "Solicitar manutenção corretiva urgente do termostato.", quem: "Engenharia", prazo: "10/04/2026", status: "Atrasado" },
-  { id: "ACT-102", ocorrenciaId: "OC-26-003", oQue: "Transferir lote de vacinas para backup térmico.", quem: "Farmacêutico Chefe", prazo: "09/04/2026", status: "Concluído" },
-  { id: "ACT-103", ocorrenciaId: "OC-26-002", oQue: "Revisar escala médica do PA nos horários de pico.", quem: "Diretoria Médica", prazo: "20/04/2026", status: "Em Andamento" },
-  { id: "ACT-104", ocorrenciaId: "OC-26-001", oQue: "Realizar treinamento de dupla checagem com equipe noturna.", quem: "Coord. Enfermagem", prazo: "18/04/2026", status: "Em Andamento" },
+const USUARIOS = [
+  "Ana Silva",
+  "Dr. Carlos",
+  "Enf. Roberta",
+  "João Pedro",
+  "Marina Souza",
+  "Lucas Oliveira",
 ];
 
-export default function GestaoOcorrenciasPage() {
-  const [viewState, setViewState] = useState<"dashboard" | "ocorrencias" | "acoes">("acoes");
+const INITIAL_DATA: Ocorrencia[] = [
+  {
+    id: "1",
+    numero: "OC-2026-0001",
+    tipo: "NAO_CONFORMIDADE",
+    status: "REGISTRO",
+    titulo: "Formulário desatualizado em uso no setor",
+    descricao:
+      "Foi identificado uso de formulário obsoleto durante rotina assistencial.",
+    setor: "Qualidade",
+    areaNotificante: "Internação",
+    dataOcorrencia: "2026-04-15",
+    dataRegistro: "2026-04-16",
+    localOcorrencia: "Posto de enfermagem",
+    anonimo: false,
+    envolvePaciente: false,
+    identificacaoRestrita: false,
+    nomeNotificador: "Ana Silva",
+    perfilResponsavel: "QUALIDADE",
+    responsavelTratativa: "Lucas Oliveira",
+    prioridade: "MEDIA",
+    gravidade: "BAIXA",
+    classificacaoNC: "DOCUMENTO",
+    acaoImediata: "Retirada imediata do formulário obsoleto.",
+    causaRaiz: "Falha no controle de distribuição de documento.",
+    planoAcao: [
+      {
+        id: "pa1",
+        descricao: "Reforçar revisão de documentos distribuídos",
+        responsavel: "Lucas Oliveira",
+        prazo: "2026-04-28",
+        status: "EM_ANDAMENTO",
+      },
+    ],
+    prazoTratativa: "2026-04-30",
+    historico: [
+      {
+        id: "h1",
+        data: "2026-04-16 08:20",
+        autor: "Ana Silva",
+        acao: "Registro criado",
+      },
+    ],
+  },
+  {
+    id: "2",
+    numero: "OC-2026-0002",
+    tipo: "EVENTO_ADVERSO",
+    status: "TRATATIVA",
+    titulo: "Queda de paciente sem dano aparente",
+    descricao:
+      "Paciente apresentou queda ao tentar levantar-se sem auxílio no período noturno.",
+    setor: "UTI Adulto",
+    areaNotificante: "UTI Adulto",
+    dataOcorrencia: "2026-04-14",
+    dataRegistro: "2026-04-14",
+    localOcorrencia: "Leito 12",
+    anonimo: true,
+    envolvePaciente: true,
+    identificacaoRestrita: true,
+    perfilResponsavel: "GESTOR",
+    responsavelTratativa: "Enf. Roberta",
+    prioridade: "ALTA",
+    gravidade: "MODERADA",
+    danoPaciente: false,
+    classificacaoEvento: "QUEDA",
+    pacienteCodigo: "PAC-44821",
+    acaoImediata: "Avaliação clínica e comunicação à equipe médica.",
+    causaRaiz: "Ausência de grade elevada e paciente sem contenção preventiva.",
+    planoAcao: [
+      {
+        id: "pa2",
+        descricao: "Reforçar protocolo de prevenção de quedas",
+        responsavel: "Enf. Roberta",
+        prazo: "2026-04-22",
+        status: "EM_ANDAMENTO",
+      },
+    ],
+    prazoTratativa: "2026-04-25",
+    historico: [
+      {
+        id: "h2",
+        data: "2026-04-14 23:11",
+        autor: "Anônimo",
+        acao: "Evento registrado",
+      },
+      {
+        id: "h3",
+        data: "2026-04-15 08:40",
+        autor: "Enf. Roberta",
+        acao: "Tratativa iniciada",
+      },
+    ],
+  },
+  {
+    id: "3",
+    numero: "OC-2026-0003",
+    tipo: "ELOGIO_RECLAMACAO",
+    status: "CONCLUIDO",
+    titulo: "Elogio ao atendimento da recepção",
+    descricao:
+      "Paciente relatou excelente acolhimento e agilidade no atendimento.",
+    setor: "Ouvidoria",
+    areaNotificante: "Recepção",
+    dataOcorrencia: "2026-04-12",
+    dataRegistro: "2026-04-12",
+    localOcorrencia: "Recepção principal",
+    anonimo: false,
+    envolvePaciente: false,
+    identificacaoRestrita: false,
+    nomeNotificador: "João Pedro",
+    perfilResponsavel: "GESTOR",
+    responsavelTratativa: "Marina Souza",
+    prioridade: "BAIXA",
+    classificacaoManifestacao: "ELOGIO",
+    planoAcao: [],
+    conclusao: "Registro validado e encaminhado à liderança para reconhecimento.",
+    historico: [
+      {
+        id: "h4",
+        data: "2026-04-12 10:00",
+        autor: "João Pedro",
+        acao: "Manifestação registrada",
+      },
+      {
+        id: "h5",
+        data: "2026-04-12 16:10",
+        autor: "Marina Souza",
+        acao: "Registro concluído",
+      },
+    ],
+  },
+];
 
-  // Cálculos Automáticos para os KPIs
-  const totalNCs = mockOcorrencias.filter(o => o.tipo === "Não Conformidade").length;
-  const totalEventos = mockOcorrencias.filter(o => o.tipo === "Evento Adverso").length;
-  const totalSAC = mockOcorrencias.filter(o => o.tipo === "Manifestação").length;
-  const acoesAtrasadas = mockAcoes.filter(a => a.status === "Atrasado").length;
+/* ──────────────────────────────────────────────────────────────────────────────
+ * HELPERS
+ * ────────────────────────────────────────────────────────────────────────────*/
 
-  const getTipoColor = (tipo: string) => {
-    if (tipo === "Não Conformidade") return "bg-purple-100 text-purple-700";
-    if (tipo === "Evento Adverso") return "bg-red-100 text-red-700";
-    return "bg-blue-100 text-blue-700"; // Manifestação/SAC
-  };
+function cn(...items: Array<string | false | null | undefined>) {
+  return items.filter(Boolean).join(" ");
+}
 
-  const getGravidadeColor = (gravidade: string) => {
-    if (gravidade === "Crítica") return "text-red-600 bg-red-50 border-red-200";
-    if (gravidade === "Alta") return "text-orange-600 bg-orange-50 border-orange-200";
-    if (gravidade === "Média") return "text-amber-600 bg-amber-50 border-amber-200";
-    return "text-emerald-600 bg-emerald-50 border-emerald-200";
-  };
+function genId(prefix = "id") {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+}
 
-  const getStatusAcaoColor = (status: string) => {
-    if (status === "Concluído") return "text-emerald-700 bg-emerald-100";
-    if (status === "Atrasado") return "text-red-700 bg-red-100";
-    return "text-blue-700 bg-blue-100";
-  };
+function statusLabel(status: StatusOcorrencia) {
+  return {
+    REGISTRO: "Registro",
+    TRATATIVA: "Em tratativa",
+    CONCLUIDO: "Concluídas",
+    CANCELADO: "Canceladas",
+  }[status];
+}
+
+function statusClass(status: StatusOcorrencia) {
+  return {
+    REGISTRO: "bg-blue-50 text-blue-700 border-blue-200",
+    TRATATIVA: "bg-amber-50 text-amber-700 border-amber-200",
+    CONCLUIDO: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    CANCELADO: "bg-slate-100 text-slate-600 border-slate-200",
+  }[status];
+}
+
+function tipoLabel(tipo: ModuloTipo) {
+  return {
+    NAO_CONFORMIDADE: "Não conformidades",
+    EVENTO_ADVERSO: "Eventos adversos",
+    ELOGIO_RECLAMACAO: "Elogios e Reclamações",
+  }[tipo];
+}
+
+function tipoIcon(tipo: ModuloTipo) {
+  switch (tipo) {
+    case "NAO_CONFORMIDADE":
+      return <FileWarning className="w-4 h-4" />;
+    case "EVENTO_ADVERSO":
+      return <HeartPulse className="w-4 h-4" />;
+    case "ELOGIO_RECLAMACAO":
+      return <MessageSquareWarning className="w-4 h-4" />;
+  }
+}
+
+function prioridadeClass(prioridade: Ocorrencia["prioridade"]) {
+  return {
+    BAIXA: "bg-slate-100 text-slate-700",
+    MEDIA: "bg-blue-100 text-blue-700",
+    ALTA: "bg-amber-100 text-amber-700",
+    CRITICA: "bg-red-100 text-red-700",
+  }[prioridade];
+}
+
+function novoNumero(seq: number) {
+  return `OC-2026-${String(seq).padStart(4, "0")}`;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * MAIN
+ * ────────────────────────────────────────────────────────────────────────────*/
+
+export default function OcorrenciasPage() {
+  const [tipoAtivo, setTipoAtivo] = useState<ModuloTipo>("NAO_CONFORMIDADE");
+  const [statusAtivo, setStatusAtivo] = useState<StatusOcorrencia | "DASHBOARD">(
+    "REGISTRO"
+  );
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>(INITIAL_DATA);
+
+  const [form, setForm] = useState<Omit<Ocorrencia, "id" | "numero" | "historico">>({
+    tipo: "NAO_CONFORMIDADE",
+    status: "REGISTRO",
+    titulo: "",
+    descricao: "",
+    setor: "Qualidade",
+    areaNotificante: "Qualidade",
+    dataOcorrencia: "",
+    dataRegistro: new Date().toISOString().slice(0, 10),
+    localOcorrencia: "",
+    anonimo: false,
+    envolvePaciente: false,
+    identificacaoRestrita: false,
+    nomeNotificador: "",
+    perfilResponsavel: "QUALIDADE",
+    responsavelTratativa: "Ana Silva",
+    prioridade: "MEDIA",
+    gravidade: "BAIXA",
+    danoPaciente: false,
+    classificacaoEvento: undefined,
+    classificacaoNC: undefined,
+    classificacaoManifestacao: undefined,
+    pacienteCodigo: "",
+    causaRaiz: "",
+    acaoImediata: "",
+    planoAcao: [],
+    conclusao: "",
+    motivoCancelamento: "",
+    prazoTratativa: "",
+  });
+
+  const filtered = useMemo(() => {
+    return ocorrencias.filter((item) => {
+      const byTipo = item.tipo === tipoAtivo;
+      const byStatus = statusAtivo === "DASHBOARD" ? true : item.status === statusAtivo;
+      const byQuery =
+        !query ||
+        item.titulo.toLowerCase().includes(query.toLowerCase()) ||
+        item.numero.toLowerCase().includes(query.toLowerCase()) ||
+        item.setor.toLowerCase().includes(query.toLowerCase());
+
+      return byTipo && byStatus && byQuery;
+    });
+  }, [ocorrencias, tipoAtivo, statusAtivo, query]);
+
+  const dashboardData = useMemo(() => {
+    const base = ocorrencias.filter((o) => o.tipo === tipoAtivo);
+
+    const total = base.length;
+    const registro = base.filter((o) => o.status === "REGISTRO").length;
+    const tratativa = base.filter((o) => o.status === "TRATATIVA").length;
+    const concluido = base.filter((o) => o.status === "CONCLUIDO").length;
+    const cancelado = base.filter((o) => o.status === "CANCELADO").length;
+
+    const porSetor = SETORES.map((setor) => ({
+      setor,
+      total: base.filter((o) => o.setor === setor).length,
+    })).filter((i) => i.total > 0);
+
+    const criticos = base.filter((o) => o.prioridade === "CRITICA").length;
+    const alta = base.filter((o) => o.prioridade === "ALTA").length;
+    const anonimos = base.filter((o) => o.anonimo).length;
+
+    return {
+      total,
+      registro,
+      tratativa,
+      concluido,
+      cancelado,
+      porSetor,
+      criticos,
+      alta,
+      anonimos,
+      taxaConclusao: total ? Math.round((concluido / total) * 100) : 0,
+    };
+  }, [ocorrencias, tipoAtivo]);
+
+  const selected = useMemo(
+    () => ocorrencias.find((o) => o.id === selectedId) ?? null,
+    [ocorrencias, selectedId]
+  );
+
+  function resetForm(tipo: ModuloTipo = tipoAtivo) {
+    setForm({
+      tipo,
+      status: "REGISTRO",
+      titulo: "",
+      descricao: "",
+      setor: "Qualidade",
+      areaNotificante: "Qualidade",
+      dataOcorrencia: "",
+      dataRegistro: new Date().toISOString().slice(0, 10),
+      localOcorrencia: "",
+      anonimo: false,
+      envolvePaciente: false,
+      identificacaoRestrita: false,
+      nomeNotificador: "",
+      perfilResponsavel: "QUALIDADE",
+      responsavelTratativa: "Ana Silva",
+      prioridade: "MEDIA",
+      gravidade: "BAIXA",
+      danoPaciente: false,
+      classificacaoEvento: undefined,
+      classificacaoNC: undefined,
+      classificacaoManifestacao: undefined,
+      pacienteCodigo: "",
+      causaRaiz: "",
+      acaoImediata: "",
+      planoAcao: [],
+      conclusao: "",
+      motivoCancelamento: "",
+      prazoTratativa: "",
+    });
+  }
+
+  function addPlanoAcao() {
+    setForm((prev) => ({
+      ...prev,
+      planoAcao: [
+        ...prev.planoAcao,
+        {
+          id: genId("pa"),
+          descricao: "",
+          responsavel: "Ana Silva",
+          prazo: "",
+          status: "PENDENTE",
+        },
+      ],
+    }));
+  }
+
+  function updatePlanoAcao(
+    id: string,
+    field: keyof PlanoAcaoItem,
+    value: string
+  ) {
+    setForm((prev) => ({
+      ...prev,
+      planoAcao: prev.planoAcao.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    }));
+  }
+
+  function removePlanoAcao(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      planoAcao: prev.planoAcao.filter((item) => item.id !== id),
+    }));
+  }
+
+  function salvarOcorrencia() {
+    if (!form.titulo || !form.descricao || !form.setor || !form.dataOcorrencia) {
+      return;
+    }
+
+    const next: Ocorrencia = {
+      id: genId("oc"),
+      numero: novoNumero(ocorrencias.length + 1),
+      ...form,
+      historico: [
+        {
+          id: genId("h"),
+          data: new Date().toLocaleString("pt-BR"),
+          autor: form.anonimo ? "Anônimo" : form.nomeNotificador || "Usuário",
+          acao: "Registro criado",
+        },
+      ],
+    };
+
+    setOcorrencias((prev) => [next, ...prev]);
+    setSelectedId(next.id);
+    setTipoAtivo(next.tipo);
+    setStatusAtivo("REGISTRO");
+    resetForm(next.tipo);
+  }
+
+  function moverStatus(id: string, nextStatus: StatusOcorrencia) {
+    setOcorrencias((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: nextStatus,
+              historico: [
+                ...item.historico,
+                {
+                  id: genId("h"),
+                  data: new Date().toLocaleString("pt-BR"),
+                  autor: "Sistema/Usuário",
+                  acao: `Status alterado para ${statusLabel(nextStatus)}`,
+                },
+              ],
+            }
+          : item
+      )
+    );
+  }
+
+  function excluirRegistro(id: string) {
+    setOcorrencias((prev) => prev.filter((item) => item.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  }
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto animate-in fade-in duration-500 relative">
-      
-      {/* HEADER DO MÓDULO */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestão de Ocorrências (CAPA)</h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">Não Conformidades, Eventos Adversos e Manifestações.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-900 shadow-md transition-all">
-            <Plus className="w-4 h-4" /> Nova Notificação
-          </button>
-        </div>
-      </div>
-
-      {/* NAVEGAÇÃO INTERNA (TABS) */}
-      <div className="border-b border-slate-200 mb-8 flex gap-8 text-sm font-bold text-slate-500">
-        <button onClick={() => setViewState("dashboard")} className={`pb-4 border-b-2 transition-all ${viewState === "dashboard" ? "border-blue-600 text-blue-600" : "border-transparent hover:text-slate-800"}`}>
-          <div className="flex items-center gap-2"><Activity className="w-4 h-4"/> Dashboard</div>
-        </button>
-        <button onClick={() => setViewState("ocorrencias")} className={`pb-4 border-b-2 transition-all ${viewState === "ocorrencias" ? "border-blue-600 text-blue-600" : "border-transparent hover:text-slate-800"}`}>
-          <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4"/> Registro de Ocorrências</div>
-        </button>
-        <button onClick={() => setViewState("acoes")} className={`pb-4 border-b-2 transition-all ${viewState === "acoes" ? "border-blue-600 text-blue-600" : "border-transparent hover:text-slate-800"}`}>
-          <div className="flex items-center gap-2">
-            <ListTodo className="w-4 h-4"/> Gestão de Ações (5W2H)
-            {acoesAtrasadas > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{acoesAtrasadas}</span>}
-          </div>
-        </button>
-      </div>
-
-      {/* VISÃO 1: DASHBOARD EXECUTIVO */}
-      {viewState === "dashboard" && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-            <KpiCard titulo="Não Conformidades" valor={totalNCs} desc="Desvios de Processo" icon={<Wrench className="w-5 h-5"/>} cor="purple" />
-            <KpiCard titulo="Eventos Adversos" valor={totalEventos} desc="Segurança do Paciente" icon={<AlertTriangle className="w-5 h-5"/>} cor="red" />
-            <KpiCard titulo="Manifestações (SAC)" valor={totalSAC} desc="Ouvidoria / Clientes" icon={<MessageSquare className="w-5 h-5"/>} cor="blue" />
-            <KpiCard titulo="Ações Atrasadas" valor={acoesAtrasadas} desc="Planos de Ação (CAPA)" icon={<Clock className="w-5 h-5"/>} cor={acoesAtrasadas > 0 ? "red" : "emerald"} />
-          </div>
-          
-          {/* Espaço para futuros gráficos (Espinha de Peixe / Pareto) */}
-          <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-slate-400">
-             <Target className="w-12 h-12 mb-4 opacity-50" />
-             <p className="font-bold">Gráficos de Pareto e Causa-Raiz (Ishikawa) serão renderizados aqui.</p>
-          </div>
-        </div>
-      )}
-
-      {/* VISÃO 2: CAIXA DE ENTRADA DE OCORRÊNCIAS */}
-      {viewState === "ocorrencias" && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-in slide-in-from-right-8">
-          <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg w-96 shadow-sm">
-              <Search className="w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Buscar por código ou descrição..." className="text-sm outline-none w-full font-medium" />
-            </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm hover:bg-slate-50">
-              <Filter className="w-4 h-4"/> Filtrar por Setor
-            </button>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-white border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
-                <tr>
-                  <th className="px-6 py-4">ID</th>
-                  <th className="px-6 py-4">Classificação</th>
-                  <th className="px-6 py-4">Descrição do Relato</th>
-                  <th className="px-6 py-4">Setor Origem</th>
-                  <th className="px-6 py-4 text-center">Gravidade</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {mockOcorrencias.map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50 cursor-pointer transition-colors group">
-                    <td className="px-6 py-4 font-mono font-bold text-slate-900">{o.id}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-block px-2 py-1 rounded text-[10px] font-black uppercase ${getTipoColor(o.tipo)}`}>{o.tipo}</span>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-700 truncate max-w-xs">{o.descricao}</td>
-                    <td className="px-6 py-4 font-medium text-slate-500">{o.setor}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${getGravidadeColor(o.gravidade)}`}>{o.gravidade}</span>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-600">{o.status}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-blue-600 font-bold text-xs hover:underline flex items-center justify-end gap-1 w-full">Tratar <ChevronRight className="w-3 h-3"/></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* VISÃO 3: GESTÃO DE AÇÕES (O QUE VOCÊ PEDIU - RASTREABILIDADE) */}
-      {viewState === "acoes" && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-in slide-in-from-right-8">
-          <div className="p-5 border-b border-slate-100 bg-slate-50/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#f8fafc] p-6 md:p-8 text-slate-900">
+      <div className="max-w-[1800px] mx-auto space-y-8">
+        {/* HEADER */}
+        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
             <div>
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ListTodo className="w-5 h-5 text-blue-600"/> Controle de Planos de Ação (5W2H)</h2>
-              <p className="text-xs font-medium text-slate-500 mt-1">Acompanhamento de ações corretivas e preventivas atreladas a ocorrências.</p>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 mb-3">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                Gestão de Ocorrências
+              </div>
+              <h1 className="text-3xl font-black tracking-tight text-slate-900">
+                Qualidade, Segurança do Paciente e Ouvidoria
+              </h1>
+              <p className="text-sm text-slate-500 font-medium mt-2 max-w-4xl">
+                Módulo estruturado para registro, tratativa, conclusão, cancelamento e monitoramento
+                de não conformidades, eventos adversos e manifestações, alinhado às melhores práticas
+                de qualidade, acreditação, segurança do paciente e governança.
+              </p>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 transition-colors">
-              <Plus className="w-4 h-4"/> Adicionar Ação Avulsa
-            </button>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-white border-b border-slate-200 text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                <tr>
-                  <th className="px-6 py-4">Ação (O que fazer)</th>
-                  <th className="px-6 py-4">Responsável (Quem)</th>
-                  <th className="px-6 py-4 text-center">Prazo (Quando)</th>
-                  <th className="px-6 py-4">Origem (Ocorrência)</th>
-                  <th className="px-6 py-4 text-right">Status do Plano</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {mockAcoes.sort((a, b) => a.status === "Atrasado" ? -1 : 1).map(acao => {
-                  const ocorrenciaOrigem = mockOcorrencias.find(o => o.id === acao.ocorrenciaId);
-                  
-                  return (
-                    <tr key={acao.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-800">{acao.oQue}</div>
-                        <div className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">{acao.id}</div>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-600 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-600 font-bold border border-white shadow-sm">
-                           {acao.quem.substring(0, 2).toUpperCase()}
-                        </div>
-                        {acao.quem}
-                      </td>
-                      <td className="px-6 py-4 text-center font-bold text-slate-700">{acao.prazo}</td>
-                      <td className="px-6 py-4">
-                        <div className="inline-flex flex-col items-start cursor-pointer group">
-                          <span className="text-xs font-black text-blue-600 group-hover:underline">{acao.ocorrenciaId}</span>
-                          <span className="text-[10px] font-medium text-slate-400 truncate max-w-[150px]" title={ocorrenciaOrigem?.descricao}>{ocorrenciaOrigem?.descricao}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${getStatusAcaoColor(acao.status)}`}>
-                          {acao.status === 'Concluído' ? <CheckCircle2 className="w-3 h-3"/> : (acao.status === 'Atrasado' ? <XCircle className="w-3 h-3"/> : <Clock className="w-3 h-3"/>)}
-                          {acao.status}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 min-w-[320px]">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total</p>
+                <p className="text-2xl font-black mt-2">{dashboardData.total}</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <p className="text-[10px] uppercase font-black tracking-widest text-amber-700">Tratativa</p>
+                <p className="text-2xl font-black mt-2 text-amber-700">{dashboardData.tratativa}</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                <p className="text-[10px] uppercase font-black tracking-widest text-emerald-700">Concluídas</p>
+                <p className="text-2xl font-black mt-2 text-emerald-700">{dashboardData.concluido}</p>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                <p className="text-[10px] uppercase font-black tracking-widest text-red-700">Críticas</p>
+                <p className="text-2xl font-black mt-2 text-red-700">{dashboardData.criticos}</p>
+              </div>
+            </div>
           </div>
         </div>
-      )}
 
+        {/* TABS TIPO */}
+        <div className="bg-white border border-slate-200 rounded-[2rem] p-4 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              {
+                value: "NAO_CONFORMIDADE" as ModuloTipo,
+                label: "Não conformidades",
+                desc: "Processos, documentos, estrutura, falhas e desvios",
+              },
+              {
+                value: "EVENTO_ADVERSO" as ModuloTipo,
+                label: "Eventos adversos",
+                desc: "Segurança do paciente, incidentes e dano",
+              },
+              {
+                value: "ELOGIO_RECLAMACAO" as ModuloTipo,
+                label: "Elogios e Reclamações",
+                desc: "Ouvidoria, percepção do cliente e melhoria",
+              },
+            ].map((item) => (
+              <button
+                key={item.value}
+                onClick={() => {
+                  setTipoAtivo(item.value);
+                  resetForm(item.value);
+                }}
+                className={cn(
+                  "rounded-2xl border p-5 text-left transition-all",
+                  tipoAtivo === item.value
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20"
+                    : "bg-white border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/40"
+                )}
+              >
+                <div className="flex items-center gap-2 text-sm font-black">
+                  {tipoIcon(item.value)}
+                  {item.label}
+                </div>
+                <p
+                  className={cn(
+                    "text-xs mt-2 font-medium",
+                    tipoAtivo === item.value ? "text-white/80" : "text-slate-500"
+                  )}
+                >
+                  {item.desc}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* GRID PRINCIPAL */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          {/* COLUNA ESQUERDA */}
+          <div className="xl:col-span-8 space-y-6">
+            {/* STATUS TABS */}
+            <div className="bg-white border border-slate-200 rounded-[2rem] p-4 shadow-sm">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: "REGISTRO", label: "Registro", icon: ClipboardList },
+                  { key: "TRATATIVA", label: "Em tratativa", icon: AlertTriangle },
+                  { key: "CONCLUIDO", label: "Concluídas", icon: CheckCircle2 },
+                  { key: "CANCELADO", label: "Canceladas", icon: XCircle },
+                  { key: "DASHBOARD", label: "Painel de monitoramento", icon: BarChart3 },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setStatusAtivo(tab.key as StatusOcorrencia | "DASHBOARD")}
+                    className={cn(
+                      "px-4 py-3 rounded-2xl border text-sm font-bold flex items-center gap-2 transition-all",
+                      statusAtivo === tab.key
+                        ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    <tab.icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* DASHBOARD */}
+            {statusAtivo === "DASHBOARD" ? (
+              <div className="space-y-6">
+                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                  <div className="mb-6">
+                    <h2 className="text-lg font-bold text-slate-800">Painel de Monitoramento</h2>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      Visão gerencial do módulo: {tipoLabel(tipoAtivo)}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <KpiCard label="Total" value={dashboardData.total} />
+                    <KpiCard label="Registro" value={dashboardData.registro} />
+                    <KpiCard label="Tratativa" value={dashboardData.tratativa} />
+                    <KpiCard label="Concluídas" value={dashboardData.concluido} />
+                    <KpiCard label="Taxa de conclusão" value={`${dashboardData.taxaConclusao}%`} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-800 mb-4">Distribuição por Setor</h3>
+                  <div className="space-y-4">
+                    {dashboardData.porSetor.length === 0 ? (
+                      <div className="text-sm text-slate-400">Sem dados para exibir.</div>
+                    ) : (
+                      dashboardData.porSetor.map((item) => {
+                        const percent = dashboardData.total
+                          ? Math.round((item.total / dashboardData.total) * 100)
+                          : 0;
+                        return (
+                          <div key={item.setor}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-bold text-slate-700">{item.setor}</span>
+                              <span className="text-sm font-bold text-slate-500">
+                                {item.total} ({percent}%)
+                              </span>
+                            </div>
+                            <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-indigo-600"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <KpiCard label="Anonimizadas" value={dashboardData.anonimos} />
+                  <KpiCard label="Prioridade alta" value={dashboardData.alta} />
+                  <KpiCard label="Prioridade crítica" value={dashboardData.criticos} />
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* LISTAGEM */}
+                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-800">
+                        {statusLabel(statusAtivo as StatusOcorrencia)}
+                      </h2>
+                      <p className="text-xs text-slate-500 font-medium mt-1">
+                        Registros filtrados por módulo e etapa do fluxo.
+                      </p>
+                    </div>
+
+                    <div className="relative w-full lg:w-[320px]">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Buscar por número, título ou setor..."
+                        className="w-full h-11 pl-11 pr-4 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-3xl overflow-hidden">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                        <tr>
+                          <th className="px-6 py-4">Ocorrência</th>
+                          <th className="px-6 py-4">Setor</th>
+                          <th className="px-6 py-4">Responsável</th>
+                          <th className="px-6 py-4">Prioridade</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-center">Abrir</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filtered.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div>
+                                <p className="font-bold text-slate-800">{item.titulo}</p>
+                                <p className="text-[11px] text-slate-400 font-medium mt-1">
+                                  {item.numero} • {tipoLabel(item.tipo)}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 font-medium text-slate-600">{item.setor}</td>
+                            <td className="px-6 py-4 font-medium text-slate-600">
+                              {item.responsavelTratativa}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={cn(
+                                  "px-2.5 py-1 rounded-full text-[11px] font-black",
+                                  prioridadeClass(item.prioridade)
+                                )}
+                              >
+                                {item.prioridade}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={cn(
+                                  "px-3 py-1 rounded-full text-[11px] font-black border",
+                                  statusClass(item.status)
+                                )}
+                              >
+                                {statusLabel(item.status)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                onClick={() => setSelectedId(item.id)}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:text-indigo-700 hover:border-indigo-200 hover:bg-indigo-50 transition-all"
+                              >
+                                Abrir <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {filtered.length === 0 && (
+                      <div className="p-10 text-center text-sm text-slate-400 font-medium">
+                        Nenhum registro encontrado para esse filtro.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* DETALHE */}
+                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-800 mb-4">Painel do Registro</h3>
+                  {!selected ? (
+                    <div className="text-sm text-slate-400 font-medium">
+                      Selecione um registro para visualizar os detalhes e avançar no workflow.
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                              {selected.numero}
+                            </span>
+                            <span
+                              className={cn(
+                                "px-3 py-1 rounded-full text-[11px] font-black border",
+                                statusClass(selected.status)
+                              )}
+                            >
+                              {statusLabel(selected.status)}
+                            </span>
+                          </div>
+                          <h4 className="text-xl font-bold text-slate-900">{selected.titulo}</h4>
+                          <p className="text-sm text-slate-500 mt-2 max-w-4xl">{selected.descricao}</p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {selected.status !== "TRATATIVA" && (
+                            <button
+                              onClick={() => moverStatus(selected.id, "TRATATIVA")}
+                              className="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition-all"
+                            >
+                              Enviar para tratativa
+                            </button>
+                          )}
+                          {selected.status !== "CONCLUIDO" && (
+                            <button
+                              onClick={() => moverStatus(selected.id, "CONCLUIDO")}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all"
+                            >
+                              Concluir
+                            </button>
+                          )}
+                          {selected.status !== "CANCELADO" && (
+                            <button
+                              onClick={() => moverStatus(selected.id, "CANCELADO")}
+                              className="px-4 py-2 rounded-xl bg-slate-700 text-white text-sm font-bold hover:bg-slate-800 transition-all"
+                            >
+                              Cancelar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => excluirRegistro(selected.id)}
+                            className="px-4 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-bold hover:bg-red-100 transition-all"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <InfoCard label="Setor" value={selected.setor} />
+                        <InfoCard label="Área notificante" value={selected.areaNotificante} />
+                        <InfoCard label="Responsável" value={selected.responsavelTratativa} />
+                        <InfoCard label="Data ocorrência" value={selected.dataOcorrencia} />
+                        <InfoCard label="Local" value={selected.localOcorrencia} />
+                        <InfoCard label="Prioridade" value={selected.prioridade} />
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <TextBlock title="Ação imediata" text={selected.acaoImediata || "-"} />
+                        <TextBlock title="Causa raiz" text={selected.causaRaiz || "-"} />
+                        <TextBlock title="Conclusão" text={selected.conclusao || "-"} />
+                        <TextBlock
+                          title="Motivo de cancelamento"
+                          text={selected.motivoCancelamento || "-"}
+                        />
+                      </div>
+
+                      <div>
+                        <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+                          Plano de ação
+                        </h5>
+                        {selected.planoAcao.length === 0 ? (
+                          <div className="text-sm text-slate-400">Sem plano de ação cadastrado.</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {selected.planoAcao.map((pa) => (
+                              <div
+                                key={pa.id}
+                                className="border border-slate-200 rounded-2xl p-4 bg-slate-50"
+                              >
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                                  <div>
+                                    <p className="font-bold text-slate-800">{pa.descricao}</p>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      Responsável: {pa.responsavel} • Prazo: {pa.prazo || "-"}
+                                    </p>
+                                  </div>
+                                  <span className="px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-black text-slate-600">
+                                    {pa.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+                          Histórico
+                        </h5>
+                        <div className="space-y-3">
+                          {selected.historico.map((h) => (
+                            <div key={h.id} className="border-l-4 border-indigo-200 pl-4 py-1">
+                              <p className="text-sm font-bold text-slate-700">{h.acao}</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {h.data} • {h.autor}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* COLUNA DIREITA - FORMULÁRIO */}
+          <div className="xl:col-span-4">
+            <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm sticky top-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">Novo Registro</h2>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    Cadastro estruturado com fluxo de tratativa.
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                  <Plus className="w-5 h-5 text-indigo-600" />
+                </div>
+              </div>
+
+              <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
+                <FieldLabel label="Tipo de ocorrência" />
+                <select
+                  value={form.tipo}
+                  onChange={(e) => setForm({ ...form, tipo: e.target.value as ModuloTipo })}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                >
+                  <option value="NAO_CONFORMIDADE">Não conformidade</option>
+                  <option value="EVENTO_ADVERSO">Evento adverso</option>
+                  <option value="ELOGIO_RECLAMACAO">Elogio / Reclamação</option>
+                </select>
+
+                <FieldLabel label="Título" />
+                <input
+                  value={form.titulo}
+                  onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                  placeholder="Título objetivo da ocorrência"
+                />
+
+                <FieldLabel label="Descrição" />
+                <textarea
+                  value={form.descricao}
+                  onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+                  className="w-full min-h-[110px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
+                  placeholder="Descreva o fato com objetividade, rastreabilidade e clareza."
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel label="Setor" />
+                    <select
+                      value={form.setor}
+                      onChange={(e) => setForm({ ...form, setor: e.target.value })}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      {SETORES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Área notificante" />
+                    <select
+                      value={form.areaNotificante}
+                      onChange={(e) => setForm({ ...form, areaNotificante: e.target.value })}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      {SETORES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Data da ocorrência" />
+                    <input
+                      type="date"
+                      value={form.dataOcorrencia}
+                      onChange={(e) => setForm({ ...form, dataOcorrencia: e.target.value })}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Prazo de tratativa" />
+                    <input
+                      type="date"
+                      value={form.prazoTratativa || ""}
+                      onChange={(e) => setForm({ ...form, prazoTratativa: e.target.value })}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <FieldLabel label="Local da ocorrência" />
+                  <input
+                    value={form.localOcorrencia}
+                    onChange={(e) => setForm({ ...form, localOcorrencia: e.target.value })}
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    placeholder="Ex.: Leito, recepção, corredor, farmácia..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel label="Responsável pela tratativa" />
+                    <select
+                      value={form.responsavelTratativa}
+                      onChange={(e) =>
+                        setForm({ ...form, responsavelTratativa: e.target.value })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      {USUARIOS.map((u) => (
+                        <option key={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Perfil responsável" />
+                    <select
+                      value={form.perfilResponsavel}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          perfilResponsavel: e.target.value as PerfilAcesso,
+                        })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="NOTIFICADOR">Notificador</option>
+                      <option value="TRATADOR">Tratador</option>
+                      <option value="GESTOR">Gestor</option>
+                      <option value="QUALIDADE">Qualidade</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Prioridade" />
+                    <select
+                      value={form.prioridade}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          prioridade: e.target.value as Ocorrencia["prioridade"],
+                        })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="BAIXA">Baixa</option>
+                      <option value="MEDIA">Média</option>
+                      <option value="ALTA">Alta</option>
+                      <option value="CRITICA">Crítica</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Gravidade" />
+                    <select
+                      value={form.gravidade}
+                      onChange={(e) =>
+                        setForm({ ...form, gravidade: e.target.value as Gravidade })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="BAIXA">Baixa</option>
+                      <option value="MODERADA">Moderada</option>
+                      <option value="ALTA">Alta</option>
+                      <option value="GRAVE">Grave</option>
+                      <option value="SENTINELA">Sentinela</option>
+                    </select>
+                  </div>
+                </div>
+
+                {form.tipo === "NAO_CONFORMIDADE" && (
+                  <div>
+                    <FieldLabel label="Classificação da não conformidade" />
+                    <select
+                      value={form.classificacaoNC || ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          classificacaoNC:
+                            e.target.value as NaoConformidadeClassificacao,
+                        })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="">Selecione</option>
+                      <option value="PROCESSO">Processo</option>
+                      <option value="DOCUMENTO">Documento</option>
+                      <option value="TREINAMENTO">Treinamento</option>
+                      <option value="ESTRUTURA">Estrutura</option>
+                      <option value="EQUIPAMENTO">Equipamento</option>
+                      <option value="FORNECEDOR">Fornecedor</option>
+                      <option value="OUTRO">Outro</option>
+                    </select>
+                  </div>
+                )}
+
+                {form.tipo === "EVENTO_ADVERSO" && (
+                  <>
+                    <div>
+                      <FieldLabel label="Classificação do evento" />
+                      <select
+                        value={form.classificacaoEvento || ""}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            classificacaoEvento: e.target.value as EventoClassificacao,
+                          })
+                        }
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                      >
+                        <option value="">Selecione</option>
+                        <option value="QUEDA">Queda</option>
+                        <option value="MEDICACAO">Medicação</option>
+                        <option value="IDENTIFICACAO">Identificação</option>
+                        <option value="LESAO_PRESSAO">Lesão por pressão</option>
+                        <option value="INFECÇÃO">Infecção</option>
+                        <option value="PROCEDIMENTO">Procedimento</option>
+                        <option value="OUTRO">Outro</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <FieldLabel label="Código do paciente" />
+                        <input
+                          value={form.pacienteCodigo || ""}
+                          onChange={(e) =>
+                            setForm({ ...form, pacienteCodigo: e.target.value })
+                          }
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                          placeholder="Identificação restrita"
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={!!form.danoPaciente}
+                            onChange={(e) =>
+                              setForm({ ...form, danoPaciente: e.target.checked })
+                            }
+                            className="w-4 h-4"
+                          />
+                          Houve dano ao paciente
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {form.tipo === "ELOGIO_RECLAMACAO" && (
+                  <div>
+                    <FieldLabel label="Classificação da manifestação" />
+                    <select
+                      value={form.classificacaoManifestacao || ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          classificacaoManifestacao:
+                            e.target.value as ClassificacaoManifestacao,
+                        })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="">Selecione</option>
+                      <option value="ELOGIO">Elogio</option>
+                      <option value="RECLAMACAO">Reclamação</option>
+                      <option value="SUGESTAO">Sugestão</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.anonimo}
+                      onChange={(e) => setForm({ ...form, anonimo: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    Registro anônimo
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.identificacaoRestrita}
+                      onChange={(e) =>
+                        setForm({ ...form, identificacaoRestrita: e.target.checked })
+                      }
+                      className="w-4 h-4"
+                    />
+                    Dados sensíveis restritos
+                  </label>
+                </div>
+
+                {!form.anonimo && (
+                  <div>
+                    <FieldLabel label="Nome do notificador" />
+                    <input
+                      value={form.nomeNotificador || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, nomeNotificador: e.target.value })
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                      placeholder="Nome do profissional/notificador"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <FieldLabel label="Ação imediata" />
+                  <textarea
+                    value={form.acaoImediata || ""}
+                    onChange={(e) => setForm({ ...form, acaoImediata: e.target.value })}
+                    className="w-full min-h-[90px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
+                    placeholder="Ações adotadas no momento do registro."
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel label="Causa raiz / análise preliminar" />
+                  <textarea
+                    value={form.causaRaiz || ""}
+                    onChange={(e) => setForm({ ...form, causaRaiz: e.target.value })}
+                    className="w-full min-h-[90px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
+                    placeholder="Análise preliminar da causa raiz."
+                  />
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">Plano de ação</h4>
+                      <p className="text-xs text-slate-500 font-medium mt-1">
+                        Registre ações corretivas, preventivas ou de melhoria.
+                      </p>
+                    </div>
+                    <button
+                      onClick={addPlanoAcao}
+                      className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {form.planoAcao.map((pa) => (
+                      <div key={pa.id} className="bg-white border border-slate-200 rounded-2xl p-4">
+                        <div className="grid grid-cols-1 gap-3">
+                          <input
+                            value={pa.descricao}
+                            onChange={(e) =>
+                              updatePlanoAcao(pa.id, "descricao", e.target.value)
+                            }
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                            placeholder="Descrição da ação"
+                          />
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <select
+                              value={pa.responsavel}
+                              onChange={(e) =>
+                                updatePlanoAcao(pa.id, "responsavel", e.target.value)
+                              }
+                              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                            >
+                              {USUARIOS.map((u) => (
+                                <option key={u}>{u}</option>
+                              ))}
+                            </select>
+
+                            <input
+                              type="date"
+                              value={pa.prazo}
+                              onChange={(e) =>
+                                updatePlanoAcao(pa.id, "prazo", e.target.value)
+                              }
+                              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                            />
+
+                            <div className="flex gap-2">
+                              <select
+                                value={pa.status}
+                                onChange={(e) =>
+                                  updatePlanoAcao(pa.id, "status", e.target.value)
+                                }
+                                className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
+                              >
+                                <option value="PENDENTE">Pendente</option>
+                                <option value="EM_ANDAMENTO">Em andamento</option>
+                                <option value="CONCLUIDO">Concluído</option>
+                              </select>
+                              <button
+                                onClick={() => removePlanoAcao(pa.id)}
+                                className="w-11 h-11 shrink-0 rounded-2xl border border-red-200 bg-red-50 text-red-600 flex items-center justify-center"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {form.planoAcao.length === 0 && (
+                      <div className="text-sm text-slate-400 font-medium">
+                        Nenhuma ação cadastrada.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    onClick={() => salvarOcorrencia()}
+                    className="flex-1 h-12 rounded-2xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Salvar registro
+                  </button>
+
+                  <button
+                    onClick={() => resetForm(form.tipo)}
+                    className="h-12 px-4 rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RODAPÉ CONCEITUAL */}
+        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <RodapeCard
+              icon={<ShieldAlert className="w-5 h-5 text-indigo-600" />}
+              title="Governança"
+              text="Fluxo estruturado com rastreabilidade, status e responsáveis definidos."
+            />
+            <RodapeCard
+              icon={<User className="w-5 h-5 text-indigo-600" />}
+              title="LGPD"
+              text="Suporte a anonimização, restrição de identificação e controle de acesso."
+            />
+            <RodapeCard
+              icon={<AlertTriangle className="w-5 h-5 text-indigo-600" />}
+              title="Segurança"
+              text="Classificação de gravidade, dano e tratativa conforme criticidade."
+            />
+            <RodapeCard
+              icon={<BarChart3 className="w-5 h-5 text-indigo-600" />}
+              title="Indicadores"
+              text="Pronto para integrar dashboards, SLA, tendência e performance da tratativa."
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-// COMPONENTE AUXILIAR
-function KpiCard({ titulo, valor, desc, icon, cor }: any) {
-  const cores: any = {
-    blue: "bg-blue-50 text-blue-600 border-blue-100",
-    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    amber: "bg-amber-50 text-amber-600 border-amber-100",
-    red: "bg-red-50 text-red-600 border-red-100",
-    purple: "bg-purple-50 text-purple-600 border-purple-100",
-  };
+/* ──────────────────────────────────────────────────────────────────────────────
+ * SUBCOMPONENTS
+ * ────────────────────────────────────────────────────────────────────────────*/
 
+function KpiCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow cursor-pointer">
-      <div className="flex justify-between items-start mb-2">
-        <div className={`p-2.5 rounded-xl border ${cores[cor]}`}>{icon}</div>
-      </div>
-      <div>
-        <h3 className="text-3xl font-black text-slate-800 tracking-tight">{valor}</h3>
-        <p className="text-sm font-bold text-slate-600 mt-1">{titulo}</p>
-        <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 mt-1">{desc}</p>
-      </div>
+    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{label}</p>
+      <p className="text-2xl font-black text-slate-900 mt-2">{value}</p>
+    </div>
+  );
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{label}</p>
+      <p className="text-sm font-bold text-slate-800 mt-2">{value || "-"}</p>
+    </div>
+  );
+}
+
+function TextBlock({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+      <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-2">{title}</h5>
+      <p className="text-sm text-slate-700 leading-relaxed">{text}</p>
+    </div>
+  );
+}
+
+function FieldLabel({ label }: { label: string }) {
+  return (
+    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">
+      {label}
+    </label>
+  );
+}
+
+function RodapeCard({
+  icon,
+  title,
+  text,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+      <div className="mb-3">{icon}</div>
+      <h4 className="text-sm font-bold text-slate-800">{title}</h4>
+      <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">{text}</p>
     </div>
   );
 }
