@@ -85,7 +85,8 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // CORREÇÃO: "as any" para evitar erro de build na Vercel com o Supabase Auth
+      const { data, error } = await (supabase.auth as any).signInWithPassword({
         email: email.trim(),
         password: senha,
       });
