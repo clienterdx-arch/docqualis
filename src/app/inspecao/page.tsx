@@ -21,9 +21,10 @@ export default function InspecaoQualidadePage() {
   const fetchTodosDocumentos = async () => {
     setIsLoading(true);
     // Busca TUDO, sem filtro de pasta, para inspeção total
-    const { data, error } = await supabase
+    // Correção TypeScript para Vercel build (as any)
+    const { data, error } = await (supabase
       .from('documentos')
-      .select('*')
+      .select('*') as any)
       .order('created_at', { ascending: false });
     
     if (data) setDocumentos(data);
