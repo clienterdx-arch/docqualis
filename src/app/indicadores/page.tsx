@@ -472,431 +472,432 @@ function IndicadorDetailView({ ind, onBack }: { ind: any, onBack: () => void }) 
   };
 
   return (
-    <div className="flex flex-col h-full gap-8 animate-in fade-in duration-500 bg-[#f8fafc]">
-      
-      {/* Header Executivo */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shrink-0 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-5">
-          <button onClick={onBack} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"><ArrowLeft className="w-5 h-5" /></button>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="text-[10px] font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{ind.id}</span>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{kpiConfig1.setor}</span>
+    <div className="w-full h-full bg-slate-50/50 p-6 md:p-8 flex flex-col animate-in fade-in duration-500">
+      <div className="w-full max-w-7xl mx-auto flex flex-col h-full gap-8">
+        {/* Header Executivo */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shrink-0 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm w-full">
+          <div className="flex items-center gap-5">
+            <button onClick={onBack} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"><ArrowLeft className="w-5 h-5" /></button>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-[10px] font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{ind.id}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{kpiConfig1.setor}</span>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Análise: {kpiConfig1.nome}</h2>
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Análise: {kpiConfig1.nome}</h2>
+          </div>
+          <div className="flex items-center gap-6 border-l border-slate-100 pl-6">
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Último Fechamento</p>
+              <span className="text-2xl font-black text-[#2655e8] leading-none tracking-tight">{formatValue(ultimoMes1.realizado, kpiConfig1.formato, kpiConfig1.decimais)}</span>
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-right">Desvio da Meta</p>
+              <div className="flex items-center gap-1.5 justify-end">
+                <TIcon val={ultimoMes1.realizado as number} target={ultimoMes1.meta} pol={kpiConfig1.polaridade} />
+                <span className="text-sm font-bold text-slate-700">{Math.abs((ultimoMes1.realizado as number) - ultimoMes1.meta).toFixed(1)}</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-6 border-l border-slate-100 pl-6">
-           <div>
-             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Último Fechamento</p>
-             <span className="text-2xl font-black text-[#2655e8] leading-none tracking-tight">{formatValue(ultimoMes1.realizado, kpiConfig1.formato, kpiConfig1.decimais)}</span>
-           </div>
-           <div>
-             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-right">Desvio da Meta</p>
-             <div className="flex items-center gap-1.5 justify-end">
-               <TIcon val={ultimoMes1.realizado as number} target={ultimoMes1.meta} pol={kpiConfig1.polaridade} />
-               <span className="text-sm font-bold text-slate-700">{Math.abs((ultimoMes1.realizado as number) - ultimoMes1.meta).toFixed(1)}</span>
-             </div>
-           </div>
-        </div>
-      </div>
 
-      {/* Área de Gráficos */}
-      <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col shrink-0">
-         <div className="flex items-center justify-between mb-6 shrink-0">
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Evolução Temporal</h2>
-              <p className="text-xs text-slate-500 font-medium mt-1">Análise de tendência {kpiConfig1.agrupamento === 1 ? 'mensal' : 'agregada'}</p>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-inner">
-               <select value={kpiConfig1.agrupamento} onChange={(e) => setKpiConfig1({...kpiConfig1, agrupamento: Number(e.target.value)})} className="bg-transparent text-[11px] font-bold text-slate-600 outline-none cursor-pointer pl-3 pr-2 py-1">
-                 <option value={1}>Mensal</option><option value={2}>Bimestral</option><option value={3}>Trimestral</option><option value={6}>Semestral</option>
-               </select>
-               <div className="w-px h-4 bg-slate-300 mx-1" />
-               <div className="flex gap-1 pr-1">
-                 <button onClick={()=>setChartConfig1({...chartConfig1, tipoGrafico: 'line'})} className={`p-1.5 rounded-xl transition-all ${chartConfig1.tipoGrafico === 'line' ? 'bg-white shadow border border-slate-200 text-indigo-600' : 'text-slate-400 hover:text-slate-700'}`}><LineChart className="w-4 h-4"/></button>
-                 <button onClick={()=>setChartConfig1({...chartConfig1, tipoGrafico: 'bar'})} className={`p-1.5 rounded-xl transition-all ${chartConfig1.tipoGrafico === 'bar' ? 'bg-white shadow border border-slate-200 text-indigo-600' : 'text-slate-400 hover:text-slate-700'}`}><BarChart2 className="w-4 h-4"/></button>
-               </div>
-            </div>
-         </div>
-         
-         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[500px]">
-            <div className="lg:col-span-8 min-w-0 relative">
-               <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest leading-tight absolute top-2 left-10">Diagrama</h4>
-               <PremiumChart data={aggregatedData1} config={{...chartConfig1, formato: kpiConfig1.formato, decimais: kpiConfig1.decimais, extraSeries}} metaStyle={metaStyle} faixas={faixas} />
-            </div>
-            
-            <div className="lg:col-span-2">
-              <MiniBarChart 
-                 title="Desempenho Atual x Meta Global"
-                 labelA1="Meta" labelA2="" valA={metaAnual1} colorA={TARGET_RED}
-                 labelB1="Acum" labelB2="2026" valB={ytdAtual1} colorB={MAIN_COLOR}
-                 tipo={kpiConfig1.formato}
-              />
-            </div>
-
-            <div className="lg:col-span-2">
-              <MiniBarChart 
-                 title="Consolidado Ano Ant. vs Atual (YTD)"
-                 labelA1="Acum" labelA2="2025" valA={prevYtd1} colorA="#94a3b8"
-                 labelB1="Acum" labelB2="2026" valB={ytdAtual1} colorB={MAIN_COLOR}
-                 tipo={kpiConfig1.formato}
-                 showTrendLine={true}
-              />
-            </div>
-         </div>
-      </div>
-
-      {/* Painel Inferior (Tabs) */}
-      <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm flex-1 flex flex-col overflow-hidden min-h-[600px]">
-        <div className="flex border-b border-slate-100 px-8 pt-2 bg-slate-50/80 overflow-x-auto shrink-0 gap-8">
-          {[
-            {id:"dados", label:"Alimentação Mensal", icon: TableProperties},
-            {id:"compare", label:"Comparar Indicadores", icon: GitCompare},
-            {id:"config_grafico", label:"Painel Visual do Gráfico", icon: Settings2},
-            {id:"config_kpi", label:"Estrutura do Indicador", icon: FileText},
-            {id:"capa", label:"Análise Crítica & CAPA", icon: MessageSquarePlus},
-          ].map(t => (
-            <button key={t.id} onClick={() => { setActiveTab(t.id as any); if(t.id === 'capa') setCapaView('list'); }} 
-              className={`py-5 flex items-center gap-2 text-sm font-bold border-b-[3px] whitespace-nowrap outline-none transition-colors
-                ${activeTab === t.id ? "text-indigo-700 border-indigo-600" : "text-slate-400 border-transparent hover:text-slate-700 hover:border-slate-300"}`}>
-              <t.icon className="w-4 h-4" /> {t.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white relative">
+        {/* Área de Gráficos */}
+        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col shrink-0 w-full">
+          <div className="flex items-center justify-between mb-6 shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Evolução Temporal</h2>
+                <p className="text-xs text-slate-500 font-medium mt-1">Análise de tendência {kpiConfig1.agrupamento === 1 ? 'mensal' : 'agregada'}</p>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-inner">
+                <select value={kpiConfig1.agrupamento} onChange={(e) => setKpiConfig1({...kpiConfig1, agrupamento: Number(e.target.value)})} className="bg-transparent text-[11px] font-bold text-slate-600 outline-none cursor-pointer pl-3 pr-2 py-1">
+                  <option value={1}>Mensal</option><option value={2}>Bimestral</option><option value={3}>Trimestral</option><option value={6}>Semestral</option>
+                </select>
+                <div className="w-px h-4 bg-slate-300 mx-1" />
+                <div className="flex gap-1 pr-1">
+                  <button onClick={()=>setChartConfig1({...chartConfig1, tipoGrafico: 'line'})} className={`p-1.5 rounded-xl transition-all ${chartConfig1.tipoGrafico === 'line' ? 'bg-white shadow border border-slate-200 text-indigo-600' : 'text-slate-400 hover:text-slate-700'}`}><LineChart className="w-4 h-4"/></button>
+                  <button onClick={()=>setChartConfig1({...chartConfig1, tipoGrafico: 'bar'})} className={`p-1.5 rounded-xl transition-all ${chartConfig1.tipoGrafico === 'bar' ? 'bg-white shadow border border-slate-200 text-indigo-600' : 'text-slate-400 hover:text-slate-700'}`}><BarChart2 className="w-4 h-4"/></button>
+                </div>
+              </div>
+          </div>
           
-          {/* TAB 1: ALIMENTAÇÃO DE DADOS */}
-          {activeTab === 'dados' && (
-            <div className="animate-in fade-in duration-300 w-full space-y-6">
-               <div className="flex items-center justify-between">
-                 <div>
-                   <h3 className="text-lg font-bold text-slate-800">Lançamento de Resultados</h3>
-                   <p className="text-xs text-slate-500 font-medium mt-1">Insira, edite ou apague os valores. O gráfico é atualizado imediatamente.</p>
-                 </div>
-                 <div className="flex gap-3">
-                   <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm hover:bg-slate-50 flex items-center gap-2"><Download className="w-3.5 h-3.5"/> Importar CSV</button>
-                   <button className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-800 flex items-center gap-2"><Save className="w-3.5 h-3.5"/> Salvar Lançamentos</button>
-                 </div>
-               </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[500px]">
+              <div className="lg:col-span-8 min-w-0 relative">
+                <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest leading-tight absolute top-2 left-10">Diagrama</h4>
+                <PremiumChart data={aggregatedData1} config={{...chartConfig1, formato: kpiConfig1.formato, decimais: kpiConfig1.decimais, extraSeries}} metaStyle={metaStyle} faixas={faixas} />
+              </div>
+              
+              <div className="lg:col-span-2">
+                <MiniBarChart 
+                  title="Desempenho Atual x Meta Global"
+                  labelA1="Meta" labelA2="" valA={metaAnual1} colorA={TARGET_RED}
+                  labelB1="Acum" labelB2="2026" valB={ytdAtual1} colorB={MAIN_COLOR}
+                  tipo={kpiConfig1.formato}
+                />
+              </div>
 
-               <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-sm">
-                 <table className="w-full text-left text-sm whitespace-nowrap">
-                   <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
-                     <tr>
-                       <th className="px-6 py-4 w-32 text-center border-r border-slate-100">Período</th>
-                       <th className="px-6 py-4 border-r border-slate-100">Valor Realizado</th>
-                       {/* Geração Dinâmica de Cabeçalhos Extras */}
-                       {extraSeries.filter(s => s.active).map(s => (
-                         <th key={`head-${s.key}`} className="px-6 py-4 border-r border-slate-100">
-                            <span style={{ color: s.color }}>{s.label}</span>
-                         </th>
-                       ))}
-                       <th className="px-6 py-4 border-r border-slate-100">Meta Estipulada</th>
-                       <th className="px-6 py-4 text-center border-r border-slate-100">Desvio / Status</th>
-                       <th className="px-6 py-4 w-12 text-center">Ação</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                     {dataSeries1.map((row:any, idx:number) => {
-                        const desvio = row.realizado != null ? row.realizado - row.meta : 0;
-                        const isLast = idx === dataSeries1.length - 1;
+              <div className="lg:col-span-2">
+                <MiniBarChart 
+                  title="Consolidado Ano Ant. vs Atual (YTD)"
+                  labelA1="Acum" labelA2="2025" valA={prevYtd1} colorA="#94a3b8"
+                  labelB1="Acum" labelB2="2026" valB={ytdAtual1} colorB={MAIN_COLOR}
+                  tipo={kpiConfig1.formato}
+                  showTrendLine={true}
+                />
+              </div>
+          </div>
+        </div>
 
-                        return (
-                          <tr key={row.id} className={`transition-colors group hover:bg-slate-50`}>
-                            <td className={`px-6 py-2.5 text-center border-r border-slate-100 bg-slate-50/50`}>
-                              <input type="text" value={row.periodo} onChange={(e) => handleUpdateTableData(idx, 'periodo', e.target.value)} className="w-full max-w-[100px] px-2 py-1 text-center font-bold bg-transparent outline-none focus:bg-white focus:shadow focus:rounded-md text-slate-800" />
-                              {isLast && <span className="block text-[9px] font-black uppercase tracking-widest mt-0.5 text-indigo-600">Atual</span>}
-                            </td>
-                            <td className="px-6 py-2.5 border-r border-slate-100">
-                              <input 
-                                type="number" value={row.realizado === null ? "" : row.realizado} 
-                                onChange={(e) => handleUpdateTableData(idx, 'realizado', e.target.value)}
-                                className="w-full max-w-[140px] px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-white shadow-sm"
-                                placeholder="-"
-                              />
-                            </td>
-                            {/* Geração Dinâmica de Inputs Extras */}
-                            {extraSeries.filter(s => s.active).map(s => (
-                               <td key={`cell-${s.key}-${row.id}`} className="px-6 py-2.5 border-r border-slate-100">
-                                  <input 
-                                    type="number" value={row[s.key] == null ? "" : row[s.key]} 
-                                    onChange={(e) => handleUpdateTableData(idx, s.key, e.target.value)}
-                                    className="w-full max-w-[140px] px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-white shadow-sm"
-                                    placeholder="-"
-                                  />
-                               </td>
-                            ))}
-                            <td className="px-6 py-2.5 font-bold text-slate-400 border-r border-slate-100">
-                               <input type="number" value={row.meta} onChange={(e) => handleUpdateTableData(idx, 'meta', e.target.value)} className="w-24 px-2 py-1 bg-transparent text-slate-500 outline-none font-bold" />
-                            </td>
-                            <td className="px-6 py-2.5 text-center border-r border-slate-100">
-                              {row.realizado != null ? <VarianceBadge value={desvio} /> : <span className="text-xs text-slate-300 font-bold">-</span>}
-                            </td>
-                            <td className="px-6 py-2.5 text-center">
-                              <button onClick={() => handleDeleteMonth(row.id)} className="p-2.5 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all flex mx-auto" title="Apagar Mês">
-                                 <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                     })}
-                   </tbody>
-                 </table>
-               </div>
-               <button onClick={handleAddMonth} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-all">
-                 <PlusCircle className="w-5 h-5"/> Lançar Próximo Período
-               </button>
-            </div>
-          )}
+        {/* Painel Inferior (Tabs) */}
+        <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm flex-1 flex flex-col overflow-hidden min-h-[600px] w-full">
+          <div className="flex border-b border-slate-100 px-8 pt-2 bg-slate-50/80 overflow-x-auto shrink-0 gap-8">
+            {[
+              {id:"dados", label:"Alimentação Mensal", icon: TableProperties},
+              {id:"compare", label:"Comparar Indicadores", icon: GitCompare},
+              {id:"config_grafico", label:"Painel Visual do Gráfico", icon: Settings2},
+              {id:"config_kpi", label:"Estrutura do Indicador", icon: FileText},
+              {id:"capa", label:"Análise Crítica & CAPA", icon: MessageSquarePlus},
+            ].map(t => (
+              <button key={t.id} onClick={() => { setActiveTab(t.id as any); if(t.id === 'capa') setCapaView('list'); }} 
+                className={`py-5 flex items-center gap-2 text-sm font-bold border-b-[3px] whitespace-nowrap outline-none transition-colors
+                  ${activeTab === t.id ? "text-indigo-700 border-indigo-600" : "text-slate-400 border-transparent hover:text-slate-700 hover:border-slate-300"}`}>
+                <t.icon className="w-4 h-4" /> {t.label}
+              </button>
+            ))}
+          </div>
 
-          {/* TAB 2: COMPARAÇÃO OVERLAY */}
-          {activeTab === 'compare' && (
-             <div className="animate-in fade-in duration-300 space-y-8">
-                <div className="flex justify-between items-center mb-6 shrink-0">
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white relative">
+            
+            {/* TAB 1: ALIMENTAÇÃO DE DADOS */}
+            {activeTab === 'dados' && (
+              <div className="animate-in fade-in duration-300 w-full space-y-6">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800">Comparativo Multi-Indicador</h3>
-                    <p className="text-sm text-slate-500 font-medium mt-1">Overlay de performance entre indicadores diferentes do sistema.</p>
+                    <h3 className="text-lg font-bold text-slate-800">Lançamento de Resultados</h3>
+                    <p className="text-xs text-slate-500 font-medium mt-1">Insira, edite ou apague os valores. O gráfico é atualizado imediatamente.</p>
                   </div>
-                  <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100 shadow-inner">
-                    <GitCompare className="w-5 h-5 text-indigo-400"/>
-                    <select className="bg-transparent text-xs font-bold px-3 py-2 outline-none">
-                       <option>{INDICATORS[0].name}</option>
-                    </select>
-                    <span className="text-xs text-slate-400 font-black">vs</span>
-                    <select className="bg-transparent text-xs font-bold px-3 py-2 outline-none">
-                       <option>{INDICATORS[1].name}</option>
-                    </select>
+                  <div className="flex gap-3">
+                    <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm hover:bg-slate-50 flex items-center gap-2"><Download className="w-3.5 h-3.5"/> Importar CSV</button>
+                    <button className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-800 flex items-center gap-2"><Save className="w-3.5 h-3.5"/> Salvar Lançamentos</button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl shadow-sm p-6 flex flex-col h-[480px]">
-                        <h4 className="text-sm font-bold text-slate-600 mb-6">Correlação de Tendência Temporal</h4>
-                        <div className="flex-1 w-full min-h-0 relative">
-                           <IndicatorComparisonChart 
-                               ind1Data={dataSeries1} ind2Data={dataSeries2}
-                               config1={{formato: kpiConfig1.formato}} config2={{formato: kpiConfig2.formato}}
-                           />
-                        </div>
-                    </div>
-                    <div className="lg:col-span-4 space-y-6">
-                        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 flex flex-col gap-4">
-                           <p className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">Indicador A</p>
-                           <h5 className="text-sm font-semibold text-slate-700">{INDICATORS[0].name}</h5>
-                           <div className="flex items-baseline justify-between"><span className="text-3xl font-black text-indigo-600">{formatValue(ytdAtual1, kpiConfig1.formato, kpiConfig1.decimais)}</span><VarianceBadge value={ytdAtual1 - metaAnual1}/></div>
-                        </div>
-                        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 flex flex-col gap-4">
-                           <p className="text-[10px] font-black uppercase text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">Indicador B</p>
-                           <h5 className="text-sm font-semibold text-slate-700">{INDICATORS[1].name}</h5>
-                           <div className="flex items-baseline justify-between"><span className="text-3xl font-black text-[#4f46e5]">{formatValue(ytdAtual2, kpiConfig2.formato, 1)} {INDICATORS[1].unit}</span><VarianceBadge value={ytdAtual2 - metaAnual2}/></div>
-                        </div>
-                    </div>
+                <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-sm">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                      <tr>
+                        <th className="px-6 py-4 w-32 text-center border-r border-slate-100">Período</th>
+                        <th className="px-6 py-4 border-r border-slate-100">Valor Realizado</th>
+                        {/* Geração Dinâmica de Cabeçalhos Extras */}
+                        {extraSeries.filter(s => s.active).map(s => (
+                          <th key={`head-${s.key}`} className="px-6 py-4 border-r border-slate-100">
+                              <span style={{ color: s.color }}>{s.label}</span>
+                          </th>
+                        ))}
+                        <th className="px-6 py-4 border-r border-slate-100">Meta Estipulada</th>
+                        <th className="px-6 py-4 text-center border-r border-slate-100">Desvio / Status</th>
+                        <th className="px-6 py-4 w-12 text-center">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {dataSeries1.map((row:any, idx:number) => {
+                          const desvio = row.realizado != null ? row.realizado - row.meta : 0;
+                          const isLast = idx === dataSeries1.length - 1;
+
+                          return (
+                            <tr key={row.id} className={`transition-colors group hover:bg-slate-50`}>
+                              <td className={`px-6 py-2.5 text-center border-r border-slate-100 bg-slate-50/50`}>
+                                <input type="text" value={row.periodo} onChange={(e) => handleUpdateTableData(idx, 'periodo', e.target.value)} className="w-full max-w-[100px] px-2 py-1 text-center font-bold bg-transparent outline-none focus:bg-white focus:shadow focus:rounded-md text-slate-800" />
+                                {isLast && <span className="block text-[9px] font-black uppercase tracking-widest mt-0.5 text-indigo-600">Atual</span>}
+                              </td>
+                              <td className="px-6 py-2.5 border-r border-slate-100">
+                                <input 
+                                  type="number" value={row.realizado === null ? "" : row.realizado} 
+                                  onChange={(e) => handleUpdateTableData(idx, 'realizado', e.target.value)}
+                                  className="w-full max-w-[140px] px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-white shadow-sm"
+                                  placeholder="-"
+                                />
+                              </td>
+                              {/* Geração Dinâmica de Inputs Extras */}
+                              {extraSeries.filter(s => s.active).map(s => (
+                                <td key={`cell-${s.key}-${row.id}`} className="px-6 py-2.5 border-r border-slate-100">
+                                    <input 
+                                      type="number" value={row[s.key] == null ? "" : row[s.key]} 
+                                      onChange={(e) => handleUpdateTableData(idx, s.key, e.target.value)}
+                                      className="w-full max-w-[140px] px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-white shadow-sm"
+                                      placeholder="-"
+                                    />
+                                </td>
+                              ))}
+                              <td className="px-6 py-2.5 font-bold text-slate-400 border-r border-slate-100">
+                                <input type="number" value={row.meta} onChange={(e) => handleUpdateTableData(idx, 'meta', e.target.value)} className="w-24 px-2 py-1 bg-transparent text-slate-500 outline-none font-bold" />
+                              </td>
+                              <td className="px-6 py-2.5 text-center border-r border-slate-100">
+                                {row.realizado != null ? <VarianceBadge value={desvio} /> : <span className="text-xs text-slate-300 font-bold">-</span>}
+                              </td>
+                              <td className="px-6 py-2.5 text-center">
+                                <button onClick={() => handleDeleteMonth(row.id)} className="p-2.5 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all flex mx-auto" title="Apagar Mês">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-             </div>
-          )}
+                <button onClick={handleAddMonth} className="w-full p-4 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-all">
+                  <PlusCircle className="w-5 h-5"/> Lançar Próximo Período
+                </button>
+              </div>
+            )}
 
-          {/* TAB 3: CONFIGURAÇÃO VISUAL DO GRÁFICO */}
-          {activeTab === 'config_grafico' && (
-            <div className="animate-in fade-in max-w-4xl space-y-8">
-               <SectionTitle title="Parâmetros Visuais do Dashboard" subtitle="Configure eixos, metas e coloração de fundo para leitura gerencial" />
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 
-                 {/* BLOCO DE SÉRIES ADICIONAIS NOVO */}
-                 <div className="md:col-span-2 space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">Séries de Dados Adicionais (Até 4 extras) no Diagrama Principal</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {extraSeries.map(s => (
-                        <div key={s.key} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                           <input type="checkbox" checked={s.active} onChange={e => handleUpdateExtraSeries(s.key, 'active', e.target.checked)} className="w-4 h-4 accent-indigo-600 cursor-pointer"/>
-                           <input type="text" value={s.label} onChange={e => handleUpdateExtraSeries(s.key, 'label', e.target.value)} className="flex-1 text-sm font-bold border-b border-slate-200 outline-none focus:border-indigo-500 bg-transparent disabled:opacity-50" placeholder="Nome da Série" disabled={!s.active} />
-                           <select value={s.type} onChange={e => handleUpdateExtraSeries(s.key, 'type', e.target.value)} className="text-xs font-bold outline-none bg-slate-50 border border-slate-200 rounded px-2 py-1 disabled:opacity-50 cursor-pointer" disabled={!s.active}>
-                             <option value="line">Linha</option>
-                             <option value="bar">Barra</option>
-                           </select>
-                           <input type="color" value={s.color} onChange={e => handleUpdateExtraSeries(s.key, 'color', e.target.value)} className="w-8 h-8 rounded cursor-pointer border-none p-0 disabled:opacity-50" disabled={!s.active} />
+            {/* TAB 2: COMPARAÇÃO OVERLAY */}
+            {activeTab === 'compare' && (
+              <div className="animate-in fade-in duration-300 space-y-8">
+                  <div className="flex justify-between items-center mb-6 shrink-0">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800">Comparativo Multi-Indicador</h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">Overlay de performance entre indicadores diferentes do sistema.</p>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100 shadow-inner">
+                      <GitCompare className="w-5 h-5 text-indigo-400"/>
+                      <select className="bg-transparent text-xs font-bold px-3 py-2 outline-none">
+                        <option>{INDICATORS[0].name}</option>
+                      </select>
+                      <span className="text-xs text-slate-400 font-black">vs</span>
+                      <select className="bg-transparent text-xs font-bold px-3 py-2 outline-none">
+                        <option>{INDICATORS[1].name}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                      <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl shadow-sm p-6 flex flex-col h-[480px]">
+                          <h4 className="text-sm font-bold text-slate-600 mb-6">Correlação de Tendência Temporal</h4>
+                          <div className="flex-1 w-full min-h-0 relative">
+                            <IndicatorComparisonChart 
+                                ind1Data={dataSeries1} ind2Data={dataSeries2}
+                                config1={{formato: kpiConfig1.formato}} config2={{formato: kpiConfig2.formato}}
+                            />
+                          </div>
+                      </div>
+                      <div className="lg:col-span-4 space-y-6">
+                          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 flex flex-col gap-4">
+                            <p className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">Indicador A</p>
+                            <h5 className="text-sm font-semibold text-slate-700">{INDICATORS[0].name}</h5>
+                            <div className="flex items-baseline justify-between"><span className="text-3xl font-black text-indigo-600">{formatValue(ytdAtual1, kpiConfig1.formato, kpiConfig1.decimais)}</span><VarianceBadge value={ytdAtual1 - metaAnual1}/></div>
+                          </div>
+                          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 flex flex-col gap-4">
+                            <p className="text-[10px] font-black uppercase text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">Indicador B</p>
+                            <h5 className="text-sm font-semibold text-slate-700">{INDICATORS[1].name}</h5>
+                            <div className="flex items-baseline justify-between"><span className="text-3xl font-black text-[#4f46e5]">{formatValue(ytdAtual2, kpiConfig2.formato, 1)} {INDICATORS[1].unit}</span><VarianceBadge value={ytdAtual2 - metaAnual2}/></div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+            )}
+
+            {/* TAB 3: CONFIGURAÇÃO VISUAL DO GRÁFICO */}
+            {activeTab === 'config_grafico' && (
+              <div className="animate-in fade-in max-w-4xl space-y-8">
+                <SectionTitle title="Parâmetros Visuais do Dashboard" subtitle="Configure eixos, metas e coloração de fundo para leitura gerencial" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  
+                  {/* BLOCO DE SÉRIES ADICIONAIS NOVO */}
+                  <div className="md:col-span-2 space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">Séries de Dados Adicionais (Até 4 extras) no Diagrama Principal</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {extraSeries.map(s => (
+                          <div key={s.key} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                            <input type="checkbox" checked={s.active} onChange={e => handleUpdateExtraSeries(s.key, 'active', e.target.checked)} className="w-4 h-4 accent-indigo-600 cursor-pointer"/>
+                            <input type="text" value={s.label} onChange={e => handleUpdateExtraSeries(s.key, 'label', e.target.value)} className="flex-1 text-sm font-bold border-b border-slate-200 outline-none focus:border-indigo-500 bg-transparent disabled:opacity-50" placeholder="Nome da Série" disabled={!s.active} />
+                            <select value={s.type} onChange={e => handleUpdateExtraSeries(s.key, 'type', e.target.value)} className="text-xs font-bold outline-none bg-slate-50 border border-slate-200 rounded px-2 py-1 disabled:opacity-50 cursor-pointer" disabled={!s.active}>
+                              <option value="line">Linha</option>
+                              <option value="bar">Barra</option>
+                            </select>
+                            <input type="color" value={s.color} onChange={e => handleUpdateExtraSeries(s.key, 'color', e.target.value)} className="w-8 h-8 rounded cursor-pointer border-none p-0 disabled:opacity-50" disabled={!s.active} />
+                          </div>
+                        ))}
+                      </div>
+                  </div>
+
+                  <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">Controle de Eixos</h4>
+                      <div className="space-y-4">
+                        <label className="flex items-center justify-between cursor-pointer"><span className="text-sm font-bold text-slate-700">Eixo Y Automático (Min/Max calc)</span><input type="checkbox" checked={chartConfig1.eixoYAuto} onChange={() => setChartConfig1({...chartConfig1, eixoYAuto: !chartConfig1.eixoYAuto})} className="w-4 h-4 accent-indigo-600"/></label>
+                        {!chartConfig1.eixoYAuto && (
+                          <div className="flex items-center gap-4 pt-2">
+                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Y Mínimo</label><input type="number" value={chartConfig1.eixoYMin} onChange={e=>setChartConfig1({...chartConfig1, eixoYMin: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Y Máximo</label><input type="number" value={chartConfig1.eixoYMax} onChange={e=>setChartConfig1({...chartConfig1, eixoYMax: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                          </div>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2 pt-4">Elementos Analíticos</h4>
+                      <div className="space-y-3">
+                        <label className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1.5 rounded"><span className="text-sm font-medium text-slate-700">Rótulos de Dados nos Pontos</span><input type="checkbox" checked={chartConfig1.mostrarRotulos} onChange={() => setChartConfig1({...chartConfig1, mostrarRotulos: !chartConfig1.mostrarRotulos})} className="w-4 h-4 accent-indigo-600"/></label>
+                      </div>
+                  </div>
+
+                  <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">Linha de Meta Geral</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Valor Meta</label><input type="number" value={metaStyle.valor} onChange={e=>setMetaStyle({...metaStyle, valor: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg text-sm font-bold text-indigo-700 outline-none"/></div>
+                          <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Rótulo</label><input type="text" value={metaStyle.rotulo} onChange={e=>setMetaStyle({...metaStyle, rotulo: e.target.value})} className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none"/></div>
                         </div>
-                      ))}
-                    </div>
-                 </div>
+                      </div>
+                  </div>
+                </div>
+                
+              </div>
+            )}
 
-                 <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">Controle de Eixos</h4>
-                    <div className="space-y-4">
-                      <label className="flex items-center justify-between cursor-pointer"><span className="text-sm font-bold text-slate-700">Eixo Y Automático (Min/Max calc)</span><input type="checkbox" checked={chartConfig1.eixoYAuto} onChange={() => setChartConfig1({...chartConfig1, eixoYAuto: !chartConfig1.eixoYAuto})} className="w-4 h-4 accent-indigo-600"/></label>
-                      {!chartConfig1.eixoYAuto && (
-                        <div className="flex items-center gap-4 pt-2">
-                          <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Y Mínimo</label><input type="number" value={chartConfig1.eixoYMin} onChange={e=>setChartConfig1({...chartConfig1, eixoYMin: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                          <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Y Máximo</label><input type="number" value={chartConfig1.eixoYMax} onChange={e=>setChartConfig1({...chartConfig1, eixoYMax: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                        </div>
-                      )}
+            {/* TAB 4: ESTRUTURA DO INDICADOR (METADADOS) */}
+            {activeTab === 'config_kpi' && (
+              <div className="animate-in fade-in max-w-3xl space-y-6">
+                  <SectionTitle title="Mapeamento Estrutural do KPI" subtitle="Defina o comportamento lógico e os metadados do indicador" />
+                  <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm grid grid-cols-2 gap-6">
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nome do Indicador</label>
+                      <input type="text" value={kpiConfig1.nome} onChange={e=>setKpiConfig1({...kpiConfig1, nome: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500" />
                     </div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2 pt-4">Elementos Analíticos</h4>
-                    <div className="space-y-3">
-                      <label className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1.5 rounded"><span className="text-sm font-medium text-slate-700">Rótulos de Dados nos Pontos</span><input type="checkbox" checked={chartConfig1.mostrarRotulos} onChange={() => setChartConfig1({...chartConfig1, mostrarRotulos: !chartConfig1.mostrarRotulos})} className="w-4 h-4 accent-indigo-600"/></label>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tipo de Formatação</label>
+                      <select value={kpiConfig1.formato} onChange={e=>setKpiConfig1({...kpiConfig1, formato: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white">
+                          <option value="absoluto">Número Absoluto (Ex: 150)</option>
+                          <option value="percentual">Percentual (Ex: 95.5%)</option>
+                          <option value="moeda">Moeda (Ex: R$ 1.500,00)</option>
+                          <option value="tempo">Horas (Ex: 12.5h)</option>
+                      </select>
                     </div>
-                 </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Casas Decimais</label>
+                      <select value={kpiConfig1.decimais} onChange={e=>setKpiConfig1({...kpiConfig1, decimais: Number(e.target.value)})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white">
+                          <option value={0}>0 (Inteiro)</option>
+                          <option value={1}>1 (Ex: 0.0)</option>
+                          <option value={2}>2 (Ex: 0.00)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Polaridade (Comportamento Ideal)</label>
+                      <select value={kpiConfig1.polaridade} onChange={e=>setKpiConfig1({...kpiConfig1, polaridade: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white">
+                          <option>Maior Melhor</option><option>Menor Melhor</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Setor Vinculado</label>
+                      <input type="text" value={kpiConfig1.setor} disabled className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-sm font-bold text-slate-500 outline-none" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-4"><button className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-sm hover:bg-indigo-700 transition-all shadow-md"><Save className="w-4 h-4" /> Salvar Estrutura</button></div>
+              </div>
+            )}
 
-                 <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">Linha de Meta Geral</h4>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-4">
-                         <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Valor Meta</label><input type="number" value={metaStyle.valor} onChange={e=>setMetaStyle({...metaStyle, valor: Number(e.target.value)})} className="w-full p-2 border border-slate-300 rounded-lg text-sm font-bold text-indigo-700 outline-none"/></div>
-                         <div className="flex-1"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Rótulo</label><input type="text" value={metaStyle.rotulo} onChange={e=>setMetaStyle({...metaStyle, rotulo: e.target.value})} className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+            {/* TAB 5: ANÁLISE CRÍTICA / CAPA */}
+            {activeTab === 'capa' && (
+              <div className="animate-in fade-in duration-300 w-full">
+                  {capaView === 'list' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <SectionTitle title="Análises Críticas" subtitle="Histórico de análises de desempenho e planos de ação (CAPA)" />
+                        <button onClick={() => setCapaView('detail')} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors">
+                          <Plus className="w-4 h-4" /> Registrar Nova Análise
+                        </button>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-500 tracking-widest">
+                            <tr>
+                              <th className="px-6 py-4">Período</th>
+                              <th className="px-6 py-4">Resultado</th>
+                              <th className="px-6 py-4 text-center">Status</th>
+                              <th className="px-6 py-4">Responsável</th>
+                              <th className="px-6 py-4 text-center">Ações CAPA</th>
+                              <th className="px-6 py-4 text-center"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {MOCK_ANALISES.map((a, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                                <td className="px-6 py-4 font-bold text-slate-800">{a.periodo}</td>
+                                <td className="px-6 py-4 font-medium text-slate-600">{a.resultado}% (Meta: {a.meta}%)</td>
+                                <td className="px-6 py-4 text-center"><span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-red-50 text-red-600 border border-red-100">{a.status}</span></td>
+                                <td className="px-6 py-4 font-medium text-slate-600">{a.autor} <span className="text-[10px] text-slate-400 block">{a.data}</span></td>
+                                <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md text-[11px] font-bold border border-indigo-100">{a.acoes} Ações Abertas</span></td>
+                                <td className="px-6 py-4 text-center">
+                                  <button onClick={() => setCapaView('detail')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 shadow-sm flex items-center gap-1 mx-auto group-hover:text-indigo-600 group-hover:border-indigo-200 transition-all">
+                                    <Eye className="w-3.5 h-3.5"/> Abrir
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                 </div>
-               </div>
-               
-            </div>
-          )}
+                  )}
 
-          {/* TAB 4: ESTRUTURA DO INDICADOR (METADADOS) */}
-          {activeTab === 'config_kpi' && (
-             <div className="animate-in fade-in max-w-3xl space-y-6">
-                <SectionTitle title="Mapeamento Estrutural do KPI" subtitle="Defina o comportamento lógico e os metadados do indicador" />
-                <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm grid grid-cols-2 gap-6">
-                   <div className="col-span-2">
-                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nome do Indicador</label>
-                     <input type="text" value={kpiConfig1.nome} onChange={e=>setKpiConfig1({...kpiConfig1, nome: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500" />
-                   </div>
-                   <div>
-                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tipo de Formatação</label>
-                     <select value={kpiConfig1.formato} onChange={e=>setKpiConfig1({...kpiConfig1, formato: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white">
-                        <option value="absoluto">Número Absoluto (Ex: 150)</option>
-                        <option value="percentual">Percentual (Ex: 95.5%)</option>
-                        <option value="moeda">Moeda (Ex: R$ 1.500,00)</option>
-                        <option value="tempo">Horas (Ex: 12.5h)</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Casas Decimais</label>
-                     <select value={kpiConfig1.decimais} onChange={e=>setKpiConfig1({...kpiConfig1, decimais: Number(e.target.value)})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white">
-                        <option value={0}>0 (Inteiro)</option>
-                        <option value={1}>1 (Ex: 0.0)</option>
-                        <option value={2}>2 (Ex: 0.00)</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Polaridade (Comportamento Ideal)</label>
-                     <select value={kpiConfig1.polaridade} onChange={e=>setKpiConfig1({...kpiConfig1, polaridade: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white">
-                        <option>Maior Melhor</option><option>Menor Melhor</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Setor Vinculado</label>
-                     <input type="text" value={kpiConfig1.setor} disabled className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-sm font-bold text-slate-500 outline-none" />
-                   </div>
-                </div>
-                <div className="flex justify-end pt-4"><button className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-sm hover:bg-indigo-700 transition-all shadow-md"><Save className="w-4 h-4" /> Salvar Estrutura</button></div>
-             </div>
-          )}
+                  {capaView === 'detail' && (
+                    <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                      <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
+                        <button onClick={() => setCapaView('list')} className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 transition-all"><ArrowLeft className="w-4 h-4"/></button>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-800">Análise: Junho/2026</h3>
+                          <p className="text-xs text-slate-500 font-medium">Preencha a narrativa do desvio e estipule o plano de ação.</p>
+                        </div>
+                      </div>
 
-          {/* TAB 5: ANÁLISE CRÍTICA / CAPA */}
-          {activeTab === 'capa' && (
-             <div className="animate-in fade-in duration-300 w-full">
-                {capaView === 'list' && (
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                       <SectionTitle title="Análises Críticas" subtitle="Histórico de análises de desempenho e planos de ação (CAPA)" />
-                       <button onClick={() => setCapaView('detail')} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors">
-                         <Plus className="w-4 h-4" /> Registrar Nova Análise
-                       </button>
-                    </div>
-
-                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                          <tr>
-                            <th className="px-6 py-4">Período</th>
-                            <th className="px-6 py-4">Resultado</th>
-                            <th className="px-6 py-4 text-center">Status</th>
-                            <th className="px-6 py-4">Responsável</th>
-                            <th className="px-6 py-4 text-center">Ações CAPA</th>
-                            <th className="px-6 py-4 text-center"></th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {MOCK_ANALISES.map((a, idx) => (
-                             <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                               <td className="px-6 py-4 font-bold text-slate-800">{a.periodo}</td>
-                               <td className="px-6 py-4 font-medium text-slate-600">{a.resultado}% (Meta: {a.meta}%)</td>
-                               <td className="px-6 py-4 text-center"><span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-red-50 text-red-600 border border-red-100">{a.status}</span></td>
-                               <td className="px-6 py-4 font-medium text-slate-600">{a.autor} <span className="text-[10px] text-slate-400 block">{a.data}</span></td>
-                               <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md text-[11px] font-bold border border-indigo-100">{a.acoes} Ações Abertas</span></td>
-                               <td className="px-6 py-4 text-center">
-                                 <button onClick={() => setCapaView('detail')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 shadow-sm flex items-center gap-1 mx-auto group-hover:text-indigo-600 group-hover:border-indigo-200 transition-all">
-                                   <Eye className="w-3.5 h-3.5"/> Abrir
-                                 </button>
-                               </td>
-                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {capaView === 'detail' && (
-                  <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                    <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
-                       <button onClick={() => setCapaView('list')} className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 transition-all"><ArrowLeft className="w-4 h-4"/></button>
-                       <div>
-                         <h3 className="text-lg font-bold text-slate-800">Análise: Junho/2026</h3>
-                         <p className="text-xs text-slate-500 font-medium">Preencha a narrativa do desvio e estipule o plano de ação.</p>
-                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                       <div className="md:col-span-1 space-y-6">
-                          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Contexto do Período</h4>
-                            <div className="space-y-4">
-                               <div><p className="text-xs text-slate-400 font-medium">Valor Realizado</p><p className="text-2xl font-black text-[#2655e8]">20.1%</p></div>
-                               <div><p className="text-xs text-slate-400 font-medium">Meta</p><p className="text-lg font-bold text-red-600">27.0%</p></div>
-                               <div><p className="text-xs text-slate-400 font-medium">Desvio Absoluto</p><p className="text-sm font-bold text-slate-700">-6.9%</p></div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="md:col-span-1 space-y-6">
+                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Contexto do Período</h4>
+                              <div className="space-y-4">
+                                <div><p className="text-xs text-slate-400 font-medium">Valor Realizado</p><p className="text-2xl font-black text-[#2655e8]">20.1%</p></div>
+                                <div><p className="text-xs text-slate-400 font-medium">Meta</p><p className="text-lg font-bold text-red-600">27.0%</p></div>
+                                <div><p className="text-xs text-slate-400 font-medium">Desvio Absoluto</p><p className="text-sm font-bold text-slate-700">-6.9%</p></div>
+                              </div>
                             </div>
-                          </div>
-                       </div>
-                       
-                       <div className="md:col-span-2 space-y-6">
-                          <div>
-                            <label className="block text-[11px] font-black text-slate-600 uppercase tracking-widest mb-2">Narrativa da Análise Crítica</label>
-                            <textarea className="w-full p-4 border border-slate-200 rounded-2xl text-sm outline-none focus:border-indigo-500 shadow-sm resize-none min-h-[120px]" placeholder="Descreva os fatores que levaram ao resultado..."></textarea>
-                          </div>
-                          
-                          <div>
-                            <div className="flex justify-between items-center mb-3">
-                               <label className="block text-[11px] font-black text-slate-600 uppercase tracking-widest">Plano de Ação (CAPA)</label>
-                               <button className="text-xs font-bold text-indigo-600 flex items-center gap-1 hover:text-indigo-800"><PlusCircle className="w-3.5 h-3.5"/> Adicionar Ação</button>
+                        </div>
+                        
+                        <div className="md:col-span-2 space-y-6">
+                            <div>
+                              <label className="block text-[11px] font-black text-slate-600 uppercase tracking-widest mb-2">Narrativa da Análise Crítica</label>
+                              <textarea className="w-full p-4 border border-slate-200 rounded-2xl text-sm outline-none focus:border-indigo-500 shadow-sm resize-none min-h-[120px]" placeholder="Descreva os fatores que levaram ao resultado..."></textarea>
                             </div>
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                              <table className="w-full text-left text-sm">
-                                <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
-                                  <tr><th className="px-4 py-3">O que fazer? (Ação)</th><th className="px-4 py-3">Quem?</th><th className="px-4 py-3">Prazo</th><th className="px-4 py-3"></th></tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  <tr className="bg-white">
-                                    <td className="px-4 py-3"><input type="text" placeholder="Descreva a ação corretiva..." className="w-full text-sm outline-none font-medium text-slate-700"/></td>
-                                    <td className="px-4 py-3"><select className="text-sm outline-none bg-transparent font-medium text-slate-600"><option>Dr. Carlos</option><option>Ana Silva</option></select></td>
-                                    <td className="px-4 py-3"><input type="date" className="text-sm outline-none font-medium text-slate-600"/></td>
-                                    <td className="px-4 py-3 text-right"><button className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
-                                  </tr>
-                                </tbody>
-                              </table>
+                            
+                            <div>
+                              <div className="flex justify-between items-center mb-3">
+                                <label className="block text-[11px] font-black text-slate-600 uppercase tracking-widest">Plano de Ação (CAPA)</label>
+                                <button className="text-xs font-bold text-indigo-600 flex items-center gap-1 hover:text-indigo-800"><PlusCircle className="w-3.5 h-3.5"/> Adicionar Ação</button>
+                              </div>
+                              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                  <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                                    <tr><th className="px-4 py-3">O que fazer? (Ação)</th><th className="px-4 py-3">Quem?</th><th className="px-4 py-3">Prazo</th><th className="px-4 py-3"></th></tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    <tr className="bg-white">
+                                      <td className="px-4 py-3"><input type="text" placeholder="Descreva a ação corretiva..." className="w-full text-sm outline-none font-medium text-slate-700"/></td>
+                                      <td className="px-4 py-3"><select className="text-sm outline-none bg-transparent font-medium text-slate-600"><option>Dr. Carlos</option><option>Ana Silva</option></select></td>
+                                      <td className="px-4 py-3"><input type="date" className="text-sm outline-none font-medium text-slate-600"/></td>
+                                      <td className="px-4 py-3 text-right"><button className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="flex justify-end pt-4">
-                             <button className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-indigo-700 transition-all flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Salvar Análise e CAPA</button>
-                          </div>
-                       </div>
+                            <div className="flex justify-end pt-4">
+                              <button className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-indigo-700 transition-all flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Salvar Análise e CAPA</button>
+                            </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
-             </div>
-          )}
+                  )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -905,182 +906,184 @@ function IndicadorDetailView({ ind, onBack }: { ind: any, onBack: () => void }) 
 
 // ─── PÁGINA PRINCIPAL DO MÓDULO (A VIEW INICIAL COM A LISTAGEM) ──────────────
 export default function GestaoIndicadoresPage() {
-  const [tab, setTab] = useState("painel");
-  const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<string[]>([]);
-  const [indicadorAtivo, setIndicadorAtivo] = useState<any>(null);
+  const [tab, setTab] = useState("painel");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [indicadorAtivo, setIndicadorAtivo] = useState<any>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return ALL_INDICATORS.filter(i => i.nome.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.setor.toLowerCase().includes(q));
-  }, [search]);
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return ALL_INDICATORS.filter(i => i.nome.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.setor.toLowerCase().includes(q));
+  }, [search]);
 
-  const sectors = useMemo(() => SETORES.map(s => {
-    const inds = filtered.filter(i => i.setor === s.nome);
-    const v = inds.filter(i => i.status === "verde").length;
-    const a = inds.filter(i => i.status === "amarelo").length;
-    const r = inds.filter(i => i.status === "vermelho").length;
-    return {...s, inds, verde: v, amarelo: a, vermelho: r, total: inds.length};
-  }).filter(s => s.total > 0), [filtered]);
+  const sectors = useMemo(() => SETORES.map(s => {
+    const inds = filtered.filter(i => i.setor === s.nome);
+    const v = inds.filter(i => i.status === "verde").length;
+    const a = inds.filter(i => i.status === "amarelo").length;
+    const r = inds.filter(i => i.status === "vermelho").length;
+    return {...s, inds, verde: v, amarelo: a, vermelho: r, total: inds.length};
+  }).filter(s => s.total > 0), [filtered]);
 
-  const stats = useMemo(() => ({
-    total: ALL_INDICATORS.length,
-    red: ALL_INDICATORS.filter(i => i.status === "vermelho").length,
-    yellow: ALL_INDICATORS.filter(i => i.status === "amarelo").length,
-    openActions: MOCK_ACOES.length,
-    pct: Math.round(ALL_INDICATORS.filter(i => i.status === "verde").length / ALL_INDICATORS.length * 100)
-  }), []);
+  const stats = useMemo(() => ({
+    total: ALL_INDICATORS.length,
+    red: ALL_INDICATORS.filter(i => i.status === "vermelho").length,
+    yellow: ALL_INDICATORS.filter(i => i.status === "amarelo").length,
+    openActions: MOCK_ACOES.length,
+    pct: Math.round(ALL_INDICATORS.filter(i => i.status === "verde").length / ALL_INDICATORS.length * 100)
+  }), []);
 
-  if (indicadorAtivo) {
-    return <IndicadorDetailView ind={indicadorAtivo} onBack={() => setIndicadorAtivo(null)} />;
-  }
+  if (indicadorAtivo) {
+    return <IndicadorDetailView ind={indicadorAtivo} onBack={() => setIndicadorAtivo(null)} />;
+  }
 
-  return (
-    <div className="h-full bg-slate-50/50 p-8 flex flex-col gap-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end gap-4 shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">Gestão de Indicadores <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase rounded-md border border-indigo-200">KPIs & BSC</span></h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">Monitoramento de performance em tempo real · <strong className="text-slate-700">{stats.total} KPIs ativos</strong></p>
-        </div>
-        <div className="relative group">
-           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-           <input value={search} onChange={e => { setSearch(e.target.value); setTab("painel"); }} placeholder="Buscar indicador..." className="pl-10 pr-10 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-400 w-80 shadow-sm transition-all"/>
-           {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><XCircle className="w-4 h-4 text-slate-300 hover:text-red-500 transition-colors" /></button>}
-        </div>
-      </div>
+  return (
+    <div className="w-full h-full bg-slate-50/50 p-6 md:p-8 flex flex-col animate-in fade-in duration-500">
+      <div className="w-full max-w-7xl mx-auto flex flex-col h-full gap-6">
+        <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 shrink-0 w-full">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">Gestão de Indicadores <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase rounded-md border border-indigo-200">KPIs & BSC</span></h1>
+            <p className="text-sm text-slate-500 mt-1 font-medium">Monitoramento de performance em tempo real · <strong className="text-slate-700">{stats.total} KPIs ativos</strong></p>
+          </div>
+          <div className="relative group w-full md:w-auto mt-2 md:mt-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input value={search} onChange={e => { setSearch(e.target.value); setTab("painel"); }} placeholder="Buscar indicador..." className="pl-10 pr-10 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-400 w-full md:w-80 shadow-sm transition-all"/>
+            {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><XCircle className="w-4 h-4 text-slate-300 hover:text-red-500 transition-colors" /></button>}
+          </div>
+        </div>
 
-      <div className="border-b border-slate-200 flex gap-8 text-[13px] font-bold text-slate-500 overflow-x-auto shrink-0">
-        {[
-          { key: "painel", label: "Base de Indicadores", icon: FolderTree },
-          { key: "acoes", label: "Ações CAPA", icon: Activity, badge: stats.openActions },
-          { key: "cadastro", label: "Fichas Técnicas", icon: FileCheck },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`pb-4 border-b-[3px] flex items-center gap-2 whitespace-nowrap transition-all outline-none ${tab === t.key ? "border-indigo-600 text-indigo-700" : "border-transparent hover:text-slate-800 hover:border-slate-300"}`}>
-            <t.icon className="w-4 h-4" /> {t.label}
-            {t.badge ? <span className="ml-1 bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 text-[10px] font-black">{t.badge}</span> : null}
-          </button>
-        ))}
-      </div>
+        <div className="border-b border-slate-200 flex gap-8 text-[13px] font-bold text-slate-500 overflow-x-auto shrink-0 w-full">
+          {[
+            { key: "painel", label: "Base de Indicadores", icon: FolderTree },
+            { key: "acoes", label: "Ações CAPA", icon: Activity, badge: stats.openActions },
+            { key: "cadastro", label: "Fichas Técnicas", icon: FileCheck },
+          ].map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} className={`pb-4 border-b-[3px] flex items-center gap-2 whitespace-nowrap transition-all outline-none ${tab === t.key ? "border-indigo-600 text-indigo-700" : "border-transparent hover:text-slate-800 hover:border-slate-300"}`}>
+              <t.icon className="w-4 h-4" /> {t.label}
+              {t.badge ? <span className="ml-1 bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 text-[10px] font-black">{t.badge}</span> : null}
+            </button>
+          ))}
+        </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col pb-4">
-        {tab === "painel" && (
-           <div className="flex flex-col h-full gap-6">
-             <div className="grid grid-cols-4 gap-4 shrink-0">
-               {[ {l: "Cadastrados", v: stats.total, c: "text-slate-800", bc: "border-slate-200 bg-white"}, {l: "Em Atenção", v: stats.yellow, c: "text-amber-600", bc: "border-amber-200 bg-white"}, {l: "Críticos", v: stats.red, c: "text-red-600", bc: "border-red-200 bg-white"}, {l: "% Result. na Meta", v: `${stats.pct}%`, c: "text-emerald-700", bc: "border-emerald-200 bg-emerald-50"} ].map(s => (
-                 <div key={s.l} className={`p-5 rounded-2xl shadow-sm flex flex-col gap-2 border ${s.bc}`}><span className="text-[10px] font-black uppercase text-slate-500">{s.l}</span><span className={`text-3xl font-black ${s.c}`}>{s.v}</span></div>
-               ))}
-             </div>
-             
-             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
-               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-                 <div className="flex gap-2"><button onClick={() => setExpanded(SETORES.map(s=>s.nome))} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-indigo-600 shadow-sm transition-all">Expandir Tudo</button><button onClick={() => setExpanded([])} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-indigo-600 shadow-sm transition-all">Recolher</button></div>
-                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-4">Base de Dados · TreeView</span>
-               </div>
-               <div className="overflow-y-auto flex-1 p-2 custom-scrollbar">
-                  {sectors.map(s => (
-                    <div key={s.nome} className="mb-1">
-                      <button onClick={() => setExpanded(p => p.includes(s.nome) ? p.filter(x=>x!==s.nome) : [...p, s.nome])} className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all outline-none ${expanded.includes(s.nome) ? "bg-slate-50 border border-slate-200 shadow-inner" : "hover:bg-slate-50 border border-transparent"}`}>
-                        <div className="flex items-center gap-4">
-                          <div className="w-6 h-6 flex items-center justify-center text-slate-300">{expanded.includes(s.nome) ? <ChevronDown className="w-5 h-5 text-indigo-600" /> : <ChevronRight className="w-5 h-5 text-slate-300" />}</div>
-                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black shadow-sm" style={{color: s.cor}}>{s.sigla}</div>
-                          <span className="font-bold text-slate-800 text-lg">{s.nome}</span>
-                          <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-100 px-2 py-0.5 rounded-full">{s.total}</span>
-                        </div>
-                        <div className="flex gap-6 pr-4">
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500"/><span className="text-xs font-bold text-slate-500">{s.vermelho}</span></div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-xs font-bold text-slate-500">{s.amarelo}</span></div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-xs font-bold text-slate-500">{s.verde}</span></div>
-                        </div>
-                      </button>
-                      {expanded.includes(s.nome) && (
-                        <div className="mt-2 ml-14 mr-4 mb-4 bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-inner">
-                          <table className="w-full text-left text-sm border-collapse">
-                            <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest border-b">
-                              <tr><th className="px-6 py-3">Código</th><th className="px-6 py-3">Indicador</th><th className="px-6 py-3 text-center">Status</th><th className="px-6 py-3 text-right">Realizado</th><th className="px-6 py-3 text-right">Meta</th><th className="px-6 py-3 text-right"></th></tr>
-                            </thead>
-                            <tbody>
-                              {s.inds.map((ind: any) => (
-                                <tr key={ind.id} onClick={() => setIndicadorAtivo(ind)} className="hover:bg-indigo-50/30 cursor-pointer group border-b last:border-0 border-slate-50">
-                                  <td className="px-6 py-4 font-bold text-indigo-600 text-xs">{ind.id}</td>
-                                  <td className="px-6 py-4 font-bold text-slate-800">{ind.nome} <span className="ml-2 text-[9px] font-mono bg-slate-100 text-slate-400 px-1 py-0.5 rounded border">{ind.setorSigla}</span></td>
-                                  <td className="px-6 py-4 text-center"><div className="flex items-center justify-center gap-2"><div className={`w-2 h-2 rounded-full ${statusColors[ind.status]}`} /><TIcon val={ind.valorAtual} target={ind.meta} pol={ind.polaridade}/></div></td>
-                                  <td className="px-6 py-4 text-right font-black text-slate-900">{formatValue(ind.valorAtual, ind.unidade === "%" ? "percentual" : "absoluto", 1)}</td>
-                                  <td className="px-6 py-4 text-right font-bold text-slate-400">{ind.meta}</td>
-                                  <td className="px-6 py-4 text-right"><button className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 shadow-sm flex items-center gap-1 ml-auto group-hover:text-indigo-600 group-hover:border-indigo-200"><BarChart3 className="w-3.5 h-3.5"/> Analisar</button></td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-               </div>
-             </div>
-           </div>
-        )}
-        
-        {tab === "acoes" && (
-           <div className="flex flex-col h-full bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden animate-in fade-in">
-              <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4 shrink-0">
-                 <div><h2 className="text-lg font-bold text-slate-800 leading-none">Plano de Ação (CAPA)</h2></div>
-                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/><input type="text" placeholder="Pesquisar ação ou responsável..." className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 w-full shadow-sm" /></div>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm"><Plus className="w-4 h-4" /> Adicionar Ação</button>
-                 </div>
-              </div>
-              <div className="overflow-y-auto flex-1 custom-scrollbar">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-white border-b text-[10px] font-black uppercase text-slate-400 tracking-widest sticky top-0 shadow-sm">
-                    <tr><th className="px-6 py-4">Ação</th><th className="px-6 py-4">KPI Ref.</th><th className="px-6 py-4">Responsável</th><th className="px-6 py-4 text-center">Prazo</th><th className="px-6 py-4 text-center">Status</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {MOCK_ACOES.map(a => (
-                      <tr key={a.id} className="hover:bg-slate-50 cursor-pointer group transition-colors">
-                        <td className="px-6 py-4 font-bold text-slate-800">{a.desc}</td>
-                        <td className="px-6 py-4"><span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded shadow-sm">{a.indicador}</span></td>
-                        <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 border border-slate-200">{getInitials(a.resp)}</div><span className="font-bold text-slate-700 text-xs">{a.resp}</span></div></td>
-                        <td className="px-6 py-4 text-center text-xs font-bold text-slate-500">{a.prazo}</td>
-                        <td className="px-6 py-4 text-center"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shadow-sm ${a.status==='Concluída'?'bg-emerald-50 text-emerald-700 border-emerald-100':'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>{a.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-           </div>
-        )}
+        <div className="flex-1 overflow-hidden flex flex-col pb-4 w-full">
+          {tab === "painel" && (
+            <div className="flex flex-col h-full gap-6 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0 w-full">
+                {[ {l: "Cadastrados", v: stats.total, c: "text-slate-800", bc: "border-slate-200 bg-white"}, {l: "Em Atenção", v: stats.yellow, c: "text-amber-600", bc: "border-amber-200 bg-white"}, {l: "Críticos", v: stats.red, c: "text-red-600", bc: "border-red-200 bg-white"}, {l: "% Result. na Meta", v: `${stats.pct}%`, c: "text-emerald-700", bc: "border-emerald-200 bg-emerald-50"} ].map(s => (
+                  <div key={s.l} className={`p-5 rounded-2xl shadow-sm flex flex-col gap-2 border ${s.bc}`}><span className="text-[10px] font-black uppercase text-slate-500">{s.l}</span><span className={`text-3xl font-black ${s.c}`}>{s.v}</span></div>
+                ))}
+              </div>
+              
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col w-full">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+                  <div className="flex gap-2"><button onClick={() => setExpanded(SETORES.map(s=>s.nome))} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-indigo-600 shadow-sm transition-all">Expandir Tudo</button><button onClick={() => setExpanded([])} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-indigo-600 shadow-sm transition-all">Recolher</button></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-4 hidden sm:inline-block">Base de Dados · TreeView</span>
+                </div>
+                <div className="overflow-y-auto flex-1 p-2 custom-scrollbar w-full">
+                  {sectors.map(s => (
+                    <div key={s.nome} className="mb-1">
+                      <button onClick={() => setExpanded(p => p.includes(s.nome) ? p.filter(x=>x!==s.nome) : [...p, s.nome])} className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all outline-none ${expanded.includes(s.nome) ? "bg-slate-50 border border-slate-200 shadow-inner" : "hover:bg-slate-50 border border-transparent"}`}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-6 h-6 flex items-center justify-center text-slate-300">{expanded.includes(s.nome) ? <ChevronDown className="w-5 h-5 text-indigo-600" /> : <ChevronRight className="w-5 h-5 text-slate-300" />}</div>
+                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black shadow-sm shrink-0" style={{color: s.cor}}>{s.sigla}</div>
+                          <span className="font-bold text-slate-800 text-base md:text-lg">{s.nome}</span>
+                          <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-100 px-2 py-0.5 rounded-full hidden sm:inline-block">{s.total}</span>
+                        </div>
+                        <div className="flex gap-4 md:gap-6 pr-4">
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500"/><span className="text-xs font-bold text-slate-500">{s.vermelho}</span></div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-400"/><span className="text-xs font-bold text-slate-500">{s.amarelo}</span></div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-xs font-bold text-slate-500">{s.verde}</span></div>
+                        </div>
+                      </button>
+                      {expanded.includes(s.nome) && (
+                        <div className="mt-2 sm:ml-14 mr-2 sm:mr-4 mb-4 bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-inner overflow-x-auto">
+                          <table className="w-full text-left text-sm border-collapse min-w-[600px]">
+                            <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest border-b">
+                              <tr><th className="px-6 py-3">Código</th><th className="px-6 py-3">Indicador</th><th className="px-6 py-3 text-center">Status</th><th className="px-6 py-3 text-right">Realizado</th><th className="px-6 py-3 text-right">Meta</th><th className="px-6 py-3 text-right"></th></tr>
+                            </thead>
+                            <tbody>
+                              {s.inds.map((ind: any) => (
+                                <tr key={ind.id} onClick={() => setIndicadorAtivo(ind)} className="hover:bg-indigo-50/30 cursor-pointer group border-b last:border-0 border-slate-50">
+                                  <td className="px-6 py-4 font-bold text-indigo-600 text-xs">{ind.id}</td>
+                                  <td className="px-6 py-4 font-bold text-slate-800">{ind.nome} <span className="ml-2 text-[9px] font-mono bg-slate-100 text-slate-400 px-1 py-0.5 rounded border">{ind.setorSigla}</span></td>
+                                  <td className="px-6 py-4 text-center"><div className="flex items-center justify-center gap-2"><div className={`w-2 h-2 rounded-full ${statusColors[ind.status]}`} /><TIcon val={ind.valorAtual} target={ind.meta} pol={ind.polaridade}/></div></td>
+                                  <td className="px-6 py-4 text-right font-black text-slate-900">{formatValue(ind.valorAtual, ind.unidade === "%" ? "percentual" : "absoluto", 1)}</td>
+                                  <td className="px-6 py-4 text-right font-bold text-slate-400">{ind.meta}</td>
+                                  <td className="px-6 py-4 text-right"><button className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 shadow-sm flex items-center gap-1 ml-auto group-hover:text-indigo-600 group-hover:border-indigo-200"><BarChart3 className="w-3.5 h-3.5"/> Analisar</button></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {tab === "acoes" && (
+            <div className="flex flex-col h-full bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden animate-in fade-in w-full">
+                <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4 shrink-0">
+                  <div><h2 className="text-lg font-bold text-slate-800 leading-none">Plano de Ação (CAPA)</h2></div>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                    <div className="relative flex-1 w-full md:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/><input type="text" placeholder="Pesquisar ação..." className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 w-full shadow-sm" /></div>
+                    <button className="flex items-center justify-center w-full sm:w-auto gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-sm"><Plus className="w-4 h-4" /> Nova Ação</button>
+                  </div>
+                </div>
+                <div className="overflow-y-auto flex-1 custom-scrollbar overflow-x-auto w-full">
+                  <table className="w-full text-left text-sm min-w-[700px]">
+                    <thead className="bg-white border-b text-[10px] font-black uppercase text-slate-400 tracking-widest sticky top-0 shadow-sm z-10">
+                      <tr><th className="px-6 py-4">Ação</th><th className="px-6 py-4">KPI Ref.</th><th className="px-6 py-4">Responsável</th><th className="px-6 py-4 text-center">Prazo</th><th className="px-6 py-4 text-center">Status</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {MOCK_ACOES.map(a => (
+                        <tr key={a.id} className="hover:bg-slate-50 cursor-pointer group transition-colors">
+                          <td className="px-6 py-4 font-bold text-slate-800">{a.desc}</td>
+                          <td className="px-6 py-4"><span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded shadow-sm">{a.indicador}</span></td>
+                          <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 border border-slate-200">{getInitials(a.resp)}</div><span className="font-bold text-slate-700 text-xs">{a.resp}</span></div></td>
+                          <td className="px-6 py-4 text-center text-xs font-bold text-slate-500">{a.prazo}</td>
+                          <td className="px-6 py-4 text-center"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shadow-sm ${a.status==='Concluída'?'bg-emerald-50 text-emerald-700 border-emerald-100':'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>{a.status}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+            </div>
+          )}
 
-        {tab === "cadastro" && (
-           <div className="flex flex-col h-full animate-in fade-in">
-              <div className="flex justify-between items-center mb-6 shrink-0">
-                 <div><h2 className="text-xl font-bold text-slate-800">Mapeamento de Indicadores</h2><p className="text-sm text-slate-500">Repositório de Fichas Técnicas (metodologia) aprovadas e em revisão.</p></div>
-                 <button className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-all"><Plus className="w-4 h-4" /> Cadastrar Ficha</button>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex-1 flex flex-col">
-                <div className="overflow-y-auto flex-1 custom-scrollbar">
-                   <table className="w-full text-left text-sm">
-                     <thead className="bg-slate-50 border-b text-[10px] font-black uppercase text-slate-400 tracking-widest sticky top-0 shadow-sm">
-                        <tr><th className="px-6 py-4">Ficha</th><th className="px-6 py-4">Título do KPI</th><th className="px-6 py-4">Setor</th><th className="px-6 py-4 text-center">Rev.</th><th className="px-6 py-4 text-center">Status</th><th className="px-6 py-4"></th></tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-100">
-                        {MOCK_FICHAS.map(f => (
-                          <tr key={f.id} className="hover:bg-slate-50 transition-colors group">
-                             <td className="px-6 py-4 font-mono font-bold text-indigo-700">{f.id}</td>
-                             <td className="px-6 py-4 font-bold text-slate-800">{f.titulo}<span className="bg-slate-100 text-slate-400 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-200 ml-2">{f.codigo}</span></td>
-                             <td className="px-6 py-4 text-slate-500 font-medium">{f.setor}</td>
-                             <td className="px-6 py-4 text-center text-slate-400 font-black">{f.rev}</td>
-                             <td className="px-6 py-4 text-center"><span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${f.status === 'Repositório' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{f.status}</span></td>
-                             <td className="px-6 py-4 text-right"><button className="text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 ml-auto">Ver Ficha <ChevronRight className="w-4 h-4"/></button></td>
-                          </tr>
-                        ))}
-                     </tbody>
-                   </table>
-                </div>
-              </div>
-           </div>
-        )}
+          {tab === "cadastro" && (
+            <div className="flex flex-col h-full animate-in fade-in w-full">
+                <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 shrink-0 gap-4">
+                  <div><h2 className="text-xl font-bold text-slate-800">Mapeamento de Indicadores</h2><p className="text-sm text-slate-500">Repositório de Fichas Técnicas aprovadas.</p></div>
+                  <button className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-all"><Plus className="w-4 h-4" /> Cadastrar Ficha</button>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex-1 flex flex-col w-full">
+                  <div className="overflow-y-auto flex-1 custom-scrollbar overflow-x-auto w-full">
+                    <table className="w-full text-left text-sm min-w-[700px]">
+                      <thead className="bg-slate-50 border-b text-[10px] font-black uppercase text-slate-400 tracking-widest sticky top-0 shadow-sm z-10">
+                          <tr><th className="px-6 py-4">Ficha</th><th className="px-6 py-4">Título do KPI</th><th className="px-6 py-4">Setor</th><th className="px-6 py-4 text-center">Rev.</th><th className="px-6 py-4 text-center">Status</th><th className="px-6 py-4"></th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {MOCK_FICHAS.map(f => (
+                            <tr key={f.id} className="hover:bg-slate-50 transition-colors group">
+                              <td className="px-6 py-4 font-mono font-bold text-indigo-700">{f.id}</td>
+                              <td className="px-6 py-4 font-bold text-slate-800">{f.titulo}<span className="bg-slate-100 text-slate-400 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-200 ml-2">{f.codigo}</span></td>
+                              <td className="px-6 py-4 text-slate-500 font-medium">{f.setor}</td>
+                              <td className="px-6 py-4 text-center text-slate-400 font-black">{f.rev}</td>
+                              <td className="px-6 py-4 text-center"><span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${f.status === 'Repositório' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{f.status}</span></td>
+                              <td className="px-6 py-4 text-right"><button className="text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 ml-auto">Ver Ficha <ChevronRight className="w-4 h-4"/></button></td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+            </div>
+          )}
 
-      </div>
-    </div>
-  );
+        </div>
+      </div>
+    </div>
+  );
 }
