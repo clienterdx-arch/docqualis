@@ -131,14 +131,14 @@ export default function NovoDocumentoPage() {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-rascunho.${fileExt}`;
         const filePath = `documentos/${fileName}`;
-        await supabase.storage.from('documentos-oficiais').upload(filePath, file);
-        const { data } = supabase.storage.from('documentos-oficiais').getPublicUrl(filePath);
+        await (supabase as any).storage.from('documentos-oficiais').upload(filePath, file);
+        const { data } = (supabase as any).storage.from('documentos-oficiais').getPublicUrl(filePath);
         publicUrl = data.publicUrl;
       }
 
       const listaVerificadores = verificadoresSelecionados.map(v => `${v.nome} (Até ${v.prazo})`).join('; ');
 
-      const { error: dbError } = await supabase.from('documentos').insert([{
+      const { error: dbError } = await (supabase.from('documentos').insert([{
         codigo: codigoFinal, 
         titulo, 
         versao: Number(versao), 
@@ -157,7 +157,7 @@ export default function NovoDocumentoPage() {
         status: 'Em Elaboração', 
         arquivo_url: publicUrl, 
         elaborador: 'CEO'
-      }]);
+      }]) as any);
 
       if (dbError) throw dbError;
       setSucesso(true);
@@ -188,12 +188,12 @@ export default function NovoDocumentoPage() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-final.${fileExt}`;
       const filePath = `documentos/${fileName}`;
-      await supabase.storage.from('documentos-oficiais').upload(filePath, file);
-      const { data: publicUrlData } = supabase.storage.from('documentos-oficiais').getPublicUrl(filePath);
+      await (supabase as any).storage.from('documentos-oficiais').upload(filePath, file);
+      const { data: publicUrlData } = (supabase as any).storage.from('documentos-oficiais').getPublicUrl(filePath);
 
       const listaVerificadores = verificadoresSelecionados.map(v => `${v.nome} (Até ${v.prazo})`).join('; ');
 
-      const { error: dbError } = await supabase.from('documentos').insert([{
+      const { error: dbError } = await (supabase.from('documentos').insert([{
         codigo: codigoFinal, 
         titulo, 
         versao: Number(versao), 
@@ -212,7 +212,7 @@ export default function NovoDocumentoPage() {
         status: 'Em Verificação', 
         arquivo_url: publicUrlData.publicUrl, 
         elaborador: 'CEO'
-      }]);
+      }]) as any);
 
       if (dbError) throw dbError;
       setSucesso(true);

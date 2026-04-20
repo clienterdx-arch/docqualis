@@ -170,8 +170,8 @@ export default function EditarDocumentoPage() {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-update.${fileExt}`;
         const filePath = `documentos/${fileName}`;
-        await supabase.storage.from('documentos-oficiais').upload(filePath, file);
-        const { data } = supabase.storage.from('documentos-oficiais').getPublicUrl(filePath);
+        await (supabase as any).storage.from('documentos-oficiais').upload(filePath, file);
+        const { data } = (supabase as any).storage.from('documentos-oficiais').getPublicUrl(filePath);
         finalUrl = data.publicUrl;
       }
 
