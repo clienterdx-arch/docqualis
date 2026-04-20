@@ -34,7 +34,6 @@ export default function GestaoDocumentosPage() {
     
     let docsFormatados: any[] = [];
     if (data) {
-      // CORREÇÃO TYPESCRIPT: (doc: any) explícito para o build não quebrar
       docsFormatados = data.map((doc: any) => ({
         ...doc,
         isProcesso: false,
@@ -73,7 +72,6 @@ export default function GestaoDocumentosPage() {
   const handleTornarObsoleto = async (id: string) => {
     if (!confirm("Tem certeza que deseja tornar este documento OBSOLETO? Ele sairá da vigência e não poderá mais ser acessado pelos usuários finais.")) return;
     
-    // Se for processo mock, apenas ignora para não quebrar. Em produção faria o update.
     if(docSelecionado.isProcesso) {
       alert("Ação não disponível para fluxos mockados.");
       return;
@@ -92,7 +90,6 @@ export default function GestaoDocumentosPage() {
   };
 
   const handleCriarNovaVersao = (doc: any) => {
-    // Redireciona para o formulário de novo documento passando os metadados base via Query Params
     const query = new URLSearchParams({
       base_id: doc.id,
       codigo: doc.codigo,
@@ -136,7 +133,7 @@ export default function GestaoDocumentosPage() {
         </div>
       )}
 
-      {/* HEADER PRINCIPAL - ESCONDIDO NA IMPRESSÃO */}
+      {/* HEADER PRINCIPAL */}
       <div className="flex items-center justify-between mb-8 print:hidden">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestão de Documentos</h1>
@@ -148,7 +145,7 @@ export default function GestaoDocumentosPage() {
         </div>
       </div>
 
-      {/* TABS DE NAVEGAÇÃO SUPERIOR */}
+      {/* TABS DE NAVEGAÇÃO */}
       <div className="border-b border-slate-200 mb-8 flex gap-8 text-sm font-bold text-slate-500 overflow-x-auto print:hidden">
         <button onClick={() => setViewState("blocos")} className={`pb-4 border-b-2 transition-all flex items-center gap-2 ${viewState === "blocos" || viewState === "lista" ? "border-blue-600 text-blue-600" : "border-transparent hover:text-slate-800"}`}>
           <Layers className="w-4 h-4"/> Pastas de Tramitação
@@ -164,9 +161,7 @@ export default function GestaoDocumentosPage() {
         </button>
       </div>
 
-      {/* ==========================================
-          VISÃO 1: BLOCOS (PASTAS)
-      ========================================== */}
+      {/* VISÃO 1: BLOCOS (PASTAS) */}
       {viewState === "blocos" && (
         <div className="animate-in fade-in">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
@@ -180,9 +175,7 @@ export default function GestaoDocumentosPage() {
         </div>
       )}
 
-      {/* ==========================================
-          VISÃO 2: LISTAGEM DENTRO DE UMA PASTA
-      ========================================== */}
+      {/* VISÃO 2: LISTAGEM DENTRO DE UMA PASTA */}
       {viewState === "lista" && (
         <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
           <div className="flex items-center gap-4 mb-2">
@@ -276,32 +269,22 @@ export default function GestaoDocumentosPage() {
         </div>
       )}
 
-      {/* ==========================================
-          VISÃO 3: INSPEÇÃO (O CÉREBRO DA QUALIDADE)
-      ========================================== */}
+      {/* VISÃO 3: INSPEÇÃO */}
       {viewState === "inspecao" && (
         <PainelInspecao documentos={documentos} isLoading={isLoading} aoAtualizar={fetchDocumentos} />
       )}
 
-      {/* ==========================================
-          VISÃO 4: CENTRAL DE CÓPIAS CONTROLADAS
-      ========================================== */}
+      {/* VISÃO 4: CÓPIAS CONTROLADAS */}
       {viewState === "copias" && (
         <PainelCopiasControladas documentos={documentos.filter(d => d.status === "Repositório" && !d.isProcesso)} />
       )}
 
-      {/* ==========================================
-          VISÃO 5: CONFIGURAÇÃO ORGANIZACIONAL
-      ========================================== */}
+      {/* VISÃO 5: CONFIGURAÇÃO ORGANIZACIONAL */}
       {viewState === "config" && (
         <PainelConfiguracaoAdmin setMensagemSistema={setMensagemSistema} />
       )}
 
-      {/* ==========================================
-          MODAIS E OVERLAYS
-      ========================================== */}
-
-      {/* Modal Exportar */}
+      {/* MODAL EXPORTAR */}
       {isExportModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in print:hidden">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
@@ -317,12 +300,11 @@ export default function GestaoDocumentosPage() {
         </div>
       )}
 
-      {/* MODAL: FICHA TÉCNICA DO DOCUMENTO */}
+      {/* MODAL: FICHA TÉCNICA */}
       {docSelecionado && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-[100] animate-in fade-in print:hidden">
           <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col animate-in slide-in-from-right-8 border-l border-slate-200">
             
-            {/* Header Modal */}
             <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50 shrink-0">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-xl border shadow-inner mt-1 ${docSelecionado.isProcesso ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
@@ -335,7 +317,6 @@ export default function GestaoDocumentosPage() {
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 leading-tight pr-4">{docSelecionado.titulo}</h3>
                   
-                  {/* Status Badge */}
                   <div className="mt-3 flex items-center gap-2">
                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border
                         ${docSelecionado.status === 'Repositório' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ''}
@@ -350,10 +331,7 @@ export default function GestaoDocumentosPage() {
               <button onClick={() => setDocSelecionado(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors shrink-0"><X className="w-5 h-5"/></button>
             </div>
 
-            {/* Conteúdo Ficha Técnica */}
             <div className="p-8 overflow-y-auto flex-1 bg-white custom-scrollbar space-y-8">
-               
-               {/* 1. Identificação */}
                <section>
                   <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
                     <BookOpen className="w-4 h-4"/> 1. Identificação do Documento
@@ -380,7 +358,6 @@ export default function GestaoDocumentosPage() {
                   </div>
                </section>
 
-               {/* 2. Controle de Versão */}
                <section>
                   <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
                     <History className="w-4 h-4"/> 2. Controle de Versão e Prazos
@@ -409,7 +386,6 @@ export default function GestaoDocumentosPage() {
                   </div>
                </section>
 
-               {/* 3. Responsabilidades */}
                <section>
                   <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
                     <User className="w-4 h-4"/> 3. Matriz de Responsabilidades
@@ -435,7 +411,6 @@ export default function GestaoDocumentosPage() {
                </section>
             </div>
 
-            {/* Footer com Ações Críticas (Apenas para Documentos em Repositório) */}
             {docSelecionado.status === "Repositório" && (
               <div className="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-4 shrink-0">
                  <button 
@@ -495,7 +470,6 @@ function PainelInspecao({ documentos, isLoading, aoAtualizar }: any) {
 
   return (
     <div className="animate-in slide-in-from-bottom-4">
-      {/* HEADER PRINT ONLY (Aparece só no PDF) */}
       <div className="hidden print:block mb-8">
         <h2 className="text-2xl font-black text-slate-900 border-b border-slate-200 pb-2">Relatório de Inspeção de Documentos</h2>
         <p className="text-sm text-slate-500 mt-2">Gerado em: {new Date().toLocaleString('pt-BR')}</p>
@@ -507,14 +481,12 @@ function PainelInspecao({ documentos, isLoading, aoAtualizar }: any) {
         </button>
       </div>
 
-      {/* CARDS DE RESUMO ANALÍTICO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 print:grid-cols-3">
         <ResumoCard titulo="Documentos em Inspeção" valor={total} icon={<FileText className="w-5 h-5"/>} cor="blue" />
         <ResumoCard titulo="Processos com Pendência" valor={pendentes} icon={<Clock className="w-5 h-5"/>} cor="amber" />
         <ResumoCard titulo="Índice de Vigência" valor={total > 0 ? `${Math.round((vigentes/total)*100)}%` : '100%'} icon={<CheckCircle2 className="w-5 h-5"/>} cor="emerald" />
       </div>
 
-      {/* ÁREA DE BUSCA E FILTROS */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-wrap items-center gap-4 print:hidden">
         <div className="flex-1 min-w-[300px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -538,7 +510,6 @@ function PainelInspecao({ documentos, isLoading, aoAtualizar }: any) {
         </button>
       </div>
 
-      {/* TABELA DE AUDITORIA */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden print:border-none print:shadow-none">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
@@ -650,9 +621,6 @@ function PainelCopiasControladas({ documentos }: { documentos: any[] }) {
   );
 }
 
-// ==========================================
-// COMPONENTES AUXILIARES EXISTENTES
-// ==========================================
 function DashboardBlock({ title, desc, count, icon, color, onClick, isLoading }: any) {
   const colorMap: any = { 
     emerald: "bg-emerald-50 text-emerald-600 border-emerald-100", 
@@ -716,13 +684,13 @@ function PainelConfiguracaoAdmin({ setMensagemSistema }: any) {
     if (!novoNome) return;
     let error;
     if (activeTab === 'tipos' && novaSigla) {
-      const res = await supabase.from('config_tipos_doc').insert([{ nome: novoNome, sigla: novaSigla.toUpperCase() }]);
+      const res: any = await supabase.from('config_tipos_doc').insert([{ nome: novoNome, sigla: novaSigla.toUpperCase() }]);
       error = res.error;
     } else if (activeTab === 'diretorias') {
-      const res = await supabase.from('config_diretorias').insert([{ nome: novoNome }]);
+      const res: any = await supabase.from('config_diretorias').insert([{ nome: novoNome }]);
       error = res.error;
     } else if (activeTab === 'setores' && novaSigla && novoDirId) {
-      const res = await supabase.from('config_setores').insert([{ nome: novoNome, sigla: novaSigla.toUpperCase(), diretoria_id: novoDirId }]);
+      const res: any = await supabase.from('config_setores').insert([{ nome: novoNome, sigla: novaSigla.toUpperCase(), diretoria_id: novoDirId }]);
       error = res.error;
     } else return;
 
@@ -733,7 +701,7 @@ function PainelConfiguracaoAdmin({ setMensagemSistema }: any) {
   };
 
   const removerItem = async (tabela: string, id: string) => {
-    const { error } = await supabase.from(tabela).delete().eq('id', id);
+    const { error } = await (supabase.from(tabela).delete() as any).eq('id', id);
     if (!error) { carregarTudo(); setMensagemSistema({tipo:'sucesso', texto:'Item removido!'}); setTimeout(()=>setMensagemSistema(null),3000); }
     else { setMensagemSistema({tipo:'erro', texto:'Erro ao remover. Pode haver documentos vinculados a este item.'}); setTimeout(()=>setMensagemSistema(null),3000); }
   };
