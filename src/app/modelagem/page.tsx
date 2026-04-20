@@ -708,10 +708,13 @@ export default function ProcessStudioPage() {
     if (!el) return;
 
     function onWheel(e: WheelEvent) {
+      const viewportEl = el;
+      if (!viewportEl) return;
+
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
 
-        const rect = el.getBoundingClientRect();
+        const rect = viewportEl.getBoundingClientRect();
         const cursorX = e.clientX - rect.left;
         const cursorY = e.clientY - rect.top;
 
