@@ -18,12 +18,11 @@ export default function SalaRevisaoPage() {
   // ==========================================================
   // CONTROLE DE ACESSO ENTERPRISE (DLP - Data Loss Prevention)
   // ==========================================================
-  const isQualidade = false; // Mock: Defina como 'true' para simular a visão da Qualidade
+  const isQualidade = false; 
 
   const [documento, setDocumento] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Estados da Assinatura Eletrônica
   const [justificativa, setJustificativa] = useState("");
   const [senhaAssinatura, setSenhaAssinatura] = useState("");
   const [isProcessando, setIsProcessando] = useState(false);
@@ -47,7 +46,6 @@ export default function SalaRevisaoPage() {
     fetchDocumento();
   }, [documentoId]);
 
-  // Lógica de Permissão de Impressão (Qualidade OU se for Formulário)
   const isFormulario = documento?.tipo_documento?.toLowerCase().includes('formul') || documento?.codigo?.includes('FOR');
   const podeImprimir = isQualidade || isFormulario;
 
@@ -95,7 +93,7 @@ export default function SalaRevisaoPage() {
 
       if (error) throw error;
 
-      setFeedback({ tipo: 'sucesso', msg: `Documento ${acao === 'Aprovar' ? 'aprovado' : 'devolvido'} com sucesso! Autenticando...` });
+      setFeedback({ tipo: 'sucesso', msg: `Documento ${acao === 'Aprovar' ? 'aprovado' : 'devolvido'} com sucesso!` });
       setTimeout(() => router.push('/'), 2000);
 
     } catch (err: any) {
@@ -113,229 +111,234 @@ export default function SalaRevisaoPage() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center font-bold text-slate-400 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <p>Acessando Cofre Digital do Documento...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-[#2655e8]" />
+        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Acessando Cofre Digital...</p>
       </div>
     );
   }
 
   if (!documento) {
-    return <div className="p-8 text-center font-bold text-slate-500">Documento não encontrado.</div>;
+    return <div className="p-8 text-center font-bold text-slate-500">Documento não encontrado no Repositório.</div>;
   }
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto animate-in fade-in duration-500">
+    <div className="min-h-screen bg-slate-50/50 p-6 md:p-8 animate-in fade-in duration-500">
       
-      {/* INJEÇÃO DE CSS PARA BLOQUEAR CTRL+P DO NAVEGADOR SE NÃO TIVER PERMISSÃO */}
+      {/* DLP CSS PROTECTION */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           ${!podeImprimir ? 'body { display: none !important; }' : ''}
         }
       `}} />
 
-      {/* HEADER DA SALA DE REVISÃO */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 hover:shadow-sm transition-all">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Análise e Homologação</h1>
-              <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border
-                ${documento.status === 'Em Homologação' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-amber-50 text-amber-700 border-amber-200'}
-              `}>
-                {documento.status}
-              </span>
-            </div>
-            <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-500"/> Ambiente Seguro CFR 21 Part 11
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {feedback && (
-        <div className={`mb-8 p-4 rounded-xl border flex items-center gap-3 text-sm font-bold animate-in slide-in-from-top-4 shadow-sm
-          ${feedback.tipo === 'sucesso' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}
-        `}>
-          {feedback.tipo === 'sucesso' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-          {feedback.msg}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* COLUNA ESQUERDA: VISUALIZADOR DE PDF E METADADOS */}
-        <div className="lg:col-span-8 space-y-6">
-          
-          {/* Card de Metadados Modernizado com DLP (Prevenção de Perda de Dados) */}
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex items-center justify-between gap-5 relative overflow-hidden">
-            
-            {/* Faixa de Segurança Visual */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${podeImprimir ? 'bg-blue-500' : 'bg-red-500'}`}></div>
-
-            <div className="flex items-center gap-5">
-              <div className={`p-4 rounded-2xl shrink-0 border ${podeImprimir ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                {podeImprimir ? <FileSignature className="w-8 h-8" /> : <Lock className="w-8 h-8" />}
+        {/* HEADER AREA */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <Link href="/" className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-[#2655e8] hover:border-[#2655e8] hover:shadow-md transition-all">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Sala de Homologação</h1>
+                <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border shadow-sm
+                  ${documento.status === 'Em Homologação' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200'}
+                `}>
+                  {documento.status}
+                </span>
               </div>
-              <div className="flex-1 pt-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-sm font-black text-blue-700 font-mono tracking-wider bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{documento.codigo}</span>
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Revisão {documento.versao}</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{documento.setor}</span>
-                </div>
-                <h2 className="text-xl font-bold text-slate-800 leading-snug">{documento.titulo}</h2>
-              </div>
-            </div>
-
-            {/* Controle Inteligente de Impressão/Download */}
-            <div className="shrink-0">
-              {podeImprimir ? (
-                <button onClick={handleImprimir} className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 font-bold rounded-xl text-sm hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                  <Printer className="w-4 h-4" /> Baixar / Imprimir PDF
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 text-slate-400 border border-slate-200 font-bold rounded-xl text-sm cursor-not-allowed" title="Impressão restrita. Apenas equipe da Qualidade ou Formulários.">
-                  <Lock className="w-4 h-4" /> Impressão Bloqueada
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Leitor de PDF - #toolbar=0 bloqueia a impressão nativa do Iframe */}
-          <div className="bg-slate-100 p-2 rounded-3xl border border-slate-200 shadow-inner">
-            <div className="bg-white rounded-2xl overflow-hidden h-[750px] shadow-sm border border-slate-200 flex flex-col relative">
-              {documento.arquivo_url ? (
-                <iframe 
-                  src={`${documento.arquivo_url}#toolbar=0&navpanes=0`} 
-                  className="w-full h-full border-none absolute inset-0"
-                  title="Visualizador de Documento"
-                ></iframe>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
-                  <FileText className="w-16 h-16 opacity-20 mb-4" />
-                  <p className="font-bold">Nenhum arquivo PDF anexado a este registro.</p>
-                </div>
-              )}
+              <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500"/> Trilhas de Auditoria CFR 21 Part 11 Ativas
+              </p>
             </div>
           </div>
         </div>
 
-        {/* COLUNA DIREITA: WORKFLOW DE ASSINATURA */}
-        <div className="lg:col-span-4 space-y-6">
+        {feedback && (
+          <div className={`p-4 rounded-2xl border flex items-center gap-3 text-sm font-black animate-in slide-in-from-top-4 shadow-sm
+            ${feedback.tipo === 'sucesso' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}
+          `}>
+            {feedback.tipo === 'sucesso' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
+            {feedback.msg}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden">
-            {/* Header do Painel */}
-            <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-slate-800">Painel de Assinatura</h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Controle de Fluxo</p>
+          {/* LEFT: VIEWER & INFO */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            {/* DOCUMENT IDENTITY CARD */}
+            <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${podeImprimir ? 'bg-[#2655e8]' : 'bg-red-500'}`}></div>
+
+              <div className="flex items-center gap-5">
+                <div className={`p-5 rounded-2xl shrink-0 border shadow-sm ${podeImprimir ? 'bg-blue-50 text-[#2655e8] border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                  {podeImprimir ? <FileSignature className="w-8 h-8" /> : <Lock className="w-8 h-8" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xs font-black text-[#2655e8] font-mono tracking-tighter bg-[#eef2ff] px-2 py-0.5 rounded border border-[#e0e7ff]">{documento.codigo}</span>
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Rev. {documento.versao}</span>
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest bg-slate-100 px-2 py-0.5 rounded">{documento.setor}</span>
+                  </div>
+                  <h2 className="text-xl font-black text-slate-800 leading-tight">{documento.titulo}</h2>
+                </div>
               </div>
-              <ShieldCheck className="w-5 h-5 text-blue-500" />
+
+              <div className="shrink-0 w-full md:w-auto">
+                {podeImprimir ? (
+                  <button onClick={handleImprimir} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#2655e8] border-2 border-[#eef2ff] font-black rounded-2xl text-xs hover:bg-[#2655e8] hover:text-white transition-all shadow-sm">
+                    <Printer className="w-4 h-4" /> IMPRIMIR PDF
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-50 text-slate-400 border border-slate-200 font-bold rounded-2xl text-xs cursor-not-allowed" title="Prevenção de Perda de Dados ativa.">
+                    <Lock className="w-4 h-4" /> IMPRESSÃO BLOQUEADA
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="p-6 space-y-6 flex-1 flex flex-col">
-              
-              {/* Resumo da Tramitação */}
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-500">Elaborador:</span>
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5 text-blue-500"/> {documento.elaborador}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-500">Data Base:</span>
-                  <span className="font-bold text-slate-800">{new Date(documento.dt_elaboracao).toLocaleDateString('pt-BR', {timeZone:'UTC'})}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs pt-3 mt-1 border-t border-slate-200/60">
-                  <span className="font-bold text-slate-500">Aguardando:</span>
-                  <span className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">{documento.status === 'Em Verificação' ? documento.verificador_pendente?.split(';')[0] : documento.aprovador}</span>
-                </div>
+            {/* PDF VIEWER CONTAINER */}
+            <div className="bg-slate-200 p-1.5 rounded-[2.5rem] border border-slate-300 shadow-inner overflow-hidden">
+              <div className="bg-white rounded-[2rem] overflow-hidden h-[800px] relative shadow-2xl border border-slate-300">
+                {documento.arquivo_url ? (
+                  <iframe 
+                    src={`${documento.arquivo_url}#toolbar=0&navpanes=0&scrollbar=0`} 
+                    className="w-full h-full border-none absolute inset-0"
+                    title="DocQualis Secure Viewer"
+                  ></iframe>
+                ) : (
+                  <div className="flex-1 h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50">
+                    <FileText className="w-20 h-20 opacity-10 mb-4" />
+                    <p className="font-black uppercase tracking-tighter">Documento sem binário PDF associado.</p>
+                  </div>
+                )}
               </div>
-
-              {/* Caixa de Parecer */}
-              <div className="flex-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Parecer Técnico / Resumo</label>
-                <textarea 
-                  rows={4} 
-                  value={justificativa}
-                  onChange={(e) => setJustificativa(e.target.value)}
-                  placeholder="Escreva suas observações (Obrigatório em caso de devolução)..."
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all resize-none"
-                ></textarea>
-              </div>
-
-              {/* Assinatura (Senha) */}
-              <div className="pt-2">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5 text-blue-500" /> Assinatura Eletrônica
-                </label>
-                <input 
-                  type="password" 
-                  value={senhaAssinatura}
-                  onChange={(e) => setSenhaAssinatura(e.target.value)}
-                  placeholder="Senha: 123456"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-center tracking-widest"
-                />
-              </div>
-
-              {/* Botões de Ação */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button 
-                  onClick={() => handleAssinatura('Devolver')}
-                  disabled={isProcessando}
-                  className="w-full py-3.5 bg-white border-2 border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:border-red-200 hover:text-red-600 hover:bg-red-50 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                >
-                  <XCircle className="w-4 h-4" /> Devolver
-                </button>
-
-                <button 
-                  onClick={() => handleAssinatura('Aprovar')}
-                  disabled={isProcessando}
-                  className="w-full py-3.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                >
-                  {isProcessando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                  Aprovar
-                </button>
-              </div>
-
             </div>
           </div>
 
-          {/* Trilha de Auditoria */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
-             <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-5 flex items-center gap-2">
-               <Clock className="w-4 h-4" /> Histórico de Tramitação
-             </h3>
-             <div className="space-y-5 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-slate-100">
+          {/* RIGHT: WORKFLOW & AUDIT */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm flex flex-col overflow-hidden">
+              <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                <div>
+                  <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Painel de Assinatura</h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Validação Biométrica/Senha</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
+                   <ShieldCheck className="w-5 h-5 text-[#2655e8]" />
+                </div>
+              </div>
+
+              <div className="p-8 space-y-8 flex-1 flex flex-col">
                 
-                {documento.justificativa?.split('\n').filter((j: string) => j.trim() !== '').map((linha: string, idx: number) => {
-                  const isAprovacao = linha.includes('APROVAR');
+                {/* STATUS SUMMARY */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Elaborado por</p>
+                    <p className="text-xs font-bold text-slate-700 truncate">{documento.elaborador}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Aguardando</p>
+                    <p className="text-xs font-bold text-amber-600 truncate">
+                      {documento.status === 'Em Verificação' ? documento.verificador_pendente?.split(';')[0] : documento.aprovador}
+                    </p>
+                  </div>
+                </div>
+
+                {/* OPINION AREA */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Parecer Técnico / Notas de Revisão</label>
+                  <textarea 
+                    rows={5} 
+                    value={justificativa}
+                    onChange={(e) => setJustificativa(e.target.value)}
+                    placeholder="Descreva observações ou motivos da devolução..."
+                    className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-[1.5rem] text-sm font-medium outline-none focus:border-[#2655e8] focus:bg-white focus:ring-4 focus:ring-[#2655e8]/5 transition-all resize-none shadow-sm"
+                  ></textarea>
+                </div>
+
+                {/* SIGNATURE AREA */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-800 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-[#2655e8]" /> Senha de Assinatura Eletrônica
+                  </label>
+                  <input 
+                    type="password" 
+                    value={senhaAssinatura}
+                    onChange={(e) => setSenhaAssinatura(e.target.value)}
+                    placeholder="Sua senha de autenticação"
+                    className="w-full px-6 py-4 bg-slate-900 border-none rounded-[1.5rem] text-white text-sm font-black outline-none focus:ring-4 focus:ring-blue-500/20 transition-all text-center tracking-[0.5em]"
+                  />
+                  <p className="mt-3 text-[10px] text-slate-400 text-center font-medium italic">
+                    Ao assinar, você confirma a leitura integral deste documento.
+                  </p>
+                </div>
+
+                {/* ACTION BUTTONS */}
+                <div className="grid grid-cols-1 gap-3 pt-2">
+                  <button 
+                    onClick={() => handleAssinatura('Aprovar')}
+                    disabled={isProcessando}
+                    className="w-full py-4 bg-[#2655e8] text-white rounded-2xl text-sm font-black hover:bg-[#1e40af] shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 uppercase tracking-widest"
+                  >
+                    {isProcessando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                    APROVAR E AVANÇAR
+                  </button>
+
+                  <button 
+                    onClick={() => handleAssinatura('Devolver')}
+                    disabled={isProcessando}
+                    className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center gap-2 transition-all disabled:opacity-50 uppercase tracking-widest"
+                  >
+                    <XCircle className="w-5 h-5" /> DEVOLVER PARA AJUSTES
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+            {/* AUDIT TRAIL LOG */}
+            <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm p-8">
+               <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-8 flex items-center gap-2 px-1">
+                 <Clock className="w-4 h-4" /> Histórico de Tramitação
+               </h3>
+               
+               <div className="space-y-6 relative border-l-2 border-slate-100 ml-3 pl-8">
+                
+                {documento.justificativa?.split('\n').filter((j: string) => j.trim() !== '').reverse().map((linha: string, idx: number) => {
+                  const isAprovacao = linha.toUpperCase().includes('APROVAR');
                   return (
-                    <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                      <div className={`flex items-center justify-center w-4 h-4 rounded-full border-2 border-white shadow-sm shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 ${isAprovacao ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                      <div className="w-[calc(100%-2rem)] md:w-[calc(50%-1.5rem)] bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                        <div className="text-[10px] text-slate-600 font-medium leading-relaxed">{linha}</div>
+                    <div key={idx} className="relative">
+                      <div className={`absolute -left-[41px] top-1 flex items-center justify-center w-5 h-5 rounded-full border-4 border-white shadow-sm z-10 
+                        ${isAprovacao ? 'bg-emerald-500' : 'bg-red-500'}`}>
+                      </div>
+                      <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                        <p className="text-[11px] text-slate-700 font-bold leading-relaxed">{linha}</p>
                       </div>
                     </div>
                   )
                 })}
 
-                <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                  <div className="flex items-center justify-center w-4 h-4 rounded-full border-2 border-white bg-blue-500 shadow-sm shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"></div>
-                  <div className="w-[calc(100%-2rem)] md:w-[calc(50%-1.5rem)] bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                <div className="relative">
+                  <div className="absolute -left-[41px] top-1 flex items-center justify-center w-5 h-5 rounded-full border-4 border-white bg-[#2655e8] shadow-sm z-10"></div>
+                  <div className="bg-[#eef2ff] p-4 rounded-2xl border border-[#e0e7ff]">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-800 text-xs">Criação</span>
-                      <time className="text-[9px] font-bold text-slate-400">{new Date(documento.created_at).toLocaleDateString('pt-BR')}</time>
+                      <span className="font-black text-[#2655e8] text-[10px] uppercase tracking-widest">Criação</span>
+                      <time className="text-[9px] font-black text-slate-400">{new Date(documento.created_at).toLocaleDateString('pt-BR')}</time>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-medium">Submetido por {documento.elaborador}</div>
+                    <div className="text-[11px] text-slate-600 font-bold uppercase tracking-tight">Registro inicial submetido por {documento.elaborador}</div>
                   </div>
                 </div>
-             </div>
-          </div>
 
+               </div>
+            </div>
+
+          </div>
         </div>
       </div>
     </div>
