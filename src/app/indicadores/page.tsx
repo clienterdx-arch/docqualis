@@ -887,7 +887,6 @@ function IndicadorDetailView({ ind, onBack }: { ind: any, onBack: () => void }) 
                               </table>
                             </div>
                           </div>
-
                           <div className="flex justify-end pt-4">
                              <button className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-md hover:bg-indigo-700 transition-all flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Salvar Análise e CAPA</button>
                           </div>
