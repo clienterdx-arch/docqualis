@@ -85,5 +85,5 @@ export default function Sidebar() {
         <button className="text-slate-400 hover:text-red-400 transition-colors mb-4"><LogOut className="w-5 h-5" /></button>
       </aside>
     </>
-  );
+  ); 
 }
