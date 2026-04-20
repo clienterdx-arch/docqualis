@@ -15,7 +15,8 @@ import {
   ClipboardSignature,
   ShieldAlert,
   AlertTriangle,
-  Target
+  Target,
+  Building2 // <- Importado o ícone de prédio para a empresa
 } from "lucide-react";
 
 // =========================================================================
@@ -221,13 +222,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
 
-        {/* Perfil Rapidamente Acessível */}
+        {/* Perfil na Sidebar */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-black text-sm shrink-0">
-              CE
+            <div className="w-10 h-10 rounded-full bg-[#2655e8] flex items-center justify-center text-white font-black text-sm shrink-0 shadow-md">
+              AS
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800 leading-tight">Sua Conta (CEO)</p>
+              <p className="text-sm font-bold text-slate-800 leading-tight">Dra. Ana Silva</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Online</p>
@@ -266,23 +267,25 @@ export function AppShell({ children }: { children: ReactNode }) {
               ].join(" ")}
               aria-hidden="true"
             />
-            Configurações Globais
+            Configurações da Empresa
           </Link>
         </div>
       </aside>
 
       {/* ── MAIN ────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50/50">
-        {/* Header */}
+        
+        {/* Header Superior */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10 shrink-0">
           <SearchBar />
 
-          <div className="flex items-center gap-5 pl-6">
+          <div className="flex items-center gap-4 pl-6">
+            
             {/* Notificações */}
             <button
               type="button"
               aria-label="Ver notificações"
-              className="relative p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+              className="relative p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-full transition-all"
             >
               <Bell className="w-5 h-5" aria-hidden="true" />
               <span
@@ -292,27 +295,41 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="sr-only">Você tem notificações</span>
             </button>
 
-            <div className="w-px h-6 bg-slate-200" role="separator" />
+            <div className="w-px h-6 bg-slate-200 hidden md:block" role="separator" />
 
-            {/* Usuário Dropdown */}
+            {/* DADOS DA EMPRESA (TENANT) */}
+            <div className="hidden md:flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+              <div className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 overflow-hidden shadow-inner">
+                {/* Aqui futuramente entrará a <img src={logoEmpresa} /> */}
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-slate-800 leading-tight">Hospital Santa Maria</p>
+                <p className="text-[10px] font-bold text-slate-500 tracking-wide">CNPJ: 12.345.678/0001-90</p>
+              </div>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden lg:block" role="separator" />
+
+            {/* DADOS DO USUÁRIO E FUNÇÃO */}
             <button
               type="button"
               aria-label="Menu do usuário"
               className="flex items-center gap-3 cursor-pointer group"
             >
-              <div className="text-right hidden md:block">
-                <p className="text-sm font-bold text-slate-800 leading-tight">
-                  Painel de Controle
-                </p>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#2655e8]">
-                  Administrador
-                </p>
+              <div className="text-right hidden lg:block">
+                <p className="text-sm font-bold text-slate-800 leading-tight">Dra. Ana Silva</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#2655e8]">Diretora Técnica</p>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-[#2655e8] text-white flex items-center justify-center text-sm font-bold shadow-md ring-2 ring-white group-hover:ring-[#eef2ff] transition-all select-none">
+                AS
               </div>
               <ChevronDown
                 className="w-4 h-4 text-slate-400 group-hover:text-slate-700"
                 aria-hidden="true"
               />
             </button>
+
           </div>
         </header>
 
