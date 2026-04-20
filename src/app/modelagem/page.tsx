@@ -234,19 +234,16 @@ function rectsIntersect(
   return !(a.x + a.w < b.left || a.x > b.right || a.y + a.h < b.top || a.y > b.bottom);
 }
 
-// Melhoria: Encontra a âncora correta projetando a linha do centro do nó até a borda
 function getAnchorPoint(node: BpmnNode, tx: number, ty: number) {
   const dx = tx - node.x;
   const dy = ty - node.y;
   
   if (Math.abs(dx) > Math.abs(dy)) {
-    // Intercepta nas laterais (esquerda ou direita)
     return {
       x: node.x + (dx > 0 ? node.w / 2 : -node.w / 2),
       y: node.y
     };
   } else {
-    // Intercepta em cima ou embaixo
     return {
       x: node.x,
       y: node.y + (dy > 0 ? node.h / 2 : -node.h / 2)
@@ -257,9 +254,6 @@ function getAnchorPoint(node: BpmnNode, tx: number, ty: number) {
 function orthogonalPath(start: { x: number; y: number }, end: { x: number; y: number }) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
-  
-  // Distância segura para sair da forma antes de virar
-  const offset = 20; 
   
   if (Math.abs(dx) >= Math.abs(dy)) {
     const mx = start.x + dx / 2;
@@ -708,13 +702,14 @@ export default function ProcessStudioPage() {
     if (!el) return;
 
     function onWheel(e: WheelEvent) {
-      const viewportEl = el;
-      if (!viewportEl) return;
+      // CORREÇÃO TYPESCRIPT: Garantir que viewportRef não é nulo dentro do evento
+      const currentEl = viewportRef.current;
+      if (!currentEl) return;
 
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
 
-        const rect = viewportEl.getBoundingClientRect();
+        const rect = currentEl.getBoundingClientRect();
         const cursorX = e.clientX - rect.left;
         const cursorY = e.clientY - rect.top;
 
