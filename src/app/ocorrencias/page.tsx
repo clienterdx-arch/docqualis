@@ -113,7 +113,7 @@ type Ocorrencia = {
 };
 
 /* ──────────────────────────────────────────────────────────────────────────────
- * MOCK
+ * MOCK VAZIO (SISTEMA LIMPO)
  * ────────────────────────────────────────────────────────────────────────────*/
 
 const SETORES = [
@@ -137,139 +137,7 @@ const USUARIOS = [
   "Lucas Oliveira",
 ];
 
-const INITIAL_DATA: Ocorrencia[] = [
-  {
-    id: "1",
-    numero: "OC-2026-0001",
-    tipo: "NAO_CONFORMIDADE",
-    status: "REGISTRO",
-    titulo: "Formulário desatualizado em uso no setor",
-    descricao:
-      "Foi identificado uso de formulário obsoleto durante rotina assistencial.",
-    setor: "Qualidade",
-    areaNotificante: "Internação",
-    dataOcorrencia: "2026-04-15",
-    dataRegistro: "2026-04-16",
-    localOcorrencia: "Posto de enfermagem",
-    anonimo: false,
-    envolvePaciente: false,
-    identificacaoRestrita: false,
-    nomeNotificador: "Ana Silva",
-    perfilResponsavel: "QUALIDADE",
-    responsavelTratativa: "Lucas Oliveira",
-    prioridade: "MEDIA",
-    gravidade: "BAIXA",
-    classificacaoNC: "DOCUMENTO",
-    acaoImediata: "Retirada imediata do formulário obsoleto.",
-    causaRaiz: "Falha no controle de distribuição de documento.",
-    planoAcao: [
-      {
-        id: "pa1",
-        descricao: "Reforçar revisão de documentos distribuídos",
-        responsavel: "Lucas Oliveira",
-        prazo: "2026-04-28",
-        status: "EM_ANDAMENTO",
-      },
-    ],
-    prazoTratativa: "2026-04-30",
-    historico: [
-      {
-        id: "h1",
-        data: "2026-04-16 08:20",
-        autor: "Ana Silva",
-        acao: "Registro criado",
-      },
-    ],
-  },
-  {
-    id: "2",
-    numero: "OC-2026-0002",
-    tipo: "EVENTO_ADVERSO",
-    status: "TRATATIVA",
-    titulo: "Queda de paciente sem dano aparente",
-    descricao:
-      "Paciente apresentou queda ao tentar levantar-se sem auxílio no período noturno.",
-    setor: "UTI Adulto",
-    areaNotificante: "UTI Adulto",
-    dataOcorrencia: "2026-04-14",
-    dataRegistro: "2026-04-14",
-    localOcorrencia: "Leito 12",
-    anonimo: true,
-    envolvePaciente: true,
-    identificacaoRestrita: true,
-    perfilResponsavel: "GESTOR",
-    responsavelTratativa: "Enf. Roberta",
-    prioridade: "ALTA",
-    gravidade: "MODERADA",
-    danoPaciente: false,
-    classificacaoEvento: "QUEDA",
-    pacienteCodigo: "PAC-44821",
-    acaoImediata: "Avaliação clínica e comunicação à equipe médica.",
-    causaRaiz: "Ausência de grade elevada e paciente sem contenção preventiva.",
-    planoAcao: [
-      {
-        id: "pa2",
-        descricao: "Reforçar protocolo de prevenção de quedas",
-        responsavel: "Enf. Roberta",
-        prazo: "2026-04-22",
-        status: "EM_ANDAMENTO",
-      },
-    ],
-    prazoTratativa: "2026-04-25",
-    historico: [
-      {
-        id: "h2",
-        data: "2026-04-14 23:11",
-        autor: "Anônimo",
-        acao: "Evento registrado",
-      },
-      {
-        id: "h3",
-        data: "2026-04-15 08:40",
-        autor: "Enf. Roberta",
-        acao: "Tratativa iniciada",
-      },
-    ],
-  },
-  {
-    id: "3",
-    numero: "OC-2026-0003",
-    tipo: "ELOGIO_RECLAMACAO",
-    status: "CONCLUIDO",
-    titulo: "Elogio ao atendimento da recepção",
-    descricao:
-      "Paciente relatou excelente acolhimento e agilidade no atendimento.",
-    setor: "Ouvidoria",
-    areaNotificante: "Recepção",
-    dataOcorrencia: "2026-04-12",
-    dataRegistro: "2026-04-12",
-    localOcorrencia: "Recepção principal",
-    anonimo: false,
-    envolvePaciente: false,
-    identificacaoRestrita: false,
-    nomeNotificador: "João Pedro",
-    perfilResponsavel: "GESTOR",
-    responsavelTratativa: "Marina Souza",
-    prioridade: "BAIXA",
-    classificacaoManifestacao: "ELOGIO",
-    planoAcao: [],
-    conclusao: "Registro validado e encaminhado à liderança para reconhecimento.",
-    historico: [
-      {
-        id: "h4",
-        data: "2026-04-12 10:00",
-        autor: "João Pedro",
-        acao: "Manifestação registrada",
-      },
-      {
-        id: "h5",
-        data: "2026-04-12 16:10",
-        autor: "Marina Souza",
-        acao: "Registro concluído",
-      },
-    ],
-  },
-];
+const INITIAL_DATA: Ocorrencia[] = [];
 
 /* ──────────────────────────────────────────────────────────────────────────────
  * HELPERS
@@ -511,8 +379,8 @@ export default function OcorrenciasPage() {
           id: genId("h"),
           data: new Date().toLocaleString("pt-BR"),
           autor: form.anonimo ? "Anônimo" : form.nomeNotificador || "Usuário",
-          acao: "Registro criado",
-        },
+          action: "Registro criado",
+        } as any,
       ],
     };
 
@@ -554,7 +422,7 @@ export default function OcorrenciasPage() {
     <div className="min-h-screen bg-[#f8fafc] p-6 md:p-8 text-slate-900">
       <div className="max-w-[1800px] mx-auto space-y-8">
         {/* HEADER */}
-        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 mb-3">
@@ -572,19 +440,19 @@ export default function OcorrenciasPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 min-w-[320px]">
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
                 <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total</p>
                 <p className="text-2xl font-black mt-2">{dashboardData.total}</p>
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
                 <p className="text-[10px] uppercase font-black tracking-widest text-amber-700">Tratativa</p>
                 <p className="text-2xl font-black mt-2 text-amber-700">{dashboardData.tratativa}</p>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
                 <p className="text-[10px] uppercase font-black tracking-widest text-emerald-700">Concluídas</p>
                 <p className="text-2xl font-black mt-2 text-emerald-700">{dashboardData.concluido}</p>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
                 <p className="text-[10px] uppercase font-black tracking-widest text-red-700">Críticas</p>
                 <p className="text-2xl font-black mt-2 text-red-700">{dashboardData.criticos}</p>
               </div>
@@ -593,7 +461,7 @@ export default function OcorrenciasPage() {
         </div>
 
         {/* TABS TIPO */}
-        <div className="bg-white border border-slate-200 rounded-[2rem] p-4 shadow-sm">
+        <div className="bg-white border border-slate-100 rounded-[2rem] p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
               {
@@ -622,7 +490,7 @@ export default function OcorrenciasPage() {
                   "rounded-2xl border p-5 text-left transition-all",
                   tipoAtivo === item.value
                     ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20"
-                    : "bg-white border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/40"
+                    : "bg-white border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40"
                 )}
               >
                 <div className="flex items-center gap-2 text-sm font-black">
@@ -647,7 +515,7 @@ export default function OcorrenciasPage() {
           {/* COLUNA ESQUERDA */}
           <div className="xl:col-span-8 space-y-6">
             {/* STATUS TABS */}
-            <div className="bg-white border border-slate-200 rounded-[2rem] p-4 shadow-sm">
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-4 shadow-sm">
               <div className="flex flex-wrap gap-2">
                 {[
                   { key: "REGISTRO", label: "Registro", icon: ClipboardList },
@@ -663,7 +531,7 @@ export default function OcorrenciasPage() {
                       "px-4 py-3 rounded-2xl border text-sm font-bold flex items-center gap-2 transition-all",
                       statusAtivo === tab.key
                         ? "bg-slate-900 text-white border-slate-900 shadow-md"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50"
                     )}
                   >
                     <tab.icon className="w-4 h-4" />
@@ -676,7 +544,7 @@ export default function OcorrenciasPage() {
             {/* DASHBOARD */}
             {statusAtivo === "DASHBOARD" ? (
               <div className="space-y-6">
-                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                   <div className="mb-6">
                     <h2 className="text-lg font-bold text-slate-800">Painel de Monitoramento</h2>
                     <p className="text-xs text-slate-500 font-medium mt-1">
@@ -693,7 +561,7 @@ export default function OcorrenciasPage() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                   <h3 className="text-lg font-bold text-slate-800 mb-4">Distribuição por Setor</h3>
                   <div className="space-y-4">
                     {dashboardData.porSetor.length === 0 ? (
@@ -733,7 +601,7 @@ export default function OcorrenciasPage() {
             ) : (
               <>
                 {/* LISTAGEM */}
-                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
                     <div>
                       <h2 className="text-lg font-bold text-slate-800">
@@ -755,9 +623,9 @@ export default function OcorrenciasPage() {
                     </div>
                   </div>
 
-                  <div className="border border-slate-200 rounded-3xl overflow-hidden">
+                  <div className="border border-slate-100 rounded-3xl overflow-hidden">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                      <thead className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-400 tracking-widest">
                         <tr>
                           <th className="px-6 py-4">Ocorrência</th>
                           <th className="px-6 py-4">Setor</th>
@@ -767,7 +635,7 @@ export default function OcorrenciasPage() {
                           <th className="px-6 py-4 text-center">Abrir</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-slate-50">
                         {filtered.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-4">
@@ -824,7 +692,7 @@ export default function OcorrenciasPage() {
                 </div>
 
                 {/* DETALHE */}
-                <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+                <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                   <h3 className="text-lg font-bold text-slate-800 mb-4">Painel do Registro</h3>
                   {!selected ? (
                     <div className="text-sm text-slate-400 font-medium">
@@ -915,7 +783,7 @@ export default function OcorrenciasPage() {
                             {selected.planoAcao.map((pa) => (
                               <div
                                 key={pa.id}
-                                className="border border-slate-200 rounded-2xl p-4 bg-slate-50"
+                                className="border border-slate-100 rounded-2xl p-4 bg-slate-50"
                               >
                                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                                   <div>
@@ -958,7 +826,7 @@ export default function OcorrenciasPage() {
 
           {/* COLUNA DIREITA - FORMULÁRIO */}
           <div className="xl:col-span-4">
-            <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm sticky top-6">
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm sticky top-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-bold text-slate-800">Novo Registro</h2>
@@ -971,7 +839,7 @@ export default function OcorrenciasPage() {
                 </div>
               </div>
 
-              <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
+              <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1 custom-scrollbar">
                 <FieldLabel label="Tipo de ocorrência" />
                 <select
                   value={form.tipo}
@@ -1291,7 +1159,7 @@ export default function OcorrenciasPage() {
                   />
                 </div>
 
-                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h4 className="text-sm font-bold text-slate-800">Plano de ação</h4>
@@ -1395,7 +1263,7 @@ export default function OcorrenciasPage() {
         </div>
 
         {/* RODAPÉ CONCEITUAL */}
-        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm">
+        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <RodapeCard
               icon={<ShieldAlert className="w-5 h-5 text-indigo-600" />}
@@ -1430,7 +1298,7 @@ export default function OcorrenciasPage() {
 
 function KpiCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
       <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{label}</p>
       <p className="text-2xl font-black text-slate-900 mt-2">{value}</p>
     </div>
@@ -1439,7 +1307,7 @@ function KpiCard({ label, value }: { label: string; value: string | number }) {
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
       <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{label}</p>
       <p className="text-sm font-bold text-slate-800 mt-2">{value || "-"}</p>
     </div>
@@ -1448,7 +1316,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 
 function TextBlock({ title, text }: { title: string; text: string }) {
   return (
-    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+    <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
       <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-2">{title}</h5>
       <p className="text-sm text-slate-700 leading-relaxed">{text}</p>
     </div>
@@ -1473,7 +1341,7 @@ function RodapeCard({
   text: string;
 }) {
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
       <div className="mb-3">{icon}</div>
       <h4 className="text-sm font-bold text-slate-800">{title}</h4>
       <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">{text}</p>
