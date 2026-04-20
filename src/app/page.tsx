@@ -34,7 +34,8 @@ export default function GestaoDocumentosPage() {
     
     let docsFormatados: any[] = [];
     if (data) {
-      docsFormatados = data.map(doc => ({
+      // CORREÇÃO TYPESCRIPT: (doc: any) explícito para o build não quebrar
+      docsFormatados = data.map((doc: any) => ({
         ...doc,
         isProcesso: false,
         status: doc.status || "Em Elaboração",
@@ -106,14 +107,14 @@ export default function GestaoDocumentosPage() {
     router.push(`/novo-documento?${query}`);
   };
 
-  const countRepositorio = documentos.filter(d => d.status === "Repositório").length;
-  const countElaboracao = documentos.filter(d => d.status === "Em Elaboração" || d.status === "EM_FLUXO").length;
-  const countVerificacao = documentos.filter(d => d.status === "Em Verificação").length;
-  const countHomologacao = documentos.filter(d => d.status === "Em Homologação").length;
-  const countRejeitados = documentos.filter(d => d.status === "Rejeitado" || d.status === "Devolvido").length;
-  const countObsoleto = documentos.filter(d => d.status === "Obsoleto").length;
+  const countRepositorio = documentos.filter((d: any) => d.status === "Repositório").length;
+  const countElaboracao = documentos.filter((d: any) => d.status === "Em Elaboração" || d.status === "EM_FLUXO").length;
+  const countVerificacao = documentos.filter((d: any) => d.status === "Em Verificação").length;
+  const countHomologacao = documentos.filter((d: any) => d.status === "Em Homologação").length;
+  const countRejeitados = documentos.filter((d: any) => d.status === "Rejeitado" || d.status === "Devolvido").length;
+  const countObsoleto = documentos.filter((d: any) => d.status === "Obsoleto").length;
 
-  const documentosFiltrados = documentos.filter(doc => {
+  const documentosFiltrados = documentos.filter((doc: any) => {
     if (pastaAtiva === "Em Elaboração") return doc.status === "Em Elaboração" || doc.status === "EM_FLUXO";
     if (pastaAtiva === "Rejeitados") return doc.status === "Rejeitado" || doc.status === "Devolvido";
     return doc.status === pastaAtiva;
@@ -205,7 +206,7 @@ export default function GestaoDocumentosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {documentosFiltrados.map(doc => (
+                {documentosFiltrados.map((doc: any) => (
                   <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors group text-sm">
                     <td className="px-4 py-3 font-mono font-bold text-blue-700">{doc.codigo}</td>
                     
@@ -589,7 +590,7 @@ function PainelInspecao({ documentos, isLoading, aoAtualizar }: any) {
 function PainelCopiasControladas({ documentos }: { documentos: any[] }) {
   const [busca, setBusca] = useState("");
 
-  const docsFiltrados = documentos.filter(doc => 
+  const docsFiltrados = documentos.filter((doc: any) => 
     doc.titulo?.toLowerCase().includes(busca.toLowerCase()) || 
     doc.codigo?.toLowerCase().includes(busca.toLowerCase())
   );
@@ -701,9 +702,9 @@ function PainelConfiguracaoAdmin({ setMensagemSistema }: any) {
   const carregarTudo = async () => {
     setIsLoading(true);
     const [resTipos, resDir, resSetores] = await Promise.all([
-      supabase.from('config_tipos_doc').select('*').order('sigla'),
-      supabase.from('config_diretorias').select('*').order('nome'),
-      supabase.from('config_setores').select('*, config_diretorias(nome)').order('nome')
+      (supabase.from('config_tipos_doc').select('*') as any).order('sigla'),
+      (supabase.from('config_diretorias').select('*') as any).order('nome'),
+      (supabase.from('config_setores').select('*, config_diretorias(nome)') as any).order('nome')
     ]);
     if (resTipos.data) setTipos(resTipos.data);
     if (resDir.data) setDiretorias(resDir.data);
@@ -758,7 +759,7 @@ function PainelConfiguracaoAdmin({ setMensagemSistema }: any) {
 
         <div className="flex gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 items-end">
           {activeTab === 'setores' && (
-            <div className="w-64"><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Diretoria Mãe</label><select value={novoDirId} onChange={(e) => setNovoDirId(e.target.value)} className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"><option value="">Selecione...</option>{diretorias.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}</select></div>
+            <div className="w-64"><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Diretoria Mãe</label><select value={novoDirId} onChange={(e) => setNovoDirId(e.target.value)} className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"><option value="">Selecione...</option>{diretorias.map((d: any) => <option key={d.id} value={d.id}>{d.nome}</option>)}</select></div>
           )}
           {(activeTab === 'tipos' || activeTab === 'setores') && (
             <div className="w-32"><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Sigla</label><input type="text" value={novaSigla} onChange={(e) => setNovaSigla(e.target.value)} placeholder="Ex: UTI" className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm uppercase font-bold outline-none" /></div>
@@ -773,9 +774,9 @@ function PainelConfiguracaoAdmin({ setMensagemSistema }: any) {
               <tr>{(activeTab === 'tipos' || activeTab === 'setores') && <th className="px-4 py-3 w-32">Sigla</th>}<th className="px-4 py-3">Nome / Descrição</th>{activeTab === 'setores' && <th className="px-4 py-3">Diretoria Vinculada</th>}<th className="px-4 py-3 text-right">Ação</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {activeTab === 'tipos' && tipos.map(t => (<tr key={t.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-mono font-bold text-blue-700">{t.sigla}</td><td className="px-4 py-3 font-medium text-slate-800">{t.nome}</td><td className="px-4 py-3 text-right"><button onClick={() => removerItem('config_tipos_doc', t.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></td></tr>))}
-              {activeTab === 'diretorias' && diretorias.map(d => (<tr key={d.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-medium text-slate-800">{d.nome}</td><td className="px-4 py-3 text-right"><button onClick={() => removerItem('config_diretorias', d.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></td></tr>))}
-              {activeTab === 'setores' && setores.map(s => (<tr key={s.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-mono font-bold text-blue-700">{s.sigla}</td><td className="px-4 py-3 font-medium text-slate-800">{s.nome}</td><td className="px-4 py-3 text-slate-500 text-xs font-bold">{s.config_diretorias?.nome || "Sem vínculo"}</td><td className="px-4 py-3 text-right"><button onClick={() => removerItem('config_setores', s.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></td></tr>))}
+              {activeTab === 'tipos' && tipos.map((t: any) => (<tr key={t.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-mono font-bold text-blue-700">{t.sigla}</td><td className="px-4 py-3 font-medium text-slate-800">{t.nome}</td><td className="px-4 py-3 text-right"><button onClick={() => removerItem('config_tipos_doc', t.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></td></tr>))}
+              {activeTab === 'diretorias' && diretorias.map((d: any) => (<tr key={d.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-medium text-slate-800">{d.nome}</td><td className="px-4 py-3 text-right"><button onClick={() => removerItem('config_diretorias', d.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></td></tr>))}
+              {activeTab === 'setores' && setores.map((s: any) => (<tr key={s.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-mono font-bold text-blue-700">{s.sigla}</td><td className="px-4 py-3 font-medium text-slate-800">{s.nome}</td><td className="px-4 py-3 text-slate-500 text-xs font-bold">{s.config_diretorias?.nome || "Sem vínculo"}</td><td className="px-4 py-3 text-right"><button onClick={() => removerItem('config_setores', s.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></td></tr>))}
               {activeTab === 'tipos' && tipos.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-medium">Nenhum Tipo cadastrado.</td></tr>}
               {activeTab === 'diretorias' && diretorias.length === 0 && <tr><td colSpan={2} className="p-8 text-center text-slate-400 font-medium">Nenhuma Diretoria cadastrada.</td></tr>}
               {activeTab === 'setores' && setores.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-medium">Nenhum Setor cadastrado.</td></tr>}
