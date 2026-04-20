@@ -51,7 +51,6 @@ export default function NovoDocumentoPage() {
   useEffect(() => {
     const fetchConfigs = async () => {
       setIsCarregandoConfigs(true);
-      // CORREÇÃO TYPESCRIPT PARA A VERCEL AQUI TAMBÉM:
       const [resTipos, resDir, resSetores] = await Promise.all([
         (supabase.from('config_tipos_doc').select('*') as any).order('nome'),
         (supabase.from('config_diretorias').select('*') as any).order('nome'),
@@ -97,9 +96,9 @@ export default function NovoDocumentoPage() {
   const verificarDuplicidadeCodigo = async () => {
     if (!numeroDoc || prefixoCodigo === "XXX.XXX") return false; 
     
-    const { data: docExistente } = await supabase
+    const { data: docExistente } = await (supabase
       .from('documentos')
-      .select('status, versao')
+      .select('status, versao') as any)
       .eq('codigo', codigoFinal)
       .eq('versao', versao) 
       .maybeSingle();

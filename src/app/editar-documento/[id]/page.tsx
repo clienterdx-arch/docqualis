@@ -56,7 +56,6 @@ export default function EditarDocumentoPage() {
     const fetchData = async () => {
       setIsCarregando(true);
       
-      // AQUI ESTÁ A CORREÇÃO DO TYPESCRIPT PARA A VERCEL PASSAR O BUILD:
       const [resTipos, resDir, resSetores] = await Promise.all([
         (supabase.from('config_tipos_doc').select('*') as any).order('nome'),
         (supabase.from('config_diretorias').select('*') as any).order('nome'),
@@ -68,7 +67,7 @@ export default function EditarDocumentoPage() {
       if (resSetores.data) setDbSetores(resSetores.data);
 
       if (documentoId) {
-        const { data: doc } = await supabase.from('documentos').select('*').eq('id', documentoId).single();
+        const { data: doc } = await (supabase.from('documentos').select('*') as any).eq('id', documentoId).single();
         if (doc) {
           setTipoDocumento(doc.tipo_documento || "");
           setDiretoria(doc.diretoria || "");
@@ -132,9 +131,9 @@ export default function EditarDocumentoPage() {
 
   const verificarDuplicidadeCodigo = async () => {
     if (!numeroDoc || prefixoCodigo === "XXX.XXX") return false;
-    const { data: docExistente } = await supabase
+    const { data: docExistente } = await (supabase
       .from('documentos')
-      .select('id, status, versao')
+      .select('id, status, versao') as any)
       .eq('codigo', codigoFinal)
       .eq('versao', versao)
       .maybeSingle();
@@ -197,7 +196,7 @@ export default function EditarDocumentoPage() {
         arquivo_url: finalUrl
       };
 
-      const { error: dbError } = await supabase.from('documentos').update(payload).eq('id', documentoId);
+      const { error: dbError } = await (supabase.from('documentos').update(payload) as any).eq('id', documentoId);
       if (dbError) throw dbError;
 
       setSucesso(true);
