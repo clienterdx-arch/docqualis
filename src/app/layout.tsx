@@ -7,6 +7,7 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
+  variable: "--font-app",
 });
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} bg-slate-50 overflow-hidden`}>
+      <body className={`${inter.variable} font-sans antialiased bg-slate-50 overflow-hidden`}>
         <div className="flex h-screen w-screen overflow-hidden">
           <Sidebar />
 
