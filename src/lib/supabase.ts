@@ -1,23 +1,33 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Durante o build (SSR/prerender) se as variáveis não existirem,
-// criamos um cliente dummy que não faz requisições reais.
-// Isso evita o erro "supabaseUrl is required".
-const isBuildTime = typeof window === 'undefined' && (!supabaseUrl || !supabaseAnonKey)
+// ✅ Cliente para uso no FRONTEND (componentes client-side)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-export const supabase = isBuildTime
-  ? {
-      // Mock básico para evitar erros durante o build
-      from: () => ({
-        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: null }) }) }),
-        insert: () => ({ select: () => Promise.resolve({ data: null, error: null }) }),
-        update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
-        delete: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
-      }),
-      auth: { getSession: () => Promise.resolve({ data: { session: null }, error: null }) },
-    }
-  : createClient(supabaseUrl!, supabaseAnonKey!)
+// ✅ Cliente para uso no BACKEND (route.ts, server components)
+// Lê o cookie de sessão — necessário para o RLS funcionar
+export async function createSupabaseServer() {
+  const cookieStore = await cookies()
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        } catch {
+          // Ignorado em Server Components (só funciona em Route Handlers)
+        }
+      },
+    },
+  })
+}
