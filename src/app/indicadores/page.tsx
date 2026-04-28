@@ -1,31 +1,37 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  TrendingUp, TrendingDown, Minus, CheckCircle2,
-  ArrowLeft, Save, BarChart2, LineChart,
-  Settings2, TableProperties, PlusCircle, Trash2, GitCompare,
-  Search, ChevronRight, ChevronDown, FolderTree,
-  FileCheck, Plus, XCircle, FileText,
-  MessageSquarePlus, Eye, BarChart3, Loader2,
-  AlertCircle, X,
-} from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-
-
-import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  TrendingUp, TrendingDown, Minus, CheckCircle2,
-  ArrowLeft, Download, Save, BarChart2, LineChart,
-  Settings2, TableProperties, PlusCircle, Trash2, GitCompare,
-  Search, ChevronRight, ChevronDown, FolderTree,
-  FileCheck, Activity, Plus, XCircle, FileText,
-  MessageSquarePlus, Eye, BarChart3, Loader2,
-  AlertCircle, X,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  CheckCircle2,
+  ArrowLeft,
+  Save,
+  BarChart2,
+  LineChart,
+  Settings2,
+  TableProperties,
+  PlusCircle,
+  Trash2,
+  GitCompare,
+  Search,
+  ChevronRight,
+  ChevronDown,
+  FolderTree,
+  FileCheck,
+  Plus,
+  XCircle,
+  FileText,
+  MessageSquarePlus,
+  BarChart3,
+  Loader2,
+  AlertCircle,
+  X,
 } from "lucide-react";
+
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 
 /* ─────────────────────────────────────────────────────────────────
  * TIPOS
@@ -96,10 +102,6 @@ function getStatusKey(ind: Indicador, valor: number | null): "verde" | "amarelo"
   if (pct >= 95) return "verde";
   if (pct >= 75) return "amarelo";
   return "vermelho";
-}
-
-function getInitials(name: string) {
-  return name.replace(/Dr\. |Dra\. |Enf\. /g, "").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 }
 
 function TIcon({ val, target, pol }: { val: number | null; target: number; pol: string }) {
@@ -1152,7 +1154,6 @@ export default function GestaoIndicadoresPage() {
                               {s.inds.map(ind => {
                                 const med   = getUltimaMedicao(ind.id);
                                 const valor = med?.valor ?? null;
-                                const statusKey = getStatusKey(ind, valor);
                                 return (
                                   <tr key={ind.id} onClick={() => setIndicadorAtivo(ind)} className="hover:bg-blue-50/30 cursor-pointer group border-b last:border-0 border-slate-50">
                                     <td className="px-6 py-4 font-bold text-slate-800">{ind.nome}</td>
