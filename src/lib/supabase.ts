@@ -1,11 +1,9 @@
 // src/lib/supabase.ts
 
 import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 
 /* =========================================================
-   🔐 ENVIRONMENT VARIABLES (validação segura)
+   🔐 ENVIRONMENT VARIABLES
 ========================================================= */
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -19,14 +17,30 @@ if (!supabaseAnonKey) {
 }
 
 /* =========================================================
-   🌐 CLIENT SIDE (React / use client)
+   🌐 CLIENT SIDE (USE CLIENT)
 ========================================================= */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// src/lib/supabase-server.ts
+
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 /* =========================================================
-   🧠 SERVER SIDE (Route Handlers / Server Components)
-   ✔ Compatível com Next.js App Router
-   ✔ Suporte a RLS via cookies
+   🔐 ENVIRONMENT VARIABLES
+========================================================= */
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+if (!supabaseUrl) {
+  throw new Error("❌ NEXT_PUBLIC_SUPABASE_URL não definido");
+}
+
+if (!supabaseAnonKey) {
+  throw new Error("❌ NEXT_PUBLIC_SUPABASE_ANON_KEY não definido");
+}
+
+/* =========================================================
+   🧠 SERVER SIDE
 ========================================================= */
 export function createSupabaseServer() {
   const cookieStore = cookies();
@@ -42,8 +56,7 @@ export function createSupabaseServer() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // ⚠️ Server Components não permitem setar cookies
-          // Funciona normalmente em Route Handlers
+          // Server Components não permitem setar cookies
         }
       },
     },
