@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   AlertCircle,
   ArrowLeft,
   BarChart3,
@@ -10,15 +11,23 @@ import {
   CircleAlert,
   Clock3,
   Cpu,
+  Download,
   FileCheck,
+  FileText,
   FolderArchive,
   Gauge,
   GitMerge,
+  GripVertical,
+  History,
+  Link2,
+  MessageSquare,
   Network,
   Plus,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
+  Target,
   TimerReset,
   Users,
   Workflow,
@@ -72,6 +81,59 @@ type VsmRow = {
   execucao: number;
   espera: number;
   valor: "VA" | "NVA" | "NNVA";
+};
+
+type SipocMode = "quadro" | "lista";
+type SipocClassification = "ASSISTENCIAL" | "APOIO" | "GERENCIAL" | "ESTRATEGICO";
+type SipocWorkflowStatus =
+  | "RASCUNHO"
+  | "EM_REVISAO"
+  | "EM_APROVACAO"
+  | "APROVADO"
+  | "OBSOLETO";
+type IndicatorCategory = "ESTRUTURA" | "PROCESSO" | "RESULTADO" | "ESTRATEGICO";
+type RiskCategory = "ASSISTENCIAL" | "OPERACIONAL" | "FINANCEIRO" | "REPUTACIONAL";
+
+type SipocProfile = {
+  nome: string;
+  codigo: string;
+  versao: string;
+  classificacao: SipocClassification;
+  status: SipocWorkflowStatus;
+  emissao: string;
+  dono: string;
+  aprovador: string;
+};
+
+type SipocIndicator = {
+  id: string;
+  nome: string;
+  categoria: IndicatorCategory;
+  meta: string;
+  atual: string;
+  unidade: string;
+};
+
+type SipocRisk = {
+  id: string;
+  nome: string;
+  categoria: RiskCategory;
+  probabilidade: number;
+  impacto: number;
+  planoAcao: string;
+  controles: string;
+};
+
+type SipocStage = {
+  id: string;
+  nome: string;
+  responsavel: string;
+  sla: number;
+  riskIds: string[];
+  indicatorIds: string[];
+  bpmLink: string;
+  documentLink: string;
+  comentario: string;
 };
 
 function cn(...items: Array<string | false | null | undefined>) {
@@ -142,6 +204,218 @@ const DEFAULT_SIPOC_ROWS: SipocRow[] = [
     cliente: "Dono do processo",
     slaEsperado: 12,
     slaReal: 8,
+  },
+];
+
+const SIPOC_CLASSIFICATION_META: Record<
+  SipocClassification,
+  { label: string; description: string }
+> = {
+  ASSISTENCIAL: {
+    label: "Processo Assistencial / Operacional",
+    description: "Fluxo diretamente relacionado ao cuidado ou operação principal.",
+  },
+  APOIO: {
+    label: "Processo de Apoio",
+    description: "Sustenta a operação com recursos, suporte ou infraestrutura.",
+  },
+  GERENCIAL: {
+    label: "Processo Gerencial",
+    description: "Coordena rotinas, metas, pessoas e resultados táticos.",
+  },
+  ESTRATEGICO: {
+    label: "Processo Estratégico",
+    description: "Direciona decisões executivas, governança e desempenho.",
+  },
+};
+
+const SIPOC_WORKFLOW_META: Record<
+  SipocWorkflowStatus,
+  { label: string; tone: string }
+> = {
+  RASCUNHO: {
+    label: "Rascunho",
+    tone: "border-slate-200 bg-slate-50 text-slate-600",
+  },
+  EM_REVISAO: {
+    label: "Em revisão",
+    tone: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  EM_APROVACAO: {
+    label: "Em aprovação",
+    tone: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+  APROVADO: {
+    label: "Aprovado",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  OBSOLETO: {
+    label: "Obsoleto",
+    tone: "border-red-200 bg-red-50 text-red-700",
+  },
+};
+
+const INDICATOR_CATEGORY_META: Record<
+  IndicatorCategory,
+  { label: string; tone: string }
+> = {
+  ESTRUTURA: {
+    label: "Estrutura",
+    tone: "border-slate-200 bg-slate-50 text-slate-700",
+  },
+  PROCESSO: {
+    label: "Processo",
+    tone: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  RESULTADO: {
+    label: "Resultado",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  ESTRATEGICO: {
+    label: "Estratégico",
+    tone: "border-violet-200 bg-violet-50 text-violet-700",
+  },
+};
+
+const RISK_CATEGORY_META: Record<RiskCategory, { label: string; tone: string }> = {
+  ASSISTENCIAL: {
+    label: "Assistencial",
+    tone: "border-red-200 bg-red-50 text-red-700",
+  },
+  OPERACIONAL: {
+    label: "Operacional",
+    tone: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+  FINANCEIRO: {
+    label: "Financeiro",
+    tone: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  REPUTACIONAL: {
+    label: "Reputacional",
+    tone: "border-violet-200 bg-violet-50 text-violet-700",
+  },
+};
+
+const DEFAULT_SIPOC_PROFILE: SipocProfile = {
+  nome: "Atendimento e Resolução de Solicitações",
+  codigo: "SIPOC.PROC.001",
+  versao: "01",
+  classificacao: "ASSISTENCIAL",
+  status: "RASCUNHO",
+  emissao: "28/04/2026",
+  dono: "Gestor do Processo",
+  aprovador: "Diretoria Executiva",
+};
+
+const DEFAULT_SIPOC_INDICATORS: SipocIndicator[] = [
+  {
+    id: "ind-estrutura-1",
+    nome: "Disponibilidade da equipe",
+    categoria: "ESTRUTURA",
+    meta: "95",
+    atual: "92",
+    unidade: "%",
+  },
+  {
+    id: "ind-processo-1",
+    nome: "Cumprimento de SLA",
+    categoria: "PROCESSO",
+    meta: "90",
+    atual: "83",
+    unidade: "%",
+  },
+  {
+    id: "ind-resultado-1",
+    nome: "Resolutividade na primeira tratativa",
+    categoria: "RESULTADO",
+    meta: "85",
+    atual: "78",
+    unidade: "%",
+  },
+  {
+    id: "ind-estrategico-1",
+    nome: "Satisfação do cliente interno",
+    categoria: "ESTRATEGICO",
+    meta: "4.5",
+    atual: "4.2",
+    unidade: "/5",
+  },
+];
+
+const DEFAULT_SIPOC_RISKS: SipocRisk[] = [
+  {
+    id: "risk-1",
+    nome: "Atraso na análise da solicitação",
+    categoria: "OPERACIONAL",
+    probabilidade: 4,
+    impacto: 3,
+    planoAcao: "Revisar dimensionamento e fila de priorização",
+    controles: "Painel diário de SLA e alerta de atraso",
+  },
+  {
+    id: "risk-2",
+    nome: "Falha na comunicação com o cliente interno",
+    categoria: "REPUTACIONAL",
+    probabilidade: 3,
+    impacto: 4,
+    planoAcao: "Padronizar mensagem de retorno e responsáveis",
+    controles: "Checklist de comunicação e trilha de auditoria",
+  },
+  {
+    id: "risk-3",
+    nome: "Execução fora do protocolo aprovado",
+    categoria: "ASSISTENCIAL",
+    probabilidade: 2,
+    impacto: 5,
+    planoAcao: "Reciclagem do POP e auditoria amostral",
+    controles: "POP vigente, dupla checagem e registro formal",
+  },
+];
+
+const DEFAULT_SIPOC_STAGES: SipocStage[] = [
+  {
+    id: "stage-1",
+    nome: "Receber demanda",
+    responsavel: "Analista do processo",
+    sla: 4,
+    riskIds: ["risk-2"],
+    indicatorIds: ["ind-processo-1"],
+    bpmLink: "/modelagem",
+    documentLink: "/documentos",
+    comentario: "Entrada formal com registro obrigatório.",
+  },
+  {
+    id: "stage-2",
+    nome: "Analisar requisitos",
+    responsavel: "Qualidade",
+    sla: 12,
+    riskIds: ["risk-1"],
+    indicatorIds: ["ind-estrutura-1", "ind-processo-1"],
+    bpmLink: "/modelagem",
+    documentLink: "/documentos",
+    comentario: "Validar critérios antes de encaminhar.",
+  },
+  {
+    id: "stage-3",
+    nome: "Executar tratativa",
+    responsavel: "Dono do processo",
+    sla: 24,
+    riskIds: ["risk-3"],
+    indicatorIds: ["ind-resultado-1"],
+    bpmLink: "/modelagem",
+    documentLink: "/documentos",
+    comentario: "Execução deve seguir POP vigente.",
+  },
+  {
+    id: "stage-4",
+    nome: "Validar e encerrar",
+    responsavel: "Gestor da área",
+    sla: 8,
+    riskIds: ["risk-2"],
+    indicatorIds: ["ind-estrategico-1"],
+    bpmLink: "/modelagem",
+    documentLink: "/documentos",
+    comentario: "Encerrar com retorno ao cliente interno.",
   },
 ];
 
@@ -398,6 +672,47 @@ function approverCount(value: string) {
     .filter(Boolean).length;
 }
 
+function riskScoreMeta(score: number) {
+  if (score >= 16) {
+    return {
+      label: "Crítico",
+      tone: "border-red-200 bg-red-50 text-red-700",
+      bar: "bg-red-500",
+    };
+  }
+
+  if (score >= 10) {
+    return {
+      label: "Alto",
+      tone: "border-amber-200 bg-amber-50 text-amber-700",
+      bar: "bg-amber-500",
+    };
+  }
+
+  if (score >= 5) {
+    return {
+      label: "Moderado",
+      tone: "border-blue-200 bg-blue-50 text-blue-700",
+      bar: "bg-blue-500",
+    };
+  }
+
+  return {
+    label: "Baixo",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    bar: "bg-emerald-500",
+  };
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export default function ProcessosPage() {
   const router = useRouter();
 
@@ -412,6 +727,19 @@ export default function ProcessosPage() {
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [sipocRows, setSipocRows] = useState<SipocRow[]>(DEFAULT_SIPOC_ROWS);
+  const [sipocMode, setSipocMode] = useState<SipocMode>("quadro");
+  const [sipocProfile, setSipocProfile] =
+    useState<SipocProfile>(DEFAULT_SIPOC_PROFILE);
+  const [sipocIndicators, setSipocIndicators] = useState<SipocIndicator[]>(
+    DEFAULT_SIPOC_INDICATORS
+  );
+  const [sipocRisks, setSipocRisks] =
+    useState<SipocRisk[]>(DEFAULT_SIPOC_RISKS);
+  const [sipocStages, setSipocStages] =
+    useState<SipocStage[]>(DEFAULT_SIPOC_STAGES);
+  const [draggedSipocStageId, setDraggedSipocStageId] = useState<string | null>(
+    null
+  );
   const [raciRows, setRaciRows] = useState<RaciRow[]>(DEFAULT_RACI_ROWS);
   const [vsmRows, setVsmRows] = useState<VsmRow[]>(DEFAULT_VSM_ROWS);
 
@@ -499,6 +827,42 @@ export default function ProcessosPage() {
   );
 
   const sipocForaSla = sipocRows.length - sipocDentroSla;
+
+  const sipocLinkedIndicatorIds = useMemo(
+    () => new Set(sipocStages.flatMap((stage) => stage.indicatorIds)),
+    [sipocStages]
+  );
+
+  const sipocLinkedRiskIds = useMemo(
+    () => new Set(sipocStages.flatMap((stage) => stage.riskIds)),
+    [sipocStages]
+  );
+
+  const sipocHighRiskCount = useMemo(
+    () =>
+      sipocRisks.filter((risk) => risk.probabilidade * risk.impacto >= 10)
+        .length,
+    [sipocRisks]
+  );
+
+  const sipocPerformanceAverage = useMemo(() => {
+    const usable = sipocIndicators
+      .map((indicator) => {
+        const atual = Number(indicator.atual.replace(",", "."));
+        const meta = Number(indicator.meta.replace(",", "."));
+        if (!Number.isFinite(atual) || !Number.isFinite(meta) || meta === 0) {
+          return null;
+        }
+        return Math.min(125, Math.round((atual / meta) * 100));
+      })
+      .filter((value): value is number => value !== null);
+
+    if (!usable.length) return 0;
+
+    return Math.round(
+      usable.reduce((total, value) => total + value, 0) / usable.length
+    );
+  }, [sipocIndicators]);
 
   const raciSemResponsavel = useMemo(
     () => raciRows.filter((row) => !row.responsavel.trim()).length,
@@ -612,6 +976,330 @@ export default function ProcessosPage() {
     setSipocRows((current) =>
       current.map((row) => (row.id === id ? { ...row, [field]: value } : row))
     );
+  }
+
+  function updateSipocProfile(
+    field: keyof SipocProfile,
+    value: SipocProfile[keyof SipocProfile]
+  ) {
+    setSipocProfile((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateSipocStage(
+    id: string,
+    field: keyof SipocStage,
+    value: string | number | string[]
+  ) {
+    setSipocStages((current) =>
+      current.map((stage) =>
+        stage.id === id ? { ...stage, [field]: value } : stage
+      )
+    );
+  }
+
+  function updateSipocIndicator(
+    id: string,
+    field: keyof SipocIndicator,
+    value: string
+  ) {
+    setSipocIndicators((current) =>
+      current.map((indicator) =>
+        indicator.id === id ? { ...indicator, [field]: value } : indicator
+      )
+    );
+  }
+
+  function updateSipocRisk(
+    id: string,
+    field: keyof SipocRisk,
+    value: string | number
+  ) {
+    setSipocRisks((current) =>
+      current.map((risk) => (risk.id === id ? { ...risk, [field]: value } : risk))
+    );
+  }
+
+  function linkSipocStageItem(
+    stageId: string,
+    field: "riskIds" | "indicatorIds",
+    itemId: string
+  ) {
+    if (!itemId) return;
+
+    setSipocStages((current) =>
+      current.map((stage) => {
+        if (stage.id !== stageId || stage[field].includes(itemId)) return stage;
+        return { ...stage, [field]: [...stage[field], itemId] };
+      })
+    );
+  }
+
+  function removeSipocStageItem(
+    stageId: string,
+    field: "riskIds" | "indicatorIds",
+    itemId: string
+  ) {
+    setSipocStages((current) =>
+      current.map((stage) =>
+        stage.id === stageId
+          ? { ...stage, [field]: stage[field].filter((id) => id !== itemId) }
+          : stage
+      )
+    );
+  }
+
+  function moveSipocStage(targetId: string) {
+    if (!draggedSipocStageId || draggedSipocStageId === targetId) return;
+
+    setSipocStages((current) => {
+      const draggedIndex = current.findIndex(
+        (stage) => stage.id === draggedSipocStageId
+      );
+      const targetIndex = current.findIndex((stage) => stage.id === targetId);
+
+      if (draggedIndex < 0 || targetIndex < 0) return current;
+
+      const next = [...current];
+      const [dragged] = next.splice(draggedIndex, 1);
+      next.splice(targetIndex, 0, dragged);
+      return next;
+    });
+  }
+
+  function exportSipocPdf() {
+    const classification = SIPOC_CLASSIFICATION_META[sipocProfile.classificacao];
+    const workflow = SIPOC_WORKFLOW_META[sipocProfile.status];
+
+    const columns = [
+      {
+        label: "S - Fornecedores",
+        items: Array.from(new Set(sipocRows.map((row) => row.fornecedor))),
+      },
+      {
+        label: "I - Entradas",
+        items: Array.from(new Set(sipocRows.map((row) => row.entrada))),
+      },
+      {
+        label: "P - Processo",
+        items: sipocStages.map(
+          (stage) => `${stage.nome} | ${stage.responsavel} | SLA ${stage.sla}h`
+        ),
+      },
+      {
+        label: "O - Saídas",
+        items: Array.from(new Set(sipocRows.map((row) => row.saida))),
+      },
+      {
+        label: "C - Clientes",
+        items: Array.from(new Set(sipocRows.map((row) => row.cliente))),
+      },
+    ];
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(sipocProfile.codigo)} - SIPOC</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 32px;
+              color: #0f172a;
+              font-family: Inter, Arial, sans-serif;
+              background: #fff;
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              border-bottom: 2px solid #e2e8f0;
+              padding-bottom: 18px;
+              margin-bottom: 22px;
+            }
+            .brand { display: flex; gap: 12px; align-items: center; }
+            .logo {
+              width: 42px;
+              height: 42px;
+              border-radius: 10px;
+              background: #2655e8;
+              color: #fff;
+              display: grid;
+              place-items: center;
+              font-weight: 900;
+            }
+            h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+            h2 { margin: 26px 0 10px; font-size: 16px; }
+            .muted { color: #64748b; font-size: 12px; font-weight: 600; }
+            .meta {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 10px;
+              margin-bottom: 22px;
+            }
+            .box {
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 12px;
+              min-height: 68px;
+            }
+            .label {
+              color: #64748b;
+              font-size: 9px;
+              text-transform: uppercase;
+              font-weight: 900;
+              letter-spacing: .08em;
+            }
+            .value { margin-top: 5px; font-size: 13px; font-weight: 800; }
+            .sipoc {
+              display: grid;
+              grid-template-columns: repeat(5, 1fr);
+              gap: 10px;
+            }
+            .column {
+              border: 1px solid #dbeafe;
+              border-radius: 14px;
+              overflow: hidden;
+              min-height: 230px;
+            }
+            .column h3 {
+              margin: 0;
+              padding: 12px;
+              background: #eff6ff;
+              color: #1d4ed8;
+              font-size: 12px;
+              text-transform: uppercase;
+              letter-spacing: .08em;
+            }
+            ul { margin: 0; padding: 12px 14px 14px 28px; }
+            li { margin: 0 0 8px; font-size: 11px; line-height: 1.45; }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 8px;
+              font-size: 11px;
+            }
+            th, td {
+              border: 1px solid #e2e8f0;
+              padding: 9px;
+              vertical-align: top;
+            }
+            th {
+              background: #f8fafc;
+              text-align: left;
+              font-size: 9px;
+              text-transform: uppercase;
+              letter-spacing: .08em;
+              color: #475569;
+            }
+            .footer {
+              margin-top: 28px;
+              padding-top: 14px;
+              border-top: 1px solid #e2e8f0;
+              display: flex;
+              justify-content: space-between;
+              font-size: 10px;
+              color: #64748b;
+            }
+            @media print {
+              body { padding: 22px; }
+              .column { break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="brand">
+              <div class="logo">DQ</div>
+              <div>
+                <h1>DocQualis</h1>
+                <div class="muted">Módulo: Gestão de Processos - SIPOC</div>
+              </div>
+            </div>
+            <div class="muted">Padrão institucional ISO / ONA / JCI</div>
+          </div>
+
+          <div class="meta">
+            <div class="box"><div class="label">Processo</div><div class="value">${escapeHtml(sipocProfile.nome)}</div></div>
+            <div class="box"><div class="label">Tipo</div><div class="value">${escapeHtml(classification.label)}</div></div>
+            <div class="box"><div class="label">Código / Versão</div><div class="value">${escapeHtml(sipocProfile.codigo)} - Rev. ${escapeHtml(sipocProfile.versao)}</div></div>
+            <div class="box"><div class="label">Status / Emissão</div><div class="value">${escapeHtml(workflow.label)} - ${escapeHtml(sipocProfile.emissao)}</div></div>
+          </div>
+
+          <h2>Estrutura SIPOC</h2>
+          <div class="sipoc">
+            ${columns
+              .map(
+                (column) => `
+                  <section class="column">
+                    <h3>${escapeHtml(column.label)}</h3>
+                    <ul>${column.items
+                      .map((item) => `<li>${escapeHtml(item)}</li>`)
+                      .join("")}</ul>
+                  </section>
+                `
+              )
+              .join("")}
+          </div>
+
+          <h2>Indicadores Vinculados</h2>
+          <table>
+            <thead><tr><th>Categoria</th><th>Indicador</th><th>Meta</th><th>Atual</th></tr></thead>
+            <tbody>
+              ${sipocIndicators
+                .map(
+                  (indicator) => `
+                    <tr>
+                      <td>${escapeHtml(INDICATOR_CATEGORY_META[indicator.categoria].label)}</td>
+                      <td>${escapeHtml(indicator.nome)}</td>
+                      <td>${escapeHtml(indicator.meta)}${escapeHtml(indicator.unidade)}</td>
+                      <td>${escapeHtml(indicator.atual)}${escapeHtml(indicator.unidade)}</td>
+                    </tr>
+                  `
+                )
+                .join("")}
+            </tbody>
+          </table>
+
+          <h2>Riscos por Etapa</h2>
+          <table>
+            <thead><tr><th>Etapa</th><th>Riscos</th><th>Controles</th><th>Plano de ação</th></tr></thead>
+            <tbody>
+              ${sipocStages
+                .map((stage) => {
+                  const risks = stage.riskIds
+                    .map((riskId) => sipocRisks.find((risk) => risk.id === riskId))
+                    .filter(Boolean) as SipocRisk[];
+
+                  return `
+                    <tr>
+                      <td>${escapeHtml(stage.nome)}</td>
+                      <td>${risks.map((risk) => escapeHtml(risk.nome)).join("<br/>")}</td>
+                      <td>${risks.map((risk) => escapeHtml(risk.controles)).join("<br/>")}</td>
+                      <td>${risks.map((risk) => escapeHtml(risk.planoAcao)).join("<br/>")}</td>
+                    </tr>
+                  `;
+                })
+                .join("")}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <span>Responsável: ${escapeHtml(sipocProfile.dono)}</span>
+            <span>Aprovador: ${escapeHtml(sipocProfile.aprovador)}</span>
+            <span>Controle de versão: Rev. ${escapeHtml(sipocProfile.versao)}</span>
+          </div>
+
+          <script>window.onload = () => setTimeout(() => window.print(), 250)</script>
+        </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank", "width=1280,height=900");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   }
 
   function updateRaciRow(id: string, field: keyof RaciRow, value: string) {
@@ -1024,6 +1712,984 @@ export default function ProcessosPage() {
             <Clock3 className="h-3.5 w-3.5" />
             Ordenação: {sortField} / {sortDirection}
           </span>
+        </div>
+      </>
+    );
+  }
+
+  function renderSipocAdvanced() {
+    const slaPercent = sipocRows.length
+      ? Math.round((sipocDentroSla / sipocRows.length) * 100)
+      : 0;
+
+    const workflow = SIPOC_WORKFLOW_META[sipocProfile.status];
+    const classification =
+      SIPOC_CLASSIFICATION_META[sipocProfile.classificacao];
+    const suppliers = Array.from(new Set(sipocRows.map((row) => row.fornecedor)));
+    const inputs = Array.from(new Set(sipocRows.map((row) => row.entrada)));
+    const outputs = Array.from(new Set(sipocRows.map((row) => row.saida)));
+    const customers = Array.from(new Set(sipocRows.map((row) => row.cliente)));
+
+    const sipocColumns = [
+      {
+        letter: "S",
+        title: "Supplier",
+        label: "Fornecedores",
+        icon: <Users className="h-4 w-4" />,
+        tone: "border-blue-100 bg-blue-50 text-blue-700",
+        items: suppliers,
+      },
+      {
+        letter: "I",
+        title: "Inputs",
+        label: "Entradas",
+        icon: <FileText className="h-4 w-4" />,
+        tone: "border-slate-200 bg-slate-50 text-slate-700",
+        items: inputs,
+      },
+      {
+        letter: "P",
+        title: "Process",
+        label: "Processo",
+        icon: <Workflow className="h-4 w-4" />,
+        tone: "border-blue-200 bg-white text-[#2655e8]",
+        items: [],
+      },
+      {
+        letter: "O",
+        title: "Outputs",
+        label: "Saídas",
+        icon: <CheckCircle2 className="h-4 w-4" />,
+        tone: "border-emerald-100 bg-emerald-50 text-emerald-700",
+        items: outputs,
+      },
+      {
+        letter: "C",
+        title: "Customers",
+        label: "Clientes",
+        icon: <Target className="h-4 w-4" />,
+        tone: "border-violet-100 bg-violet-50 text-violet-700",
+        items: customers,
+      },
+    ];
+
+    const workflowSteps: SipocWorkflowStatus[] = [
+      "RASCUNHO",
+      "EM_REVISAO",
+      "EM_APROVACAO",
+      "APROVADO",
+      "OBSOLETO",
+    ];
+
+    return (
+      <>
+        <ModuleHeader
+          eyebrow="Mapeamento SIPOC"
+          title="Centro de Inteligência de Processos"
+          subtitle="SIPOC controlado com indicadores, riscos, workflow documental e integração com BPM, documentos e qualidade."
+          onBack={() => setViewState("home")}
+          action={
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={exportSipocPdf}
+                className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
+              >
+                <Download className="h-4 w-4" />
+                Exportar PDF
+              </button>
+              <button
+                onClick={() =>
+                  setSipocStages((current) => [
+                    ...current,
+                    {
+                      id: makeId("stage"),
+                      nome: "Nova etapa",
+                      responsavel: "Responsável",
+                      sla: 8,
+                      riskIds: [],
+                      indicatorIds: [],
+                      bpmLink: "/modelagem",
+                      documentLink: "/documentos",
+                      comentario: "",
+                    },
+                  ])
+                }
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2655e8] px-5 text-sm font-bold text-white shadow-md transition hover:bg-[#1e40af]"
+              >
+                <Plus className="h-4 w-4" />
+                Nova etapa
+              </button>
+            </div>
+          }
+        />
+
+        <Panel
+          title="Documento controlado SIPOC"
+          subtitle="Identificação, classificação obrigatória e workflow de revisão do processo."
+        >
+          <div className="grid gap-5 p-6 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Nome do processo
+                </span>
+                <TableInput
+                  value={sipocProfile.nome}
+                  onChange={(value) => updateSipocProfile("nome", value)}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Código do documento
+                </span>
+                <TableInput
+                  value={sipocProfile.codigo}
+                  onChange={(value) => updateSipocProfile("codigo", value)}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Classificação
+                </span>
+                <select
+                  value={sipocProfile.classificacao}
+                  onChange={(event) =>
+                    updateSipocProfile(
+                      "classificacao",
+                      event.target.value as SipocClassification
+                    )
+                  }
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10"
+                >
+                  {Object.entries(SIPOC_CLASSIFICATION_META).map(
+                    ([value, meta]) => (
+                      <option key={value} value={value}>
+                        {meta.label}
+                      </option>
+                    )
+                  )}
+                </select>
+                <p className="text-xs font-medium text-slate-500">
+                  {classification.description}
+                </p>
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Status do workflow
+                </span>
+                <select
+                  value={sipocProfile.status}
+                  onChange={(event) =>
+                    updateSipocProfile(
+                      "status",
+                      event.target.value as SipocWorkflowStatus
+                    )
+                  }
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10"
+                >
+                  {Object.entries(SIPOC_WORKFLOW_META).map(([value, meta]) => (
+                    <option key={value} value={value}>
+                      {meta.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className={cn(
+                    "inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                    workflow.tone
+                  )}
+                >
+                  {workflow.label}
+                </span>
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Dono do processo
+                </span>
+                <TableInput
+                  value={sipocProfile.dono}
+                  onChange={(value) => updateSipocProfile("dono", value)}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Versão
+                  </span>
+                  <TableInput
+                    value={sipocProfile.versao}
+                    onChange={(value) => updateSipocProfile("versao", value)}
+                  />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Emissão
+                  </span>
+                  <TableInput
+                    value={sipocProfile.emissao}
+                    onChange={(value) => updateSipocProfile("emissao", value)}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-[#2655e8]">
+                  <History className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-950">
+                    Workflow documental
+                  </p>
+                  <p className="text-xs font-medium text-slate-500">
+                    Controle de versão, aprovação e obsolescência.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {workflowSteps.map((step, index) => {
+                  const activeIndex = workflowSteps.indexOf(sipocProfile.status);
+                  const done = index <= activeIndex;
+                  const meta = SIPOC_WORKFLOW_META[step];
+
+                  return (
+                    <div key={step} className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          "flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black",
+                          done
+                            ? "border-[#2655e8] bg-[#2655e8] text-white"
+                            : "border-slate-200 bg-white text-slate-400"
+                        )}
+                      >
+                        {index + 1}
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs font-bold",
+                          done ? "text-slate-900" : "text-slate-400"
+                        )}
+                      >
+                        {meta.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 rounded-xl border border-white bg-white p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Aprovação
+                </p>
+                <p className="mt-2 text-sm font-bold text-slate-900">
+                  {sipocProfile.aprovador}
+                </p>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  Última revisão registrada em {sipocProfile.emissao}.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Panel>
+
+        <div className="my-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            title="Performance"
+            value={`${sipocPerformanceAverage}%`}
+            subtitle="Média dos indicadores vinculados"
+            icon={<Activity className="h-4 w-4" />}
+            tone={sipocPerformanceAverage >= 90 ? "emerald" : "amber"}
+          />
+          <MetricCard
+            title="Riscos vinculados"
+            value={sipocLinkedRiskIds.size}
+            subtitle={`${sipocHighRiskCount} risco(s) alto/crítico`}
+            icon={<CircleAlert className="h-4 w-4" />}
+            tone={sipocHighRiskCount ? "red" : "emerald"}
+          />
+          <MetricCard
+            title="Indicadores"
+            value={sipocLinkedIndicatorIds.size}
+            subtitle="Relacionados às etapas"
+            icon={<BarChart3 className="h-4 w-4" />}
+            tone="blue"
+          />
+          <MetricCard
+            title="SLA conforme"
+            value={`${slaPercent}%`}
+            subtitle={`${sipocForaSla} interação(ões) fora do SLA`}
+            icon={<TimerReset className="h-4 w-4" />}
+            tone={sipocForaSla ? "amber" : "emerald"}
+          />
+        </div>
+
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            {[
+              {
+                key: "quadro",
+                label: "Modo quadro",
+                icon: <Network className="h-4 w-4" />,
+              },
+              {
+                key: "lista",
+                label: "Modo lista",
+                icon: <SlidersHorizontal className="h-4 w-4" />,
+              },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setSipocMode(item.key as SipocMode)}
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 rounded-lg px-4 text-xs font-black uppercase tracking-widest transition",
+                  sipocMode === item.key
+                    ? "bg-[#2655e8] text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() =>
+                setSipocIndicators((current) => [
+                  ...current,
+                  {
+                    id: makeId("indicator"),
+                    nome: "Novo indicador",
+                    categoria: "PROCESSO",
+                    meta: "100",
+                    atual: "0",
+                    unidade: "%",
+                  },
+                ])
+              }
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
+            >
+              <Plus className="h-4 w-4" />
+              Novo indicador
+            </button>
+            <button
+              onClick={() =>
+                setSipocRisks((current) => [
+                  ...current,
+                  {
+                    id: makeId("risk"),
+                    nome: "Novo risco do processo",
+                    categoria: "OPERACIONAL",
+                    probabilidade: 1,
+                    impacto: 1,
+                    planoAcao: "Definir plano de ação",
+                    controles: "Definir controles existentes",
+                  },
+                ])
+              }
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-red-300 hover:text-red-600"
+            >
+              <Plus className="h-4 w-4" />
+              Novo risco
+            </button>
+          </div>
+        </div>
+
+        {sipocMode === "quadro" && (
+          <div className="grid gap-6">
+            <Panel
+              title="Quadro SIPOC clássico"
+              subtitle="Cinco colunas SIPOC com mini-fluxo interativo no bloco Process."
+            >
+              <div className="grid gap-4 p-6 xl:grid-cols-5">
+                {sipocColumns.map((column) => (
+                  <section
+                    key={column.letter}
+                    className="min-h-[390px] rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center justify-between border-b px-4 py-4",
+                        column.tone
+                      )}
+                    >
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em]">
+                          {column.title}
+                        </p>
+                        <h3 className="mt-1 text-sm font-black">
+                          {column.letter} - {column.label}
+                        </h3>
+                      </div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/60 bg-white/70">
+                        {column.icon}
+                      </div>
+                    </div>
+
+                    {column.letter === "P" ? (
+                      <div className="space-y-3 p-4">
+                        {sipocStages.map((stage, index) => {
+                          const stageRisks = stage.riskIds
+                            .map((riskId) =>
+                              sipocRisks.find((risk) => risk.id === riskId)
+                            )
+                            .filter(Boolean) as SipocRisk[];
+                          const maxRiskScore = stageRisks.length
+                            ? Math.max(
+                                ...stageRisks.map(
+                                  (risk) => risk.probabilidade * risk.impacto
+                                )
+                              )
+                            : 0;
+                          const riskMeta = riskScoreMeta(maxRiskScore);
+
+                          return (
+                            <article
+                              key={stage.id}
+                              draggable
+                              onDragStart={() => setDraggedSipocStageId(stage.id)}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => moveSipocStage(stage.id)}
+                              onDragEnd={() => setDraggedSipocStageId(null)}
+                              className={cn(
+                                "rounded-xl border border-slate-200 bg-slate-50/70 p-3 transition",
+                                draggedSipocStageId === stage.id &&
+                                  "opacity-60 ring-4 ring-blue-100"
+                              )}
+                            >
+                              <div className="mb-3 flex items-start gap-2">
+                                <span className="mt-1 text-slate-300">
+                                  <GripVertical className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="mb-2 flex items-center gap-2">
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2655e8] text-[10px] font-black text-white">
+                                      {index + 1}
+                                    </span>
+                                    <input
+                                      value={stage.nome}
+                                      onChange={(event) =>
+                                        updateSipocStage(
+                                          stage.id,
+                                          "nome",
+                                          event.target.value
+                                        )
+                                      }
+                                      className="min-w-0 flex-1 border-0 bg-transparent text-sm font-black text-slate-950 outline-none"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                      value={stage.responsavel}
+                                      onChange={(event) =>
+                                        updateSipocStage(
+                                          stage.id,
+                                          "responsavel",
+                                          event.target.value
+                                        )
+                                      }
+                                      className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#2655e8]"
+                                    />
+                                    <input
+                                      type="number"
+                                      value={stage.sla}
+                                      onChange={(event) =>
+                                        updateSipocStage(
+                                          stage.id,
+                                          "sla",
+                                          Number(event.target.value || 0)
+                                        )
+                                      }
+                                      className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#2655e8]"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mb-3 flex flex-wrap gap-1.5">
+                                <span
+                                  className={cn(
+                                    "inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-widest",
+                                    riskMeta.tone
+                                  )}
+                                >
+                                  Risco {riskMeta.label}
+                                </span>
+                                <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-blue-700">
+                                  {stage.indicatorIds.length} indicador(es)
+                                </span>
+                              </div>
+
+                              <div className="mb-2 flex flex-wrap gap-1.5">
+                                {stage.indicatorIds.map((indicatorId) => {
+                                  const indicator = sipocIndicators.find(
+                                    (item) => item.id === indicatorId
+                                  );
+                                  if (!indicator) return null;
+                                  return (
+                                    <button
+                                      key={indicatorId}
+                                      onClick={() =>
+                                        removeSipocStageItem(
+                                          stage.id,
+                                          "indicatorIds",
+                                          indicatorId
+                                        )
+                                      }
+                                      className="rounded-full border border-blue-100 bg-white px-2 py-1 text-[9px] font-bold text-blue-700"
+                                    >
+                                      {indicator.nome}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              <select
+                                value=""
+                                onChange={(event) =>
+                                  linkSipocStageItem(
+                                    stage.id,
+                                    "indicatorIds",
+                                    event.target.value
+                                  )
+                                }
+                                className="mb-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 outline-none focus:border-[#2655e8]"
+                              >
+                                <option value="">Vincular indicador...</option>
+                                {sipocIndicators.map((indicator) => (
+                                  <option key={indicator.id} value={indicator.id}>
+                                    {indicator.nome}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <select
+                                value=""
+                                onChange={(event) =>
+                                  linkSipocStageItem(
+                                    stage.id,
+                                    "riskIds",
+                                    event.target.value
+                                  )
+                                }
+                                className="mb-2 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 outline-none focus:border-[#2655e8]"
+                              >
+                                <option value="">Vincular risco...</option>
+                                {sipocRisks.map((risk) => (
+                                  <option key={risk.id} value={risk.id}>
+                                    {risk.nome}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <textarea
+                                value={stage.comentario}
+                                onChange={(event) =>
+                                  updateSipocStage(
+                                    stage.id,
+                                    "comentario",
+                                    event.target.value
+                                  )
+                                }
+                                className="min-h-[54px] w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 outline-none focus:border-[#2655e8]"
+                                placeholder="Comentário da etapa..."
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-2 p-4">
+                        {column.items.map((item) => (
+                          <div
+                            key={item}
+                            className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3 text-sm font-bold leading-snug text-slate-700"
+                          >
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
+            </Panel>
+
+            <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+              <Panel
+                title="Indicadores de performance"
+                subtitle="Estrutura, processo, resultado e estratégia."
+              >
+                <div className="space-y-3 p-6">
+                  {sipocIndicators.map((indicator) => {
+                    const meta = INDICATOR_CATEGORY_META[indicator.categoria];
+
+                    return (
+                      <div
+                        key={indicator.id}
+                        className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_150px_90px_90px]"
+                      >
+                        <input
+                          value={indicator.nome}
+                          onChange={(event) =>
+                            updateSipocIndicator(
+                              indicator.id,
+                              "nome",
+                              event.target.value
+                            )
+                          }
+                          className="min-w-0 border-0 bg-transparent text-sm font-black text-slate-900 outline-none"
+                        />
+                        <select
+                          value={indicator.categoria}
+                          onChange={(event) =>
+                            updateSipocIndicator(
+                              indicator.id,
+                              "categoria",
+                              event.target.value as IndicatorCategory
+                            )
+                          }
+                          className={cn(
+                            "h-9 rounded-lg border px-2 text-xs font-black uppercase tracking-widest outline-none",
+                            meta.tone
+                          )}
+                        >
+                          {Object.entries(INDICATOR_CATEGORY_META).map(
+                            ([value, category]) => (
+                              <option key={value} value={value}>
+                                {category.label}
+                              </option>
+                            )
+                          )}
+                        </select>
+                        <TableInput
+                          value={indicator.meta}
+                          onChange={(value) =>
+                            updateSipocIndicator(indicator.id, "meta", value)
+                          }
+                          className="h-9"
+                        />
+                        <TableInput
+                          value={indicator.atual}
+                          onChange={(value) =>
+                            updateSipocIndicator(indicator.id, "atual", value)
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </Panel>
+
+              <Panel
+                title="Mapa de riscos integrado"
+                subtitle="Probabilidade x impacto define o nível automaticamente."
+              >
+                <div className="space-y-3 p-6">
+                  {sipocRisks.map((risk) => {
+                    const category = RISK_CATEGORY_META[risk.categoria];
+                    const score = risk.probabilidade * risk.impacto;
+                    const level = riskScoreMeta(score);
+
+                    return (
+                      <div
+                        key={risk.id}
+                        className="rounded-xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                          <input
+                            value={risk.nome}
+                            onChange={(event) =>
+                              updateSipocRisk(
+                                risk.id,
+                                "nome",
+                                event.target.value
+                              )
+                            }
+                            className="min-w-[220px] flex-1 border-0 bg-transparent text-sm font-black text-slate-950 outline-none"
+                          />
+                          <span
+                            className={cn(
+                              "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                              level.tone
+                            )}
+                          >
+                            {level.label} • {score}
+                          </span>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-[150px_1fr_1fr]">
+                          <select
+                            value={risk.categoria}
+                            onChange={(event) =>
+                              updateSipocRisk(
+                                risk.id,
+                                "categoria",
+                                event.target.value as RiskCategory
+                              )
+                            }
+                            className={cn(
+                              "h-9 rounded-lg border px-2 text-xs font-black uppercase tracking-widest outline-none",
+                              category.tone
+                            )}
+                          >
+                            {Object.entries(RISK_CATEGORY_META).map(
+                              ([value, meta]) => (
+                                <option key={value} value={value}>
+                                  {meta.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                          <div className="grid grid-cols-2 gap-2">
+                            <TableInput
+                              type="number"
+                              value={risk.probabilidade}
+                              onChange={(value) =>
+                                updateSipocRisk(
+                                  risk.id,
+                                  "probabilidade",
+                                  Number(value || 0)
+                                )
+                              }
+                              className="h-9 text-center"
+                            />
+                            <TableInput
+                              type="number"
+                              value={risk.impacto}
+                              onChange={(value) =>
+                                updateSipocRisk(
+                                  risk.id,
+                                  "impacto",
+                                  Number(value || 0)
+                                )
+                              }
+                              className="h-9 text-center"
+                            />
+                          </div>
+                          <div className="h-2 self-center rounded-full bg-slate-100">
+                            <div
+                              className={cn("h-full rounded-full", level.bar)}
+                              style={{ width: `${Math.min(100, score * 4)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <TableInput
+                            value={risk.controles}
+                            onChange={(value) =>
+                              updateSipocRisk(risk.id, "controles", value)
+                            }
+                          />
+                          <TableInput
+                            value={risk.planoAcao}
+                            onChange={(value) =>
+                              updateSipocRisk(risk.id, "planoAcao", value)
+                            }
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {sipocMode === "lista" && (
+          <Panel
+            title="Gestão em lista"
+            subtitle="Base analítica para auditoria, SLA, fornecedores, entradas, saídas e clientes."
+          >
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="min-w-[1180px] w-full text-left">
+                <thead className="border-b border-slate-100 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <tr>
+                    <th className="px-5 py-4">Fornecedor</th>
+                    <th className="px-5 py-4">Entrada</th>
+                    <th className="px-5 py-4">Processo / etapa</th>
+                    <th className="px-5 py-4">Saída</th>
+                    <th className="px-5 py-4">Cliente</th>
+                    <th className="px-5 py-4 text-center">SLA esperado</th>
+                    <th className="px-5 py-4 text-center">Tempo real</th>
+                    <th className="px-5 py-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sipocRows.map((row) => {
+                    const dentroSla = row.slaReal <= row.slaEsperado;
+
+                    return (
+                      <tr key={row.id} className="align-top">
+                        {(
+                          [
+                            "fornecedor",
+                            "entrada",
+                            "etapa",
+                            "saida",
+                            "cliente",
+                          ] as Array<keyof SipocRow>
+                        ).map((field) => (
+                          <td key={field} className="px-5 py-4">
+                            <TableInput
+                              value={row[field] as string}
+                              onChange={(value) =>
+                                updateSipocRow(row.id, field, value)
+                              }
+                            />
+                          </td>
+                        ))}
+                        <td className="px-5 py-4">
+                          <TableInput
+                            type="number"
+                            value={row.slaEsperado}
+                            onChange={(value) =>
+                              updateSipocRow(
+                                row.id,
+                                "slaEsperado",
+                                Number(value || 0)
+                              )
+                            }
+                            className="text-center"
+                          />
+                        </td>
+                        <td className="px-5 py-4">
+                          <TableInput
+                            type="number"
+                            value={row.slaReal}
+                            onChange={(value) =>
+                              updateSipocRow(
+                                row.id,
+                                "slaReal",
+                                Number(value || 0)
+                              )
+                            }
+                            className="text-center"
+                          />
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest",
+                              dentroSla
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-red-200 bg-red-50 text-red-700"
+                            )}
+                          >
+                            {dentroSla ? (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            ) : (
+                              <XCircle className="h-3.5 w-3.5" />
+                            )}
+                            {dentroSla ? "Dentro do SLA" : "Fora do SLA"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        )}
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Panel
+            title="Integrações do processo"
+            subtitle="O SIPOC passa a conversar com os módulos-chave do SGQ."
+          >
+            <div className="grid gap-3 p-6 md:grid-cols-2">
+              {[
+                {
+                  label: "BPM Studio",
+                  text: "Fluxo completo, conectores e modelagem BPMN.",
+                  icon: <Workflow className="h-4 w-4" />,
+                },
+                {
+                  label: "Documentos",
+                  text: "POP, protocolos e documentos controlados relacionados.",
+                  icon: <FileCheck className="h-4 w-4" />,
+                },
+                {
+                  label: "Indicadores",
+                  text: "Performance operacional e estratégica vinculada.",
+                  icon: <BarChart3 className="h-4 w-4" />,
+                },
+                {
+                  label: "Riscos",
+                  text: "Riscos por etapa, controles e planos de ação.",
+                  icon: <ShieldCheck className="h-4 w-4" />,
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-slate-200 bg-white p-4"
+                >
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-[#2655e8]">
+                    {item.icon}
+                  </div>
+                  <p className="text-sm font-black text-slate-950">
+                    {item.label}
+                  </p>
+                  <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                    {item.text}
+                  </p>
+                  <div className="mt-3 inline-flex items-center gap-1 text-xs font-black text-[#2655e8]">
+                    <Link2 className="h-3.5 w-3.5" />
+                    Vinculado ao processo
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel
+            title="Histórico e comentários"
+            subtitle="Rastreabilidade executiva para revisão e auditoria."
+          >
+            <div className="space-y-3 p-6">
+              {[
+                "Criação do SIPOC em modo rascunho",
+                "Classificação obrigatória definida",
+                "Indicadores e riscos vinculados às etapas",
+                "Aguardando revisão formal do dono do processo",
+              ].map((item, index) => (
+                <div
+                  key={item}
+                  className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"
+                >
+                  <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-xs font-black text-[#2655e8]">
+                    {index + 1}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{item}</p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      Sistema • {sipocProfile.emissao}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                <div className="mb-2 flex items-center gap-2 text-[#2655e8]">
+                  <MessageSquare className="h-4 w-4" />
+                  <p className="text-xs font-black uppercase tracking-widest">
+                    Comentários por etapa
+                  </p>
+                </div>
+                <p className="text-sm font-semibold leading-relaxed text-slate-700">
+                  Os comentários informados no bloco Process são preservados na
+                  rastreabilidade do SIPOC e entram na exportação institucional.
+                </p>
+              </div>
+            </div>
+          </Panel>
         </div>
       </>
     );
@@ -1623,7 +3289,7 @@ export default function ProcessosPage() {
       <div className="mx-auto w-full max-w-[1440px] px-8 py-8">
         {viewState === "home" && renderHome()}
         {viewState === "list" && renderList()}
-        {viewState === "sipoc" && renderSipoc()}
+        {viewState === "sipoc" && renderSipocAdvanced()}
         {viewState === "raci" && renderRaci()}
         {viewState === "vsm" && renderVsm()}
       </div>
