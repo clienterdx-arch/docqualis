@@ -3,8 +3,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl) {
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL não definido");
+}
+
+if (!supabaseAnonKey) {
+  throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY não definido");
+}
 
 export async function createSupabaseServer() {
   const cookieStore = await cookies();
@@ -20,7 +28,7 @@ export async function createSupabaseServer() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // Ignorado em Server Components
+          // Ignorado quando executado em Server Components.
         }
       },
     },

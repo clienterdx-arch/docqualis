@@ -4,40 +4,35 @@ import { supabase } from "@/lib/supabase";
 type PerfilRecord = Record<string, any>;
 
 export async function carregarPerfilUsuario<T extends PerfilRecord = PerfilRecord>(
-  session: Session,
-  select = "empresa_id, nome"
+  session: Session | null,
+  select = "id, empresa_id, nome, cargo, setor, perfil_acesso, ativo"
 ): Promise<T | null> {
-  const lookupValues: Array<[string, string | undefined]> = [
-    ["id", session.user.id],
-    ["user_id", session.user.id],
-    ["auth_user_id", session.user.id],
-    ["usuario_id", session.user.id],
-    ["auth_id", session.user.id],
-    ["email", session.user.email ?? undefined],
-  ];
+  if (!session?.user?.id) return null;
 
-  for (const [column, value] of lookupValues) {
-    if (!value) continue;
+  const userId = session.user.id;
+  const userEmail = session.user.email ?? "";
 
-    const { data: perfilComEmpresa, error: erroPerfilComEmpresa } = await supabase
+  const { data, error } = await supabase
+    .from("perfis")
+    .select(select)
+    .eq("id", userId)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (!error && data) {
+    return data as T;
+  }
+
+  if (userEmail) {
+    const { data: perfilPorEmail, error: erroEmail } = await supabase
       .from("perfis")
       .select(select)
-      .eq(column, value)
-      .not("empresa_id", "is", null)
-      .limit(1);
+      .eq("email", userEmail)
+      .eq("ativo", true)
+      .maybeSingle();
 
-    if (!erroPerfilComEmpresa && perfilComEmpresa?.[0]) {
-      return perfilComEmpresa[0] as unknown as T;
-    }
-
-    const { data, error } = await supabase
-      .from("perfis")
-      .select(select)
-      .eq(column, value)
-      .limit(1);
-
-    if (!error && data?.[0]) {
-      return data[0] as unknown as T;
+    if (!erroEmail && perfilPorEmail) {
+      return perfilPorEmail as T;
     }
   }
 
