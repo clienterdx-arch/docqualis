@@ -1100,7 +1100,7 @@ function ProcessStudioContent() {
           <title>${processData.name}</title>
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; font-family: Arial, sans-serif; background: #fff; }
+            body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fff; }
             .page { padding: 24px; }
             .header { margin-bottom: 18px; }
             .title { font-size: 22px; font-weight: 700; margin-bottom: 6px; color: #0f172a; }
