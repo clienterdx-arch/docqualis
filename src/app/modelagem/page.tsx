@@ -427,6 +427,7 @@ function ProcessStudioContent() {
   const [pan, setPan] = useState<PanState>({ x: 120, y: 80 });
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
   const [tempLine, setTempLine] = useState<TempLine | null>(null);
+  const [connectionTargetId, setConnectionTargetId] = useState<string | null>(null);
   const [promptIA, setPromptIA] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -1375,6 +1376,7 @@ function ProcessStudioContent() {
     inter.current.mode = "idle";
     inter.current.pointerId = null;
     inter.current.rafPending = false;
+    setConnectionTargetId(null);
     setSelectionRect(null);
     setTempLine(null);
   }
@@ -1419,6 +1421,25 @@ function ProcessStudioContent() {
         setTempLine({ path });
       }
     }
+  }
+
+  function findNodeAtWorldPoint(
+    worldPoint: { x: number; y: number },
+    excludedNodeId?: string
+  ) {
+    return [...nodes]
+      .sort((a, b) => b.zIndex - a.zIndex)
+      .find((node) => {
+        if (node.id === excludedNodeId) return false;
+
+        const bounds = getBounds(node);
+        return (
+          worldPoint.x >= bounds.left &&
+          worldPoint.x <= bounds.right &&
+          worldPoint.y >= bounds.top &&
+          worldPoint.y <= bounds.bottom
+        );
+      });
   }
 
   function processMoveFrame() {
@@ -1502,6 +1523,10 @@ function ProcessStudioContent() {
 
     if (mode === "connect" || mode === "reconnect") {
       updateTempConnectionPath(temp);
+      const excludedNodeId =
+        mode === "connect" ? inter.current.connectFromId : undefined;
+      const targetNode = findNodeAtWorldPoint(temp, excludedNodeId);
+      setConnectionTargetId(targetNode?.id ?? null);
       return;
     }
 
@@ -1567,7 +1592,23 @@ function ProcessStudioContent() {
     scheduleProcessMove();
   }
 
-  function onViewportPointerUp() {
+  function onViewportPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (inter.current.mode === "connect" || inter.current.mode === "reconnect") {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const excludedNodeId =
+        inter.current.mode === "connect" ? inter.current.connectFromId : undefined;
+      const targetNode = findNodeAtWorldPoint(world, excludedNodeId);
+
+      if (targetNode) {
+        finishConnect(targetNode.id);
+        return;
+      }
+
+      toast("Solte a conexão sobre um elemento do fluxo.", "warning");
+      finishInteraction();
+      return;
+    }
+
     if (inter.current.mode === "drag" || inter.current.mode === "resize") {
       pushHistory(nodes, edges);
     }
@@ -2239,11 +2280,14 @@ function ProcessStudioContent() {
                       <div
                         key={node.id}
                         data-node="true"
+                        data-node-id={node.id}
                         onPointerDown={(e) => onNodePointerDown(e, node)}
                         className={cn(
                           "absolute select-none border border-slate-300 bg-white shadow-sm",
                           !isReadOnly && "cursor-move",
-                          isSelected && "ring-4 ring-[#2655e8]/20 border-[#2655e8]"
+                          isSelected && "ring-4 ring-[#2655e8]/20 border-[#2655e8]",
+                          connectionTargetId === node.id &&
+                            "ring-4 ring-[#2655e8]/30 border-[#2655e8]"
                         )}
                         style={{
                           left: node.x - node.w / 2,
@@ -2352,8 +2396,14 @@ function ProcessStudioContent() {
                       <div
                         key={node.id}
                         data-node="true"
+                        data-node-id={node.id}
                         onPointerDown={(e) => onNodePointerDown(e, node)}
-                        className={cn("absolute select-none", !isReadOnly && "cursor-move")}
+                        className={cn(
+                          "absolute select-none",
+                          !isReadOnly && "cursor-move",
+                          connectionTargetId === node.id &&
+                            "rounded-2xl ring-4 ring-[#2655e8]/30"
+                        )}
                         style={{
                           left: node.x - node.w / 2,
                           top: node.y - node.h / 2,
