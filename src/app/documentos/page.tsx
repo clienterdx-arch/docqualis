@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FilePlus, Search, FileCheck, Clock, Archive, FileEdit,
-  FileSpreadsheet, X, ArrowLeft, ShieldCheck,
+  FilePlus, Search, FileCheck, Clock, Archive,
+  FileSpreadsheet, X, ArrowLeft,
   User, RefreshCw, FileText, CheckCircle2, AlertCircle,
   Edit, History, Plus, Trash2, Layers, BookOpen,
-  Building2, Settings, Printer, Copy, XCircle,
+  Building2, Settings, Printer, Copy,
   Workflow, Eye, FileSearch,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -56,8 +56,8 @@ export default function GestaoDocumentosPage() {
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ✅ Estado de sessão e empresa
   const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [perfilAcesso, setPerfilAcesso] = useState<string | null>(null);
 
   /* ── FEEDBACK ─────────────────────────────────────────────── */
   function mostrarMensagem(tipo: MensagemSistema["tipo"], texto: string) {
@@ -103,9 +103,10 @@ export default function GestaoDocumentosPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
 
-      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null }>(session, "empresa_id");
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; perfil_acesso?: string | null }>(session, "empresa_id, perfil_acesso");
       if (perfil?.empresa_id) {
         setEmpresaId(perfil.empresa_id);
+        setPerfilAcesso(perfil.perfil_acesso ?? null);
       } else {
         mostrarMensagem("erro", "Não foi possível identificar a empresa vinculada ao seu usuário.");
         setIsLoading(false);
@@ -227,12 +228,26 @@ export default function GestaoDocumentosPage() {
   const countHomologacao  = documentos.filter((d) => d.status === "Em Homologação").length;
   const countRejeitados   = documentos.filter((d) => d.status === "Rejeitado" || d.status === "Devolvido").length;
   const countObsoleto     = documentos.filter((d) => d.status === "Obsoleto").length;
+  const pipelineStatuses = ["Em Elaboração", "EM_FLUXO", "Em Verificação", "Em Homologação", "Rejeitado", "Devolvido"];
+  const countPipeline = documentos.filter((d) => pipelineStatuses.includes(d.status)).length;
+  const podeConfigurarDocumentos = ["SUPERADMIN", "ADMIN_TENANT", "GESTOR_QUALIDADE"].includes(perfilAcesso ?? "");
+
+  function abrirConfiguracao() {
+    if (!podeConfigurarDocumentos) {
+      mostrarMensagem("alerta", "A configuração organizacional é restrita aos administradores e perfis autorizados.");
+      return;
+    }
+
+    setViewState("config");
+  }
 
   const documentosFiltrados = documentos.filter((doc) => {
+    if (pastaAtiva === "Pipeline de Documentos") return pipelineStatuses.includes(doc.status);
     if (pastaAtiva === "Em Elaboração") return doc.status === "Em Elaboração" || doc.status === "EM_FLUXO";
     if (pastaAtiva === "Rejeitados")    return doc.status === "Rejeitado" || doc.status === "Devolvido";
     return doc.status === pastaAtiva;
   });
+  const isPipelineAtivo = pastaAtiva === "Pipeline de Documentos";
 
   /* ── RENDER ───────────────────────────────────────────────── */
   return (
@@ -289,7 +304,7 @@ export default function GestaoDocumentosPage() {
           return (
             <button
               key={tab.key}
-              onClick={() => setViewState(tab.key as typeof viewState)}
+              onClick={() => (tab.key === "config" ? abrirConfiguracao() : setViewState(tab.key as typeof viewState))}
               className={`pb-4 border-b-2 transition-all flex items-center gap-2 ${
                 isActive ? "border-blue-600 text-blue-600" : "border-transparent hover:text-slate-800"
               }`}
@@ -303,13 +318,42 @@ export default function GestaoDocumentosPage() {
       {/* VISÃO: BLOCOS */}
       {viewState === "blocos" && (
         <div className="animate-in fade-in">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
-            <DashboardBlock title="Repositório"   desc="Vigentes"   count={countRepositorio} icon={<FileCheck className="w-6 h-6" />}   color="emerald" onClick={() => { setPastaAtiva("Repositório");  setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Em Elaboração" desc="Rascunhos"  count={countElaboracao}  icon={<FileEdit className="w-6 h-6" />}     color="blue"    onClick={() => { setPastaAtiva("Em Elaboração"); setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Em Verificação" desc="Revisão"   count={countVerificacao} icon={<Clock className="w-6 h-6" />}        color="amber"   onClick={() => { setPastaAtiva("Em Verificação"); setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Em Homologação" desc="Aprovação" count={countHomologacao} icon={<ShieldCheck className="w-6 h-6" />} color="purple"  onClick={() => { setPastaAtiva("Em Homologação"); setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Rejeitados"    desc="Devolvidos" count={countRejeitados}  icon={<XCircle className="w-6 h-6" />}      color="red"     onClick={() => { setPastaAtiva("Rejeitados");   setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Obsoletos"     desc="Arquivados" count={countObsoleto}    icon={<Archive className="w-6 h-6" />}      color="slate"   onClick={() => { setPastaAtiva("Obsoletos");    setViewState("lista"); }} isLoading={isLoading} />
+          <div className="mb-5">
+            <h2 className="text-xl font-bold text-slate-900">Dashboard de documentos</h2>
+            <p className="text-sm text-slate-500 mt-1">Visão operacional do ciclo de vida documental.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+            <DashboardBlock title="Repositório" desc="Documentos aprovados no fluxo" count={countRepositorio} icon={<FileCheck className="w-6 h-6" />} color="emerald" onClick={() => { setPastaAtiva("Repositório"); setViewState("lista"); }} isLoading={isLoading} />
+            <DashboardBlock title="Pipeline de documentos" desc="Elaboração, verificação, rejeição e homologação" count={countPipeline} icon={<Workflow className="w-6 h-6" />} color="blue" onClick={() => { setPastaAtiva("Pipeline de Documentos"); setViewState("lista"); }} isLoading={isLoading} />
+            <DashboardBlock title="Obsoletos" desc="Documentos arquivados e fora de vigência" count={countObsoleto} icon={<Archive className="w-6 h-6" />} color="slate" onClick={() => { setPastaAtiva("Obsoletos"); setViewState("lista"); }} isLoading={isLoading} />
+            <DashboardBlock title="Configuração" desc="Parâmetros e estrutura organizacional" count={3} icon={<Settings className="w-6 h-6" />} color="purple" onClick={abrirConfiguracao} isLoading={isLoading} />
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5">
+            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Composição do pipeline</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Etapas ativas antes do repositório.</p>
+                </div>
+                <span className="text-xs font-black text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1">{countPipeline} em fluxo</span>
+              </div>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                <PipelineMiniCard label="Em elaboração" value={countElaboracao} color="blue" />
+                <PipelineMiniCard label="Em verificação" value={countVerificacao} color="amber" />
+                <PipelineMiniCard label="Aguardando homologação" value={countHomologacao} color="purple" />
+                <PipelineMiniCard label="Rejeitados" value={countRejeitados} color="red" />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900">Acesso administrativo</h3>
+              <p className="text-xs text-slate-500 mt-1">A configuração do módulo fica protegida para administradores e perfis autorizados.</p>
+              <button onClick={abrirConfiguracao} className="mt-5 w-full h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                <Settings className="w-4 h-4" /> Abrir configuração
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -335,6 +379,7 @@ export default function GestaoDocumentosPage() {
                   <th className="px-4 py-3">Elaborador</th>
                   <th className="px-4 py-3">Elaboração</th>
                   <th className="px-4 py-3">Setor</th>
+                  {isPipelineAtivo && <th className="px-4 py-3">Status</th>}
                   {pastaAtiva === "Em Verificação" && <th className="px-4 py-3">Pendente de</th>}
                   <th className="px-4 py-3 text-right">Ação</th>
                 </tr>
@@ -356,6 +401,13 @@ export default function GestaoDocumentosPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600 font-medium">{doc.dt_elaboracao}</td>
                     <td className="px-4 py-3 font-bold text-slate-700">{doc.setor}</td>
+                    {isPipelineAtivo && (
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                          {doc.status}
+                        </span>
+                      </td>
+                    )}
                     {pastaAtiva === "Em Verificação" && (
                       <td className="px-4 py-3 font-bold text-amber-600 text-xs truncate max-w-[150px]">
                         {doc.verificador_pendente?.split(";")[0]}
@@ -373,12 +425,12 @@ export default function GestaoDocumentosPage() {
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
-                          {(pastaAtiva === "Em Elaboração" || pastaAtiva === "Rejeitados") && (
+                          {(pastaAtiva === "Em Elaboração" || pastaAtiva === "Rejeitados" || (isPipelineAtivo && ["Em Elaboração", "EM_FLUXO", "Rejeitado", "Devolvido"].includes(doc.status))) && (
                             <Link href={`/editar-documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
                               <Edit className="w-3.5 h-3.5" /> Retomar
                             </Link>
                           )}
-                          {(pastaAtiva === "Em Verificação" || pastaAtiva === "Em Homologação") && (
+                          {(pastaAtiva === "Em Verificação" || pastaAtiva === "Em Homologação" || (isPipelineAtivo && ["Em Verificação", "Em Homologação"].includes(doc.status))) && (
                             <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
                               <Search className="w-3.5 h-3.5" /> Analisar
                             </Link>
@@ -990,9 +1042,25 @@ function DashboardBlock({ title, desc, count, icon, color, onClick, isLoading }:
         <span className="text-2xl font-black">{isLoading ? "..." : count}</span>
       </div>
       <div>
-        <h3 className="text-xs font-black text-slate-800 uppercase">{title}</h3>
-        <p className="text-[10px] text-slate-500">{desc}</p>
+        <h3 className="text-[11px] font-black text-slate-800 uppercase leading-tight">{title}</h3>
+        <p className="text-[10px] text-slate-500 leading-snug mt-0.5">{desc}</p>
       </div>
+    </div>
+  );
+}
+
+function PipelineMiniCard({ label, value, color }: { label: string; value: number; color: string }) {
+  const cores: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
+    purple: "bg-purple-50 text-purple-700 border-purple-100",
+    red: "bg-red-50 text-red-700 border-red-100",
+  };
+
+  return (
+    <div className={`rounded-xl border px-3 py-3 ${cores[color]}`}>
+      <p className="text-xl font-black leading-none">{value}</p>
+      <p className="mt-1 text-[10px] font-bold uppercase tracking-wide leading-tight">{label}</p>
     </div>
   );
 }

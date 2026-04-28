@@ -527,13 +527,15 @@ function ResponsesViewer({ form, responses, onBack, onOpenRecord }: {
           const isActive = statusFilter === card.status;
           return (
             <button key={card.status} type="button" onClick={() => setStatusFilter(p => p === card.status ? "Todos" : card.status)}
-              className={`bg-white border rounded-[2rem] p-5 text-left shadow-sm hover:shadow-md ${isActive ? "border-[#2655e8] ring-2 ring-[#2655e8]/15" : "border-slate-200"}`}>
-              <div className="flex justify-between items-start mb-5">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bg} ${meta.border} border`}><Icon className={`w-5 h-5 ${meta.color}`} /></div>
-                <span className="text-4xl font-black text-slate-900">{card.count}</span>
+              className={`h-32 bg-white border rounded-2xl p-5 text-left shadow-sm hover:shadow-md flex flex-col justify-between ${isActive ? "border-[#2655e8] ring-2 ring-[#2655e8]/15" : "border-slate-200"}`}>
+              <div className="flex justify-between items-start">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${meta.bg} ${meta.border} border`}><Icon className={`w-5 h-5 ${meta.color}`} /></div>
+                <span className="text-2xl font-black text-slate-900">{card.count}</span>
               </div>
-              <p className="text-lg font-bold text-slate-900">{card.title}</p>
-              <p className="text-xs text-slate-500 font-medium">{card.subtitle}</p>
+              <div>
+                <p className="text-[11px] font-black uppercase leading-tight text-slate-900">{card.title}</p>
+                <p className="text-[10px] text-slate-500 font-medium leading-snug mt-0.5">{card.subtitle}</p>
+              </div>
             </button>
           );
         })}

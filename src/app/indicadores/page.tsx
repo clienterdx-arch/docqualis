@@ -1119,9 +1119,9 @@ export default function GestaoIndicadoresPage() {
                   { l: "Críticos (Vermelho)",  v: stats.vermelho, c: "text-red-600",     bc: "bg-white border-red-100" },
                   { l: "% Na Meta (Verde)",    v: `${stats.pct}%`, c: "text-emerald-700", bc: "bg-emerald-50 border-emerald-100" },
                 ].map(s => (
-                  <div key={s.l} className={`p-5 rounded-2xl shadow-sm border flex flex-col gap-2 ${s.bc}`}>
-                    <span className="text-[10px] font-black uppercase text-slate-500">{s.l}</span>
-                    <span className={`text-3xl font-black ${s.c}`}>{s.v}</span>
+                  <div key={s.l} className={`h-32 p-5 rounded-2xl shadow-sm border flex flex-col justify-between ${s.bc}`}>
+                    <span className="text-[10px] font-black uppercase text-slate-500 leading-tight">{s.l}</span>
+                    <span className={`text-2xl font-black ${s.c}`}>{s.v}</span>
                   </div>
                 ))}
               </div>

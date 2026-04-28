@@ -186,24 +186,26 @@ function StatCard({
     <button
       onClick={onClick}
       className={cn(
-        "rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
+        "h-32 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between",
         hoverBorder
       )}
     >
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div
           className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-xl border shadow-sm",
+            "flex h-10 w-10 items-center justify-center rounded-lg border shadow-sm",
             palette
           )}
         >
           {icon}
         </div>
-        <span className="text-4xl font-black text-slate-900">{value}</span>
+        <span className="text-2xl font-black text-slate-900">{value}</span>
       </div>
 
-      <p className="text-lg font-bold text-slate-800">{title}</p>
-      <p className="mt-1 text-xs font-medium text-slate-500">{subtitle}</p>
+      <div>
+        <p className="text-[11px] font-black uppercase leading-tight text-slate-800">{title}</p>
+        <p className="mt-0.5 text-[10px] font-medium leading-snug text-slate-500">{subtitle}</p>
+      </div>
     </button>
   );
 }

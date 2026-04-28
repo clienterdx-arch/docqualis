@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   User, Building2, UserCircle, Users, ShieldAlert, CreditCard,
   Lock, History, Search, Plus, MoreVertical,
@@ -8,6 +8,8 @@ import {
   KeyRound, Mail, Save, Globe, Smartphone,
   CheckSquare, Square, Settings, Copy, Layers
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { salvarPinAssinatura } from "@/lib/assinatura";
 
 // ─── MOCKS E DADOS GLOBAIS ───────────────────────────────────────────────────
 
@@ -65,10 +67,56 @@ export default function ConfiguracoesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRole, setActiveRole] = useState("Administrador Global");
   const [notice, setNotice] = useState<string | null>(null);
+  const [pinAssinaturaConfigurado, setPinAssinaturaConfigurado] = useState(false);
+  const [senhaAtualAssinatura, setSenhaAtualAssinatura] = useState("");
+  const [novoPinAssinatura, setNovoPinAssinatura] = useState("");
+  const [confirmacaoPinAssinatura, setConfirmacaoPinAssinatura] = useState("");
+  const [salvandoPinAssinatura, setSalvandoPinAssinatura] = useState(false);
 
   function notify(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 3000);
+  }
+
+  useEffect(() => {
+    async function carregarAssinatura() {
+      const { data } = await supabase.auth.getUser();
+      setPinAssinaturaConfigurado(Boolean(data.user?.user_metadata?.assinatura_pin_hash));
+    }
+
+    carregarAssinatura();
+  }, []);
+
+  async function handleSalvarPinAssinatura() {
+    if (novoPinAssinatura.length < 4) {
+      notify("Use um PIN de assinatura com no mínimo 4 caracteres.");
+      return;
+    }
+
+    if (novoPinAssinatura !== confirmacaoPinAssinatura) {
+      notify("A confirmação do PIN não confere.");
+      return;
+    }
+
+    if (!senhaAtualAssinatura) {
+      notify("Informe sua senha atual para alterar o PIN.");
+      return;
+    }
+
+    setSalvandoPinAssinatura(true);
+    const result = await salvarPinAssinatura(novoPinAssinatura, senhaAtualAssinatura);
+    setSalvandoPinAssinatura(false);
+
+    if (!result.ok) {
+      notify(result.message);
+      return;
+    }
+
+    setSenhaAtualAssinatura("");
+    setNovoPinAssinatura("");
+    setConfirmacaoPinAssinatura("");
+    setPinAssinaturaConfigurado(true);
+      notify("PIN de assinatura atualizado.");
   }
 
   // ─── RENDERIZADORES DE ABAS ───────────────────────────────────────────────
@@ -107,6 +155,44 @@ export default function ConfiguracoesPage() {
           <input type="text" defaultValue="Analista da Qualidade" readOnly className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed" />
         </div>
       </div>
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 mb-8">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white border border-blue-100 text-[#2655e8] flex items-center justify-center shadow-sm">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">PIN de assinatura eletrônica</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Usado para aprovar, devolver e registrar atos críticos.</p>
+            </div>
+          </div>
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${pinAssinaturaConfigurado ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+            {pinAssinaturaConfigurado ? "Configurado" : "Pendente"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Senha atual</label>
+            <input type="password" value={senhaAtualAssinatura} onChange={(event) => setSenhaAtualAssinatura(event.target.value)} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#2655e8]" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Novo PIN</label>
+            <input type="password" value={novoPinAssinatura} onChange={(event) => setNovoPinAssinatura(event.target.value)} inputMode="numeric" autoComplete="new-password" className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#2655e8] tracking-[0.25em]" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Confirmar PIN</label>
+            <input type="password" value={confirmacaoPinAssinatura} onChange={(event) => setConfirmacaoPinAssinatura(event.target.value)} inputMode="numeric" autoComplete="new-password" className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#2655e8] tracking-[0.25em]" />
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button type="button" onClick={handleSalvarPinAssinatura} disabled={salvandoPinAssinatura} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-slate-800 disabled:opacity-50">
+            {salvandoPinAssinatura ? "Salvando..." : "Salvar PIN de assinatura"}
+          </button>
+        </div>
+      </div>
+
       <div className="flex justify-end">
         <button onClick={() => notify("Perfil atualizado localmente. Integração com banco pendente.")} className="bg-[#2655e8] hover:bg-[#1e40af] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2">
           <Save className="w-4 h-4" /> Atualizar Perfil

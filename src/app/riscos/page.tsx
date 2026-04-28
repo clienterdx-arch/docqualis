@@ -592,21 +592,18 @@ export default function GestaoRiscosPage() {
         ].map((card) => (
           <div
             key={card.label}
-            className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm"
+            className="h-32 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between"
           >
             <div
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center ${card.color}`}
+              className={`w-10 h-10 rounded-lg flex items-center justify-center ${card.color}`}
             >
               {card.icon}
             </div>
 
-            <p className="text-3xl font-black text-slate-900 mt-4">
-              {card.value}
-            </p>
-
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">
-              {card.label}
-            </p>
+            <div>
+              <p className="text-2xl font-black text-slate-900">{card.value}</p>
+              <p className="text-[11px] font-bold text-slate-500 uppercase leading-tight mt-1">{card.label}</p>
+            </div>
           </div>
         ))}
       </div>

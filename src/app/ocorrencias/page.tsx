@@ -766,7 +766,7 @@ export default function OcorrenciasPage() {
               const active = tipoAtivo === item.value;
               return (
                 <button key={item.value} onClick={() => onSelectTipo(item.value)}
-                  className={cn("rounded-2xl border p-5 text-left transition-all min-h-[122px]", tipoCardClass(item.value, active))}>
+                  className={cn("h-32 rounded-2xl border p-5 text-left transition-all", tipoCardClass(item.value, active))}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-black">
                       {tipoIcon(item.value)}<span>{item.label}</span>

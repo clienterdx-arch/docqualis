@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { carregarPerfilUsuario } from "@/lib/perfil";
+import { validarAssinaturaEletronica } from "@/lib/assinatura";
 
 export default function SalaRevisaoPage() {
   const router = useRouter();
@@ -18,19 +19,19 @@ export default function SalaRevisaoPage() {
 
   const [documento,    setDocumento]    = useState<any>(null);
   const [isLoading,    setIsLoading]    = useState(true);
-  const [emailUsuario, setEmailUsuario] = useState("");
   const [nomeUsuario,  setNomeUsuario]  = useState("Usuário");
   const [empresaId,    setEmpresaId]    = useState<string | null>(null);
 
-  // ✅ Permissão baseada no perfil_acesso real
+  // Permissão baseada no perfil_acesso real
   const [isQualidade, setIsQualidade] = useState(false);
 
   const [justificativa,   setJustificativa]   = useState("");
   const [senhaAssinatura, setSenhaAssinatura] = useState("");
   const [isProcessando,   setIsProcessando]   = useState(false);
+  const [pinConfigurado,   setPinConfigurado]  = useState(false);
   const [feedback, setFeedback] = useState<{ tipo: "sucesso" | "erro"; msg: string } | null>(null);
 
-  /* ── INICIALIZAÇÃO ────────────────────────────────────── */
+  /* Inicialização */
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
@@ -38,13 +39,13 @@ export default function SalaRevisaoPage() {
       // Sessão do usuário
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      setEmailUsuario(session.user.email ?? "");
+      setPinConfigurado(Boolean(session.user.user_metadata?.assinatura_pin_hash));
 
       const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null; perfil_acesso?: string | null }>(session, "empresa_id, nome, perfil_acesso");
       if (perfil) {
         setEmpresaId(perfil.empresa_id ?? null);
         setNomeUsuario(perfil.nome ?? "Usuário");
-        // ✅ Permissão real — Gestores de Qualidade e Admins podem imprimir
+        // Permissão real: Gestores de Qualidade e Admins podem imprimir
         setIsQualidade(["GESTOR_QUALIDADE", "APROVADOR", "ADMIN_TENANT", "SUPERADMIN"].includes(perfil.perfil_acesso ?? ""));
       }
 
@@ -54,7 +55,7 @@ export default function SalaRevisaoPage() {
           .from("documentos")
           .select("*")
           .eq("id", documentoId)
-          .eq("empresa_id", perfil.empresa_id) // ✅ Segurança multi-tenant
+          .eq("empresa_id", perfil.empresa_id) // Segurança multi-tenant
           .single();
 
         if (data) setDocumento(data);
@@ -66,16 +67,16 @@ export default function SalaRevisaoPage() {
     init();
   }, [documentoId, router]);
 
-  /* ── DERIVADOS ────────────────────────────────────────── */
+  /* Derivados */
   const isFormulario = documento?.tipo_documento?.toLowerCase().includes("formul") || documento?.codigo?.includes("FOR");
   const podeImprimir = isQualidade || isFormulario;
 
-  /* ── ASSINATURA ELETRÔNICA ────────────────────────────── */
+  /* Assinatura eletrônica */
   const handleAssinatura = async (acao: "Aprovar" | "Devolver") => {
     setFeedback(null);
 
     if (!senhaAssinatura) {
-      setFeedback({ tipo: "erro", msg: "A Assinatura Eletrônica (Senha) é obrigatória." }); return;
+      setFeedback({ tipo: "erro", msg: "A assinatura eletrônica é obrigatória." }); return;
     }
     if (acao === "Devolver" && !justificativa.trim()) {
       setFeedback({ tipo: "erro", msg: "Para devolver, preencha o parecer técnico justificando a decisão." }); return;
@@ -87,14 +88,10 @@ export default function SalaRevisaoPage() {
     setIsProcessando(true);
 
     try {
-      // ✅ Validação REAL da senha via Supabase Auth (não mais hardcoded!)
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: emailUsuario,
-        password: senhaAssinatura,
-      });
+      const validacao = await validarAssinaturaEletronica(senhaAssinatura);
 
-      if (authError) {
-        setFeedback({ tipo: "erro", msg: "Assinatura inválida. Senha incorreta." });
+      if (!validacao.ok) {
+        setFeedback({ tipo: "erro", msg: validacao.message ?? "Assinatura inválida." });
         setIsProcessando(false);
         return;
       }
@@ -111,7 +108,7 @@ export default function SalaRevisaoPage() {
 
       // Audit trail no campo justificativa
       const dataHora = new Date().toLocaleString("pt-BR");
-      const registroAuditoria = `\n[${dataHora}] ${acao.toUpperCase()} por ${nomeUsuario} — Parecer: ${justificativa || "Aprovado sem ressalvas."}`;
+      const registroAuditoria = `\n[${dataHora}] ${acao.toUpperCase()} por ${nomeUsuario} - Parecer: ${justificativa || "Aprovado sem ressalvas."}`;
       const historicoAtualizado = (documento.justificativa ?? "") + registroAuditoria;
 
       const { error } = await supabase
@@ -122,7 +119,7 @@ export default function SalaRevisaoPage() {
           ...(novoStatus === "Repositório" ? { dt_homologacao: new Date().toISOString().slice(0, 10) } : {}),
         })
         .eq("id", documentoId)
-        .eq("empresa_id", empresaId); // ✅ Segurança extra
+        .eq("empresa_id", empresaId); // Segurança extra
 
       if (error) throw error;
 
@@ -142,7 +139,7 @@ export default function SalaRevisaoPage() {
     }
   };
 
-  /* ── LOADING / NOT FOUND ──────────────────────────────── */
+  /* Loading / not found */
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
@@ -160,11 +157,11 @@ export default function SalaRevisaoPage() {
     );
   }
 
-  /* ── RENDER ───────────────────────────────────────────── */
+  /* Render */
   return (
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-8 animate-in fade-in duration-500">
 
-      {/* DLP — bloqueio de impressão para não autorizados */}
+      {/* DLP: bloqueio de impressão para não autorizados */}
       <style dangerouslySetInnerHTML={{ __html: `@media print { ${!podeImprimir ? "body { display: none !important; }" : ""} }` }} />
 
       <div className="max-w-7xl mx-auto space-y-8">
@@ -201,7 +198,7 @@ export default function SalaRevisaoPage() {
           {/* ESQUERDA: VIEWER */}
           <div className="lg:col-span-8 space-y-6">
 
-            {/* CARD DE IDENTIFICAÇÃO */}
+            {/* Card de identificação */}
             <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
               <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${podeImprimir ? "bg-[#2655e8]" : "bg-red-500"}`} />
               <div className="flex items-center gap-5">
@@ -248,27 +245,29 @@ export default function SalaRevisaoPage() {
           {/* DIREITA: PAINEL DE ASSINATURA */}
           <div className="lg:col-span-4 space-y-6">
 
-            <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm flex flex-col overflow-hidden">
-              <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+            <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm flex flex-col overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 bg-white flex items-center justify-between">
                 <div>
-                  <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Painel de Assinatura</h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Validação Eletrônica com Senha</p>
+                  <h3 className="font-bold text-slate-900 text-sm">Assinatura eletrônica</h3>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {pinConfigurado ? "Validação por PIN pessoal" : "Validação por senha de acesso"}
+                  </p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
                   <ShieldCheck className="w-5 h-5 text-[#2655e8]" />
                 </div>
               </div>
 
-              <div className="p-8 space-y-8 flex-1 flex flex-col">
+              <div className="p-6 space-y-6 flex-1 flex flex-col">
 
                 {/* RESUMO DO DOCUMENTO */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Elaborado por</p>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Elaborado por</p>
                     <p className="text-xs font-bold text-slate-700 truncate">{documento.elaborador}</p>
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Aguardando</p>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Aguardando</p>
                     <p className="text-xs font-bold text-amber-600 truncate">
                       {documento.status === "Em Verificação" ? documento.verificador_pendente?.split(";")[0] : documento.aprovador}
                     </p>
@@ -277,34 +276,34 @@ export default function SalaRevisaoPage() {
 
                 {/* PARECER */}
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Parecer Técnico / Notas de Revisão</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Parecer técnico / notas</label>
                   <textarea rows={5} value={justificativa} onChange={(e) => setJustificativa(e.target.value)} placeholder="Descreva observações ou motivos da devolução..."
-                    className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-[1.5rem] text-sm font-medium outline-none focus:border-[#2655e8] focus:bg-white focus:ring-4 focus:ring-[#2655e8]/5 transition-all resize-none shadow-sm" />
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-[#2655e8] focus:bg-white focus:ring-4 focus:ring-[#2655e8]/5 transition-all resize-none shadow-sm" />
                 </div>
 
                 {/* SENHA DE ASSINATURA */}
                 <div>
-                  <label className="block text-[10px] font-black text-slate-800 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
-                    <KeyRound className="w-4 h-4 text-[#2655e8]" /> Senha de Assinatura Eletrônica
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-widest mb-2 px-1 flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-[#2655e8]" /> {pinConfigurado ? "PIN de assinatura" : "Senha de assinatura"}
                   </label>
-                  <input type="password" value={senhaAssinatura} onChange={(e) => setSenhaAssinatura(e.target.value)} placeholder="Sua senha de autenticação"
-                    className="w-full px-6 py-4 bg-slate-900 border-none rounded-[1.5rem] text-white text-sm font-black outline-none focus:ring-4 focus:ring-blue-500/20 transition-all text-center tracking-[0.5em]" />
-                  {/* ✅ Aviso claro de que é a senha real do sistema */}
-                  <p className="mt-3 text-[10px] text-slate-400 text-center font-medium italic">
-                    Use sua senha de acesso ao DocQualis. Ao assinar, você confirma a leitura integral.
+                  <input type="password" value={senhaAssinatura} onChange={(e) => setSenhaAssinatura(e.target.value)} placeholder={pinConfigurado ? "Digite seu PIN" : "Senha de acesso"}
+                    className="w-full h-12 px-4 bg-white border border-slate-200 rounded-2xl text-slate-900 text-sm font-semibold outline-none focus:border-[#2655e8] focus:ring-4 focus:ring-blue-500/10 transition-all text-center tracking-[0.35em] shadow-sm" />
+                  {/* Status do método de assinatura */}
+                  <p className="mt-2 text-[10px] text-slate-400 text-center font-medium">
+                    {pinConfigurado ? "PIN definido em Configurações > Meu Perfil." : "Defina um PIN em Configurações > Meu Perfil para assinar mais rápido."}
                   </p>
                 </div>
 
-                {/* BOTÕES DE AÇÃO */}
-                <div className="grid grid-cols-1 gap-3 pt-2">
-                  <button onClick={() => handleAssinatura("Aprovar")} disabled={isProcessando}
-                    className="w-full py-4 bg-[#2655e8] text-white rounded-2xl text-sm font-black hover:bg-[#1e40af] shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 uppercase tracking-widest">
-                    {isProcessando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                    APROVAR E AVANÇAR
-                  </button>
+                {/* Botões de ação */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
                   <button onClick={() => handleAssinatura("Devolver")} disabled={isProcessando}
-                    className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center gap-2 transition-all disabled:opacity-50 uppercase tracking-widest">
-                    <XCircle className="w-5 h-5" /> DEVOLVER PARA AJUSTES
+                    className="h-11 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                    <XCircle className="w-4 h-4" /> Devolver
+                  </button>
+                  <button onClick={() => handleAssinatura("Aprovar")} disabled={isProcessando}
+                    className="h-11 bg-[#2655e8] text-white rounded-xl text-xs font-bold hover:bg-[#1e40af] shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                    {isProcessando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Aprovar
                   </button>
                 </div>
 
