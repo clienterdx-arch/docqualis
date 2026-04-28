@@ -200,7 +200,7 @@ export default function EditarDocumentoPage() {
       if (dbError) throw dbError;
 
       setSucesso(true);
-      setTimeout(() => router.push('/'), 1500);
+      setTimeout(() => router.push('/documentos'), 1500);
     } catch (err: any) { setErro(err.message); } finally { setIsProcessando(false); }
   };
 
@@ -216,7 +216,7 @@ export default function EditarDocumentoPage() {
   return (
     <div className="max-w-5xl mx-auto p-6 animate-in fade-in duration-500">
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/" className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-colors"><ArrowLeft className="w-5 h-5" /></Link>
+        <Link href="/documentos" className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-colors"><ArrowLeft className="w-5 h-5" /></Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Retomar Edição do Rascunho</h1>
           <p className="text-sm text-slate-500 mt-1 font-medium">Continue preenchendo os dados antes de submeter ao fluxo.</p>

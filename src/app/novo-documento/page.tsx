@@ -174,7 +174,7 @@ export default function NovoDocumentoPage() {
       const { error } = await supabase.from("documentos").insert(montar("Em Elaboração", url));
       if (error) throw error;
       setSucesso(true);
-      setTimeout(() => router.push("/"), 1500);
+      setTimeout(() => router.push("/documentos"), 1500);
     } catch (e: any) { setErro(e.message); }
     finally { setIsLoading(false); }
   };
@@ -192,7 +192,7 @@ export default function NovoDocumentoPage() {
       const { error } = await supabase.from("documentos").insert(montar("Em Verificação", url));
       if (error) throw error;
       setSucesso(true);
-      setTimeout(() => router.push("/"), 1500);
+      setTimeout(() => router.push("/documentos"), 1500);
     } catch (e: any) { setErro(e.message); }
     finally { setIsLoading(false); }
   };
@@ -212,7 +212,7 @@ export default function NovoDocumentoPage() {
     <div className="max-w-5xl mx-auto p-6 animate-in fade-in duration-500">
 
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/" className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-colors">
+        <Link href="/documentos" className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>

@@ -1,933 +1,910 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FilePlus, Search, FileCheck, Clock, Archive, FileEdit,
-  FileSpreadsheet, X, ArrowLeft, ShieldCheck,
-  User, RefreshCw, FileText, CheckCircle2, AlertCircle,
-  Edit, History, Plus, Trash2, Layers, BookOpen,
-  Building2, Settings, Printer, Copy, XCircle,
-  Workflow, Eye, FileSearch,
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  FileCheck2,
+  FileText,
+  Gauge,
+  LayoutDashboard,
+  LineChart,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Workflow,
+  XCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-/* ─────────────────────────────────────────────────────────────────
- * TIPOS
- * ───────────────────────────────────────────────────────────────*/
-interface Documento {
-  id: string;
-  codigo: string;
-  titulo: string;
-  tipo_documento: string;
-  setor: string;
-  diretoria: string;
-  elaborador: string;
-  aprovador: string;
-  verificador_pendente: string;
-  status: string;
-  versao: number;
-  justificativa: string;
-  arquivo_url: string;
-  dt_elaboracao: string;
-  dt_vencimento: string;
-  isProcesso: boolean;
+type Priority = "critica" | "alta" | "media" | "baixa";
+type ModuleKey =
+  | "documentos"
+  | "processos"
+  | "riscos"
+  | "ocorrencias"
+  | "registros"
+  | "indicadores"
+  | "estrategico";
+
+type PerfilUsuario = {
+  nome: string;
+  cargo: string | null;
+  perfil_acesso: string | null;
   empresa_id: string;
+};
+
+type ProcessoItem = {
+  id: string;
+  code: string;
+  name: string;
+  owner: string;
+  version: number;
+  module: "SIPOC" | "BPMN";
+  status: "EM_ELABORACAO" | "EM_VERIFICACAO" | "REPOSITORIO" | "OBSOLETO";
+  updatedAt?: string;
+};
+
+type DashboardRow = Record<string, unknown>;
+
+type DashboardData = {
+  documentos: DashboardRow[];
+  processos: ProcessoItem[];
+  riscos: DashboardRow[];
+  ocorrencias: DashboardRow[];
+  registros: DashboardRow[];
+  indicadores: DashboardRow[];
+  medicoes: DashboardRow[];
+  objetivos: DashboardRow[];
+  iniciativas: DashboardRow[];
+};
+
+type PendingItem = {
+  id: string;
+  module: ModuleKey;
+  moduleLabel: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  href: string;
+  dueDate?: string | null;
+  owner?: string | null;
+  priority: Priority;
+  isMine: boolean;
+};
+
+type ModuleSummary = {
+  key: ModuleKey;
+  label: string;
+  href: string;
+  total: number;
+  open: number;
+  mine: number;
+  critical: number;
+  accent: "blue" | "emerald" | "amber" | "red" | "violet" | "cyan" | "slate";
+  icon: React.ReactNode;
+};
+
+const EMPTY_DATA: DashboardData = {
+  documentos: [],
+  processos: [],
+  riscos: [],
+  ocorrencias: [],
+  registros: [],
+  indicadores: [],
+  medicoes: [],
+  objetivos: [],
+  iniciativas: [],
+};
+
+const MODULE_META: Record<ModuleKey, { label: string; href: string }> = {
+  documentos: { label: "Documentos", href: "/documentos" },
+  processos: { label: "Processos", href: "/processos" },
+  riscos: { label: "Riscos", href: "/riscos" },
+  ocorrencias: { label: "Ocorrências", href: "/ocorrencias" },
+  registros: { label: "Registros", href: "/gestao-registros" },
+  indicadores: { label: "Indicadores", href: "/indicadores" },
+  estrategico: { label: "Estratégico", href: "/estrategico" },
+};
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
-interface MensagemSistema {
-  tipo: "sucesso" | "alerta" | "erro";
-  texto: string;
+function normalizeText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
-/* ─────────────────────────────────────────────────────────────────
- * COMPONENTE PRINCIPAL
- * ───────────────────────────────────────────────────────────────*/
-export default function GestaoDocumentosPage() {
+function asString(value: unknown, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+  const text = String(value);
+  return text.length > 0 ? text : fallback;
+}
+
+function optionalString(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  return String(value);
+}
+
+function asObject(value: unknown): DashboardRow {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as DashboardRow
+    : {};
+}
+
+function userMatches(value: unknown, perfil: PerfilUsuario | null, email: string) {
+  const source = normalizeText(value);
+  if (!source || !perfil) return false;
+
+  return [perfil.nome, perfil.cargo, perfil.perfil_acesso, email]
+    .filter(Boolean)
+    .map(normalizeText)
+    .some((needle) => needle.length > 2 && source.includes(needle));
+}
+
+function parseDate(value: unknown) {
+  if (!value) return null;
+  const raw = String(value);
+  const date = /^\d{4}-\d{2}-\d{2}/.test(raw)
+    ? new Date(`${raw.slice(0, 10)}T00:00:00`)
+    : new Date(raw);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function daysUntil(value: unknown) {
+  const due = parseDate(value);
+  if (!due) return null;
+  return Math.ceil((due.getTime() - startOfToday().getTime()) / 86400000);
+}
+
+function formatDate(value: unknown) {
+  const date = parseDate(value);
+  if (!date) return "Sem prazo";
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function dueLabel(value: unknown) {
+  const days = daysUntil(value);
+  if (days === null) return "Sem prazo definido";
+  if (days < 0) return `${Math.abs(days)} dia(s) em atraso`;
+  if (days === 0) return "Vence hoje";
+  if (days === 1) return "Vence amanhã";
+  return `Vence em ${days} dias`;
+}
+
+function priorityFromDue(value: unknown, critical = false): Priority {
+  const days = daysUntil(value);
+  if (critical || (days !== null && days < 0)) return "critica";
+  if (days !== null && days <= 3) return "alta";
+  if (days !== null && days <= 7) return "media";
+  return "baixa";
+}
+
+function priorityRank(priority: Priority) {
+  return { critica: 0, alta: 1, media: 2, baixa: 3 }[priority];
+}
+
+function isOpenStatus(status: unknown, closed: string[]) {
+  const value = normalizeText(status);
+  return !closed.some((item) => value === item || value.includes(item));
+}
+
+function readableProcessStatus(status: ProcessoItem["status"]) {
+  return {
+    EM_ELABORACAO: "Em elaboração",
+    EM_VERIFICACAO: "Em verificação",
+    REPOSITORIO: "Repositório",
+    OBSOLETO: "Obsoleto",
+  }[status];
+}
+
+function latestMeasurement(indicadorId: string, medicoes: DashboardRow[]) {
+  return medicoes.find((medicao) => medicao.indicador_id === indicadorId) ?? null;
+}
+
+function isKpiBelowTarget(indicador: DashboardRow, medicao: DashboardRow | null) {
+  if (!medicao || medicao.valor == null || indicador.meta == null) return true;
+  const value = Number(medicao.valor);
+  const target = Number(indicador.meta);
+  if (Number.isNaN(value) || Number.isNaN(target)) return true;
+  if (target === 0) return false;
+  return normalizeText(indicador.polaridade).includes("menor") ? value > target : value < target;
+}
+
+function moduleAccentClasses(accent: ModuleSummary["accent"]) {
+  return {
+    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
+    red: "bg-red-50 text-red-700 border-red-100",
+    violet: "bg-violet-50 text-violet-700 border-violet-100",
+    cyan: "bg-cyan-50 text-cyan-700 border-cyan-100",
+    slate: "bg-slate-100 text-slate-700 border-slate-200",
+  }[accent];
+}
+
+function priorityClasses(priority: Priority) {
+  return {
+    critica: "bg-red-50 text-red-700 border-red-200",
+    alta: "bg-amber-50 text-amber-700 border-amber-200",
+    media: "bg-blue-50 text-blue-700 border-blue-200",
+    baixa: "bg-slate-50 text-slate-600 border-slate-200",
+  }[priority];
+}
+
+function priorityLabel(priority: Priority) {
+  return {
+    critica: "Crítica",
+    alta: "Alta",
+    media: "Média",
+    baixa: "Baixa",
+  }[priority];
+}
+
+function buildPendingItems(data: DashboardData, perfil: PerfilUsuario | null, email: string) {
+  const items: PendingItem[] = [];
+
+  const addItem = (item: PendingItem) => {
+    items.push(item);
+  };
+
+  data.documentos.forEach((doc) => {
+    const status = String(doc.status ?? "");
+    const normalized = normalizeText(status);
+    const isPending =
+      normalized.includes("em elaboracao") ||
+      normalized.includes("em_fluxo") ||
+      normalized.includes("em verificacao") ||
+      normalized.includes("em homologacao") ||
+      normalized.includes("rejeitado") ||
+      normalized.includes("devolvido");
+
+    if (!isPending) return;
+
+    const docId = asString(doc.id);
+    const owner = normalized.includes("verificacao")
+      ? doc.verificador_pendente
+      : normalized.includes("homologacao")
+        ? doc.aprovador
+        : doc.elaborador;
+    const dueDate = optionalString(doc.dt_vencimento ?? doc.dt_alerta);
+    const isMine = userMatches(owner, perfil, email) || userMatches(doc.elaborador, perfil, email);
+    const href = normalized.includes("elaboracao") || normalized.includes("rejeitado") || normalized.includes("devolvido")
+      ? `/editar-documento/${docId}`
+      : `/documento/${docId}`;
+
+    addItem({
+      id: `doc-${docId}`,
+      module: "documentos",
+      moduleLabel: MODULE_META.documentos.label,
+      title: `${doc.codigo ? `${asString(doc.codigo)} · ` : ""}${asString(doc.titulo, "Documento sem título")}`,
+      subtitle: normalized.includes("homologacao") ? "Assinatura de homologação pendente" : "Tramitação documental pendente",
+      status,
+      href,
+      dueDate,
+      owner: optionalString(owner),
+      priority: priorityFromDue(dueDate, normalized.includes("rejeitado") || normalized.includes("devolvido")),
+      isMine,
+    });
+  });
+
+  data.processos.forEach((processo) => {
+    if (processo.status === "REPOSITORIO" || processo.status === "OBSOLETO") return;
+
+    addItem({
+      id: `proc-${processo.id}`,
+      module: "processos",
+      moduleLabel: MODULE_META.processos.label,
+      title: `${processo.code} · ${processo.name}`,
+      subtitle: `Módulo ${processo.module} aguardando evolução de workflow`,
+      status: readableProcessStatus(processo.status),
+      href: "/processos",
+      dueDate: null,
+      owner: processo.owner,
+      priority: processo.status === "EM_VERIFICACAO" ? "alta" : "media",
+      isMine: userMatches(processo.owner, perfil, email),
+    });
+  });
+
+  data.riscos.forEach((risco) => {
+    if (!isOpenStatus(risco.status, ["concluido", "finalizado", "tratado", "encerrado", "cancelado"])) return;
+
+    const score = Number(risco.nivel_risco ?? risco.score ?? (Number(risco.probabilidade ?? 0) * Number(risco.impacto ?? 0)));
+    const isCritical = score >= 14 || normalizeText(risco.classificacao).includes("alto") || normalizeText(risco.status).includes("critico");
+
+    const riscoId = asString(risco.id);
+
+    addItem({
+      id: `risco-${riscoId}`,
+      module: "riscos",
+      moduleLabel: MODULE_META.riscos.label,
+      title: `${risco.codigo ? `${asString(risco.codigo)} · ` : ""}${asString(risco.titulo, "Risco sem título")}`,
+      subtitle: isCritical ? `Risco elevado com score ${Number.isNaN(score) ? "-" : score}` : "Tratamento de risco pendente",
+      status: asString(risco.status, "Aberto"),
+      href: "/riscos",
+      dueDate: optionalString(risco.prazo_tratamento),
+      owner: optionalString(risco.responsavel),
+      priority: priorityFromDue(risco.prazo_tratamento, isCritical),
+      isMine: userMatches(risco.responsavel, perfil, email),
+    });
+  });
+
+  data.ocorrencias.forEach((ocorrencia) => {
+    if (!isOpenStatus(ocorrencia.status, ["concluido", "cancelado"])) return;
+
+    const critical =
+      normalizeText(ocorrencia.prioridade).includes("critica") ||
+      normalizeText(ocorrencia.prioridade).includes("alta") ||
+      normalizeText(ocorrencia.gravidade).includes("grave") ||
+      normalizeText(ocorrencia.gravidade).includes("sentinela");
+
+    const ocorrenciaId = asString(ocorrencia.id);
+
+    addItem({
+      id: `oco-${ocorrenciaId}`,
+      module: "ocorrencias",
+      moduleLabel: MODULE_META.ocorrencias.label,
+      title: `${ocorrencia.numero ? `${asString(ocorrencia.numero)} · ` : ""}${asString(ocorrencia.titulo, "Ocorrência sem título")}`,
+      subtitle: `${asString(ocorrencia.tipo, "Evento")} em ${asString(ocorrencia.setor, "setor não informado")}`,
+      status: asString(ocorrencia.status, "Aberta"),
+      href: "/ocorrencias",
+      dueDate: optionalString(ocorrencia.prazo_tratativa),
+      owner: optionalString(ocorrencia.responsavel_tratativa),
+      priority: priorityFromDue(ocorrencia.prazo_tratativa, critical),
+      isMine: userMatches(ocorrencia.responsavel_tratativa, perfil, email),
+    });
+  });
+
+  data.registros.forEach((registro) => {
+    const status = asString(registro.status, "Enviado");
+    if (!isOpenStatus(status, ["aprovado", "rejeitado", "excluido"])) return;
+
+    const dados = asObject(registro.dados);
+    const owner = dados._currentOwner ?? registro.current_owner ?? registro.preenchido_por;
+    const registroId = asString(registro.id);
+
+    addItem({
+      id: `reg-${registroId}`,
+      module: "registros",
+      moduleLabel: MODULE_META.registros.label,
+      title: `${asString(registro.numero ?? registro.id, "Registro")} · ${asString(dados.titulo, "Registro em workflow")}`,
+      subtitle: `Preenchido por ${asString(registro.preenchido_por, "usuário não informado")}`,
+      status,
+      href: "/gestao-registros",
+      dueDate: optionalString(registro.data_preenchimento),
+      owner: optionalString(owner),
+      priority: normalizeText(status).includes("ajuste") ? "alta" : "media",
+      isMine: userMatches(owner, perfil, email) || userMatches(registro.preenchido_por, perfil, email),
+    });
+  });
+
+  data.indicadores.forEach((indicador) => {
+    if (!isOpenStatus(indicador.status, ["inativo", "cancelado"])) return;
+
+    const indicadorId = asString(indicador.id);
+    const medicao = latestMeasurement(indicadorId, data.medicoes);
+    const belowTarget = isKpiBelowTarget(indicador, medicao);
+    if (!belowTarget) return;
+
+    addItem({
+      id: `kpi-${indicadorId}`,
+      module: "indicadores",
+      moduleLabel: MODULE_META.indicadores.label,
+      title: asString(indicador.nome, "Indicador sem nome"),
+      subtitle: medicao ? `Realizado ${asString(medicao.valor)} / meta ${asString(indicador.meta)}` : "Sem medição registrada",
+      status: medicao ? "Fora da meta" : "Sem medição",
+      href: "/indicadores",
+      dueDate: null,
+      owner: optionalString(indicador.responsavel),
+      priority: medicao ? "alta" : "media",
+      isMine: userMatches(indicador.responsavel, perfil, email),
+    });
+  });
+
+  [...data.objetivos, ...data.iniciativas].forEach((item) => {
+    if (!isOpenStatus(item.status, ["concluido", "cancelado"])) return;
+    const critical = normalizeText(item.status).includes("atrasado");
+
+    const itemId = asString(item.id);
+
+    addItem({
+      id: `str-${itemId}`,
+      module: "estrategico",
+      moduleLabel: MODULE_META.estrategico.label,
+      title: asString(item.titulo, "Item estratégico sem título"),
+      subtitle: item.objetivo_id ? "Iniciativa estratégica em andamento" : "Objetivo estratégico em andamento",
+      status: asString(item.status, "Aberto"),
+      href: "/estrategico",
+      dueDate: optionalString(item.prazo),
+      owner: optionalString(item.responsavel),
+      priority: priorityFromDue(item.prazo, critical),
+      isMine: userMatches(item.responsavel, perfil, email),
+    });
+  });
+
+  return items.sort((a, b) => {
+    const priority = priorityRank(a.priority) - priorityRank(b.priority);
+    if (priority !== 0) return priority;
+
+    const aDays = daysUntil(a.dueDate) ?? 999;
+    const bDays = daysUntil(b.dueDate) ?? 999;
+    return aDays - bDays;
+  });
+}
+
+function buildModuleSummaries(data: DashboardData, pendingItems: PendingItem[]): ModuleSummary[] {
+  const count = (key: ModuleKey) => pendingItems.filter((item) => item.module === key);
+  const make = (
+    key: ModuleKey,
+    total: number,
+    accent: ModuleSummary["accent"],
+    icon: React.ReactNode
+  ): ModuleSummary => {
+    const moduleItems = count(key);
+    return {
+      key,
+      label: MODULE_META[key].label,
+      href: MODULE_META[key].href,
+      total,
+      open: moduleItems.length,
+      mine: moduleItems.filter((item) => item.isMine).length,
+      critical: moduleItems.filter((item) => item.priority === "critica" || item.priority === "alta").length,
+      accent,
+      icon,
+    };
+  };
+
+  return [
+    make("documentos", data.documentos.length, "blue", <FileText className="h-5 w-5" />),
+    make("processos", data.processos.length, "emerald", <Workflow className="h-5 w-5" />),
+    make("riscos", data.riscos.length, "red", <ShieldAlert className="h-5 w-5" />),
+    make("ocorrencias", data.ocorrencias.length, "amber", <AlertTriangle className="h-5 w-5" />),
+    make("registros", data.registros.length, "violet", <ClipboardCheck className="h-5 w-5" />),
+    make("indicadores", data.indicadores.length, "cyan", <LineChart className="h-5 w-5" />),
+    make("estrategico", data.objetivos.length + data.iniciativas.length, "slate", <Target className="h-5 w-5" />),
+  ];
+}
+
+function ExecutiveMetric({
+  title,
+  value,
+  subtitle,
+  icon,
+  tone,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: React.ReactNode;
+  tone: "blue" | "red" | "amber" | "emerald";
+}) {
+  const palette = {
+    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    red: "bg-red-50 text-red-700 border-red-100",
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  }[tone];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl border", palette)}>
+          {icon}
+        </div>
+        <span className="text-3xl font-black text-slate-900">{value}</span>
+      </div>
+      <div className="mt-5">
+        <p className="text-sm font-bold text-slate-800">{title}</p>
+        <p className="mt-1 text-xs font-medium text-slate-500">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function PendingRow({ item }: { item: PendingItem }) {
+  return (
+    <Link
+      href={item.href}
+      className="group grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-[#2655e8] hover:bg-[#eef2ff]/30 md:grid-cols-[1fr_auto]"
+    >
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {item.moduleLabel}
+          </span>
+          <span className={cn("rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-widest", priorityClasses(item.priority))}>
+            {priorityLabel(item.priority)}
+          </span>
+          {item.isMine && (
+            <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+              Minha
+            </span>
+          )}
+        </div>
+
+        <h3 className="truncate text-sm font-black text-slate-900">{item.title}</h3>
+        <p className="mt-1 text-xs font-medium text-slate-500">{item.subtitle}</p>
+      </div>
+
+      <div className="flex items-center justify-between gap-5 md:justify-end">
+        <div className="text-left md:text-right">
+          <p className="text-xs font-bold text-slate-700">{item.status}</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-400">{dueLabel(item.dueDate)}</p>
+        </div>
+        <ArrowRight className="h-4 w-4 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-[#2655e8]" />
+      </div>
+    </Link>
+  );
+}
+
+function ModuleCard({ module }: { module: ModuleSummary }) {
+  return (
+    <Link
+      href={module.href}
+      className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#2655e8] hover:shadow-md"
+    >
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl border", moduleAccentClasses(module.accent))}>
+          {module.icon}
+        </div>
+        <ArrowRight className="h-4 w-4 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-[#2655e8]" />
+      </div>
+
+      <p className="text-sm font-black text-slate-900">{module.label}</p>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-slate-50 px-2 py-2">
+          <p className="text-lg font-black text-slate-900">{module.open}</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Abertas</p>
+        </div>
+        <div className="rounded-lg bg-blue-50 px-2 py-2">
+          <p className="text-lg font-black text-blue-700">{module.mine}</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Minhas</p>
+        </div>
+        <div className="rounded-lg bg-red-50 px-2 py-2">
+          <p className="text-lg font-black text-red-700">{module.critical}</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-red-500">Atenção</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+export default function PainelExecutivoPage() {
   const router = useRouter();
-  const [viewState, setViewState] = useState<"blocos" | "lista" | "config" | "inspecao" | "copias">("blocos");
-  const [pastaAtiva, setPastaAtiva] = useState<string>("");
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [docSelecionado, setDocSelecionado] = useState<Documento | null>(null);
-  const [fichaTab, setFichaTab] = useState<"detalhes" | "historico">("detalhes");
-  const [mensagemSistema, setMensagemSistema] = useState<MensagemSistema | null>(null);
-  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
+  const [emailUsuario, setEmailUsuario] = useState("");
+  const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // ✅ Estado de sessão e empresa
-  const [empresaId, setEmpresaId] = useState<string | null>(null);
-
-  /* ── FEEDBACK ─────────────────────────────────────────────── */
-  function mostrarMensagem(tipo: MensagemSistema["tipo"], texto: string) {
-    setMensagemSistema({ tipo, texto });
-    setTimeout(() => setMensagemSistema(null), 3500);
-  }
-
-  /* ── SESSÃO ───────────────────────────────────────────────── */
-  useEffect(() => {
-    async function iniciar() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push("/login"); return; }
-
-      const { data: perfil } = await supabase
-        .from("perfis")
-        .select("empresa_id")
-        .eq("id", session.user.id)
-        .single();
-
-      if (perfil?.empresa_id) {
-        setEmpresaId(perfil.empresa_id);
-      }
-    }
-    iniciar();
-  }, [router]);
-
-  /* ── FETCH DOCUMENTOS ─────────────────────────────────────── */
-  const fetchDocumentos = useCallback(async () => {
-    if (!empresaId) return;
+  const carregarPainel = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
 
-    const { data, error } = await supabase
-      .from("documentos")
-      .select("*")
-      .eq("empresa_id", empresaId)   // ✅ Isolamento por tenant
-      .order("created_at", { ascending: false });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
 
-    if (error) {
-      mostrarMensagem("erro", "Erro ao carregar documentos.");
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+
+    setEmailUsuario(session.user.email ?? "");
+
+    const { data: perfilData, error: perfilError } = await supabase
+      .from("perfis")
+      .select("empresa_id, nome, cargo, perfil_acesso")
+      .eq("id", session.user.id)
+      .single();
+
+    if (perfilError || !perfilData?.empresa_id) {
+      setLoadError("Não foi possível carregar o perfil do usuário.");
       setIsLoading(false);
       return;
     }
 
-    const docsFormatados: Documento[] = (data ?? []).map((doc: any) => ({
-      ...doc,
-      isProcesso: false,
-      status: doc.status ?? "Em Elaboração",
-      dt_elaboracao: doc.dt_elaboracao
-        ? new Date(doc.dt_elaboracao).toLocaleDateString("pt-BR", { timeZone: "UTC" })
-        : "-",
-      dt_vencimento: doc.dt_vencimento
-        ? new Date(doc.dt_vencimento).toLocaleDateString("pt-BR", { timeZone: "UTC" })
-        : "-",
-    }));
+    const perfilAtual = perfilData as PerfilUsuario;
+    setPerfil(perfilAtual);
 
-    setDocumentos(docsFormatados);
-    setIsLoading(false);
-  }, [empresaId]);
+    const processosPromise = fetch("/api/processos", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => (Array.isArray(rows) ? rows : []))
+      .catch(() => []);
 
-  useEffect(() => { fetchDocumentos(); }, [fetchDocumentos]);
+    const [
+      documentos,
+      riscos,
+      ocorrencias,
+      registros,
+      indicadores,
+      medicoes,
+      objetivos,
+      iniciativas,
+      processos,
+    ] = await Promise.all([
+      supabase.from("documentos").select("*").eq("empresa_id", perfilAtual.empresa_id).order("created_at", { ascending: false }),
+      supabase.from("riscos").select("*").eq("empresa_id", perfilAtual.empresa_id),
+      supabase.from("ocorrencias").select("*").eq("empresa_id", perfilAtual.empresa_id).order("created_at", { ascending: false }),
+      supabase.from("registros_preenchidos").select("*").eq("empresa_id", perfilAtual.empresa_id).order("created_at", { ascending: false }),
+      supabase.from("indicadores").select("*").eq("empresa_id", perfilAtual.empresa_id).order("nome"),
+      supabase.from("indicadores_medicoes").select("*").eq("empresa_id", perfilAtual.empresa_id).order("data_medicao", { ascending: false }),
+      supabase.from("planejamento_objetivos").select("*").eq("empresa_id", perfilAtual.empresa_id),
+      supabase.from("planejamento_iniciativas").select("*").eq("empresa_id", perfilAtual.empresa_id),
+      processosPromise,
+    ]);
 
-  /* ── HANDLERS ─────────────────────────────────────────────── */
-  const abrirFicha = (doc: Documento, tab: "detalhes" | "historico" = "detalhes") => {
-    setDocSelecionado(doc);
-    setFichaTab(tab);
-  };
+    const queryErrors = [documentos, riscos, ocorrencias, registros, indicadores, medicoes, objetivos, iniciativas]
+      .filter((result) => "error" in result && result.error)
+      .map((result) => result.error?.message);
 
-  const handleVisualizarConteudo = (e: React.MouseEvent, doc: Documento) => {
-    e.stopPropagation();
-    if (doc.isProcesso) {
-      router.push("/processos");
-    } else if (doc.arquivo_url) {
-      window.open(doc.arquivo_url, "_blank");
-    } else {
-      mostrarMensagem("alerta", "Arquivo não localizado para este documento.");
+    if (queryErrors.length > 0) {
+      setLoadError("Alguns módulos não responderam. O painel exibiu os dados disponíveis.");
     }
-  };
 
-  const handleTornarObsoleto = async (id: string) => {
-    if (!confirm("Tem certeza que deseja tornar este documento OBSOLETO? Ele sairá da vigência.")) return;
-
-    const { error } = await supabase
-      .from("documentos")
-      .update({ status: "Obsoleto" })
-      .eq("id", id)
-      .eq("empresa_id", empresaId!); // ✅ Segurança extra
-
-    if (!error) {
-      mostrarMensagem("sucesso", "Documento arquivado como Obsoleto com sucesso.");
-      setDocSelecionado(null);
-      fetchDocumentos();
-    } else {
-      mostrarMensagem("erro", "Erro ao arquivar documento.");
-    }
-  };
-
-  const handleCriarNovaVersao = (doc: Documento) => {
-    const query = new URLSearchParams({
-      base_id: doc.id,
-      codigo: doc.codigo,
-      titulo: doc.titulo,
-      tipo: doc.tipo_documento ?? "",
-      diretoria: doc.diretoria ?? "",
-      setor: doc.setor ?? "",
-      versao: String(Number(doc.versao) + 1),
-      acao: "revisao",
-    }).toString();
-    router.push(`/novo-documento?${query}`);
-  };
-
-  /* ── CONTADORES ───────────────────────────────────────────── */
-  const countRepositorio  = documentos.filter((d) => d.status === "Repositório").length;
-  const countElaboracao   = documentos.filter((d) => d.status === "Em Elaboração" || d.status === "EM_FLUXO").length;
-  const countVerificacao  = documentos.filter((d) => d.status === "Em Verificação").length;
-  const countHomologacao  = documentos.filter((d) => d.status === "Em Homologação").length;
-  const countRejeitados   = documentos.filter((d) => d.status === "Rejeitado" || d.status === "Devolvido").length;
-  const countObsoleto     = documentos.filter((d) => d.status === "Obsoleto").length;
-
-  const documentosFiltrados = documentos.filter((doc) => {
-    if (pastaAtiva === "Em Elaboração") return doc.status === "Em Elaboração" || doc.status === "EM_FLUXO";
-    if (pastaAtiva === "Rejeitados")    return doc.status === "Rejeitado" || doc.status === "Devolvido";
-    return doc.status === pastaAtiva;
-  });
-
-  /* ── RENDER ───────────────────────────────────────────────── */
-  return (
-    <div className="p-8 max-w-[1400px] mx-auto animate-in fade-in duration-500 relative print:p-0">
-
-      {/* TOAST */}
-      {mensagemSistema && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 font-bold text-sm animate-in slide-in-from-top-10 print:hidden
-          ${mensagemSistema.tipo === "sucesso" ? "bg-emerald-600 text-white" : ""}
-          ${mensagemSistema.tipo === "alerta"  ? "bg-amber-500 text-white"   : ""}
-          ${mensagemSistema.tipo === "erro"    ? "bg-red-600 text-white"     : ""}
-        `}>
-          {mensagemSistema.tipo === "sucesso" && <CheckCircle2 className="w-5 h-5" />}
-          {mensagemSistema.tipo === "alerta"  && <AlertCircle  className="w-5 h-5" />}
-          {mensagemSistema.tipo === "erro"    && <X             className="w-5 h-5" />}
-          {mensagemSistema.texto}
-        </div>
-      )}
-
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-8 print:hidden">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestão de Documentos</h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">Controle de informação documentada ISO 9001</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-2 bg-white border border-slate-100 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 shadow-sm transition-all"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Lista Mestra
-          </button>
-          <Link
-            href="/novo-documento"
-            className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all"
-          >
-            <FilePlus className="w-4 h-4" /> Novo Documento
-          </Link>
-        </div>
-      </div>
-
-      {/* TABS */}
-      <div className="border-b border-slate-100 mb-8 flex gap-8 text-sm font-bold text-slate-500 overflow-x-auto print:hidden">
-        {[
-          { key: "blocos",   label: "Pastas de Tramitação",       icon: <Layers className="w-4 h-4" /> },
-          { key: "inspecao", label: "Inspeção 360°",              icon: <Search className="w-4 h-4" /> },
-          { key: "copias",   label: "Cópias Controladas",         icon: <Printer className="w-4 h-4" /> },
-          { key: "config",   label: "Configuração Organizacional", icon: <Settings className="w-4 h-4" /> },
-        ].map((tab) => {
-          const isActive =
-            tab.key === "blocos"
-              ? viewState === "blocos" || viewState === "lista"
-              : viewState === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setViewState(tab.key as typeof viewState)}
-              className={`pb-4 border-b-2 transition-all flex items-center gap-2 ${
-                isActive ? "border-blue-600 text-blue-600" : "border-transparent hover:text-slate-800"
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* VISÃO: BLOCOS */}
-      {viewState === "blocos" && (
-        <div className="animate-in fade-in">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
-            <DashboardBlock title="Repositório"   desc="Vigentes"   count={countRepositorio} icon={<FileCheck className="w-6 h-6" />}   color="emerald" onClick={() => { setPastaAtiva("Repositório");  setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Em Elaboração" desc="Rascunhos"  count={countElaboracao}  icon={<FileEdit className="w-6 h-6" />}     color="blue"    onClick={() => { setPastaAtiva("Em Elaboração"); setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Em Verificação" desc="Revisão"   count={countVerificacao} icon={<Clock className="w-6 h-6" />}        color="amber"   onClick={() => { setPastaAtiva("Em Verificação"); setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Em Homologação" desc="Aprovação" count={countHomologacao} icon={<ShieldCheck className="w-6 h-6" />} color="purple"  onClick={() => { setPastaAtiva("Em Homologação"); setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Rejeitados"    desc="Devolvidos" count={countRejeitados}  icon={<XCircle className="w-6 h-6" />}      color="red"     onClick={() => { setPastaAtiva("Rejeitados");   setViewState("lista"); }} isLoading={isLoading} />
-            <DashboardBlock title="Obsoletos"     desc="Arquivados" count={countObsoleto}    icon={<Archive className="w-6 h-6" />}      color="slate"   onClick={() => { setPastaAtiva("Obsoletos");    setViewState("lista"); }} isLoading={isLoading} />
-          </div>
-        </div>
-      )}
-
-      {/* VISÃO: LISTA */}
-      {viewState === "lista" && (
-        <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
-          <div className="flex items-center gap-4 mb-2">
-            <button onClick={() => setViewState("blocos")} className="p-2 bg-white border border-slate-100 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-all">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h2 className="text-xl font-bold text-slate-800">Pasta: <span className="text-blue-600">{pastaAtiva}</span></h2>
-          </div>
-
-          <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                  <th className="px-4 py-3">Código</th>
-                  <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Título do Documento</th>
-                  <th className="px-4 py-3 text-center">Rev</th>
-                  <th className="px-4 py-3">Elaborador</th>
-                  <th className="px-4 py-3">Elaboração</th>
-                  <th className="px-4 py-3">Setor</th>
-                  {pastaAtiva === "Em Verificação" && <th className="px-4 py-3">Pendente de</th>}
-                  <th className="px-4 py-3 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {documentosFiltrados.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors group text-sm">
-                    <td className="px-4 py-3 font-mono font-bold text-blue-700">{doc.codigo}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border whitespace-nowrap
-                        ${doc.isProcesso ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-slate-100 text-slate-500 border-slate-100"}`}>
-                        {doc.tipo_documento}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-bold text-slate-800">{doc.titulo}</td>
-                    <td className="px-4 py-3 text-center text-slate-500 font-medium">{doc.versao}</td>
-                    <td className="px-4 py-3 text-slate-600 font-medium flex items-center gap-1.5">
-                      <User className="w-3 h-3 text-slate-400" />{doc.elaborador}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 font-medium">{doc.dt_elaboracao}</td>
-                    <td className="px-4 py-3 font-bold text-slate-700">{doc.setor}</td>
-                    {pastaAtiva === "Em Verificação" && (
-                      <td className="px-4 py-3 font-bold text-amber-600 text-xs truncate max-w-[150px]">
-                        {doc.verificador_pendente?.split(";")[0]}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      {pastaAtiva === "Repositório" ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={(e) => handleVisualizarConteudo(e, doc)} title="Visualizar Documento" className="p-2 bg-white border border-slate-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc); }} title="Ver Ficha Técnica" className="p-2 bg-white border border-slate-100 text-slate-600 rounded-lg hover:bg-slate-100 transition-all shadow-sm">
-                            <FileSearch className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-end gap-2">
-                          {(pastaAtiva === "Em Elaboração" || pastaAtiva === "Rejeitados") && (
-                            <Link href={`/editar-documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
-                              <Edit className="w-3.5 h-3.5" /> Retomar
-                            </Link>
-                          )}
-                          {(pastaAtiva === "Em Verificação" || pastaAtiva === "Em Homologação") && (
-                            <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
-                              <Search className="w-3.5 h-3.5" /> Analisar
-                            </Link>
-                          )}
-                          {pastaAtiva === "Obsoletos" && (
-                            <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc, "historico"); }} className="text-slate-500 font-bold flex items-center justify-end gap-1.5 hover:text-blue-600 transition-colors">
-                              <History className="w-3.5 h-3.5" /> Histórico
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {documentosFiltrados.length === 0 && !isLoading && (
-              <div className="p-8 text-center text-slate-500 font-medium">Nenhum documento encontrado nesta pasta.</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* VISÃO: INSPEÇÃO */}
-      {viewState === "inspecao" && (
-        <PainelInspecao documentos={documentos} isLoading={isLoading} aoAtualizar={fetchDocumentos} />
-      )}
-
-      {/* VISÃO: CÓPIAS */}
-      {viewState === "copias" && (
-        <PainelCopiasControladas
-          documentos={documentos.filter((d) => d.status === "Repositório" && !d.isProcesso)}
-          empresaId={empresaId}
-          setMensagemSistema={setMensagemSistema}
-        />
-      )}
-
-      {/* VISÃO: CONFIG */}
-      {viewState === "config" && (
-        <PainelConfiguracaoAdmin empresaId={empresaId} setMensagemSistema={setMensagemSistema} />
-      )}
-
-      {/* MODAL EXPORTAR */}
-      {isExportModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 print:hidden">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="text-md font-bold text-slate-900">Gerar Relatório</h3>
-              <button onClick={() => setIsExportModalOpen(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-6 text-center">
-              <FileSpreadsheet className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-              <button onClick={() => setIsExportModalOpen(false)} className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-emerald-700 transition-colors">
-                Exportar Base
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: FICHA TÉCNICA */}
-      {docSelecionado && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-end z-[100] animate-in fade-in print:hidden">
-          <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col animate-in slide-in-from-right-8 border-l border-slate-100">
-
-            <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50 shrink-0">
-              <div className="flex items-start gap-4">
-                <div className="p-3 rounded-xl border shadow-inner mt-1 bg-blue-50 text-blue-600 border-blue-100">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-sm font-black text-blue-700">{docSelecionado.codigo}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">Rev. {docSelecionado.versao}</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 leading-tight pr-4">{docSelecionado.titulo}</h3>
-                  <div className="mt-3">
-                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border
-                      ${docSelecionado.status === "Repositório"   ? "bg-emerald-50 text-emerald-700 border-emerald-200" : ""}
-                      ${docSelecionado.status === "Obsoleto"      ? "bg-slate-100 text-slate-500 border-slate-200"       : ""}
-                      ${docSelecionado.status === "Em Verificação"? "bg-amber-50 text-amber-700 border-amber-200"         : ""}
-                    `}>
-                      {docSelecionado.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button onClick={() => setDocSelecionado(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors shrink-0">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-8 overflow-y-auto flex-1 bg-white space-y-8">
-              <section>
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4" /> 1. Identificação do Documento
-                </h4>
-                <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                  <div className="col-span-2">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Título</p>
-                    <p className="text-sm font-bold text-slate-800">{docSelecionado.titulo}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tipo de Documento</p>
-                    <p className="text-sm font-bold text-slate-700">{docSelecionado.tipo_documento}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Setor Responsável</p>
-                    <p className="text-sm font-bold text-slate-700">{docSelecionado.setor}</p>
-                  </div>
-                  {docSelecionado.diretoria && (
-                    <div className="col-span-2">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Diretoria Vinculada</p>
-                      <p className="text-sm font-bold text-slate-700">{docSelecionado.diretoria}</p>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <section>
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
-                  <History className="w-4 h-4" /> 2. Controle de Versão e Prazos
-                </h4>
-                <div className="grid grid-cols-2 gap-y-4 gap-x-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Versão Vigente</p>
-                    <p className="text-base font-black text-blue-600">{docSelecionado.versao}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Situação</p>
-                    <p className="text-sm font-bold text-slate-800">{docSelecionado.status}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Data de Elaboração</p>
-                    <p className="text-sm font-bold text-slate-700">{docSelecionado.dt_elaboracao}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Vencimento (Validade)</p>
-                    <p className="text-sm font-bold text-slate-700">{docSelecionado.dt_vencimento}</p>
-                  </div>
-                  <div className="col-span-2 mt-2 pt-4 border-t border-slate-200/60">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Justificativa</p>
-                    <p className="text-sm text-slate-600 italic bg-white p-3 rounded-lg border border-slate-100">
-                      {docSelecionado.justificativa || "Sem justificativa registrada."}
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
-                  <User className="w-4 h-4" /> 3. Matriz de Responsabilidades
-                </h4>
-                <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Elaborador</p>
-                    <p className="text-sm font-bold text-slate-800">{docSelecionado.elaborador || "Sistema/Legado"}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Aprovador Final</p>
-                    <p className="text-sm font-bold text-slate-800">{docSelecionado.aprovador || "Comitê da Qualidade"}</p>
-                  </div>
-                  {docSelecionado.verificador_pendente && (
-                    <div className="col-span-2">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Verificadores</p>
-                      <ul className="text-sm text-slate-600 mt-1 space-y-1">
-                        {docSelecionado.verificador_pendente.split(";").map((v, i) => (
-                          <li key={i} className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />{v}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
-
-            {docSelecionado.status === "Repositório" && (
-              <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-4 shrink-0">
-                <button onClick={() => handleTornarObsoleto(docSelecionado.id)} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 font-bold rounded-xl text-sm hover:bg-red-50 transition-all shadow-sm">
-                  <Archive className="w-4 h-4" /> Tornar Obsoleto
-                </button>
-                <button onClick={() => handleCriarNovaVersao(docSelecionado)} className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition-all shadow-md">
-                  <Edit className="w-4 h-4" /> Criar Nova Versão (Rev. {Number(docSelecionado.versao) + 1})
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────
- * PAINEL INSPEÇÃO
- * ───────────────────────────────────────────────────────────────*/
-function PainelInspecao({ documentos, isLoading, aoAtualizar }: {
-  documentos: Documento[]; isLoading: boolean; aoAtualizar: () => void;
-}) {
-  const [filtroGlobal, setFiltroGlobal] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState("Todos");
-
-  const docsFiltrados = documentos.filter((doc) => {
-    const busca = filtroGlobal.toLowerCase();
-    const matchesTexto =
-      doc.titulo?.toLowerCase().includes(busca) ||
-      doc.codigo?.toLowerCase().includes(busca) ||
-      doc.elaborador?.toLowerCase().includes(busca);
-    const matchesStatus = statusFiltro === "Todos" || doc.status === statusFiltro;
-    return matchesTexto && matchesStatus;
-  });
-
-  const total    = docsFiltrados.length;
-  const pendentes = docsFiltrados.filter((d) => d.status !== "Repositório" && d.status !== "Obsoleto").length;
-  const vigentes  = docsFiltrados.filter((d) => d.status === "Repositório").length;
-
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case "Repositório":    return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "Em Verificação": return "bg-amber-50 text-amber-700 border-amber-200";
-      case "Em Homologação": return "bg-purple-50 text-purple-700 border-purple-200";
-      case "Em Elaboração":  return "bg-blue-50 text-blue-700 border-blue-200";
-      case "Rejeitado":
-      case "Devolvido":      return "bg-red-50 text-red-700 border-red-200";
-      default:               return "bg-slate-50 text-slate-700 border-slate-100";
-    }
-  };
-
-  return (
-    <div className="animate-in slide-in-from-bottom-4">
-      <div className="flex justify-end mb-6 print:hidden">
-        <button onClick={() => window.print()} className="flex items-center gap-2 bg-white border border-slate-100 text-slate-700 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 shadow-sm transition-all">
-          <Printer className="w-4 h-4 text-blue-600" /> Relatório PDF / Imprimir
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <ResumoCard titulo="Documentos em Inspeção" valor={total}    icon={<FileText className="w-5 h-5" />}    cor="blue"    />
-        <ResumoCard titulo="Com Pendência"          valor={pendentes} icon={<Clock className="w-5 h-5" />}       cor="amber"   />
-        <ResumoCard titulo="Índice de Vigência"     valor={total > 0 ? `${Math.round((vigentes / total) * 100)}%` : "100%"} icon={<CheckCircle2 className="w-5 h-5" />} cor="emerald" />
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6 flex flex-wrap items-center gap-4 print:hidden">
-        <div className="flex-1 min-w-[300px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input type="text" placeholder="Localizar por Código, Título ou Responsável..." value={filtroGlobal} onChange={(e) => setFiltroGlobal(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-lg text-sm outline-none focus:border-blue-500 focus:bg-white transition-all" />
-        </div>
-        <select value={statusFiltro} onChange={(e) => setStatusFiltro(e.target.value)} className="px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-lg text-sm font-bold text-slate-600 outline-none cursor-pointer">
-          <option value="Todos">Todos os Status</option>
-          <option value="Repositório">Vigentes</option>
-          <option value="Em Verificação">Em Verificação</option>
-          <option value="Em Homologação">Em Homologação</option>
-          <option value="Em Elaboração">Em Elaboração</option>
-          <option value="Rejeitado">Rejeitados</option>
-        </select>
-        <button onClick={aoAtualizar} className="p-2.5 text-slate-400 hover:text-blue-600 transition-colors">
-          <RefreshCw className={`w-5 h-5 ${isLoading ? "animate-spin" : ""}`} />
-        </button>
-      </div>
-
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr className="text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                <th className="px-6 py-4">Status Atual</th>
-                <th className="px-6 py-4">Identificação</th>
-                <th className="px-6 py-4">Setor</th>
-                <th className="px-6 py-4">Responsável Atual</th>
-                <th className="px-6 py-4 text-center">Vencimento</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {docsFiltrados.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${getStatusStyle(doc.status)}`}>{doc.status}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="font-mono font-bold text-blue-700">{doc.codigo}</div>
-                    <div className="font-bold text-slate-800 text-xs mt-0.5 max-w-[200px] truncate" title={doc.titulo}>{doc.titulo}</div>
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-slate-600 uppercase text-[10px]">{doc.setor}</td>
-                  <td className="px-6 py-4 font-medium text-slate-700">
-                    <div className="flex flex-col">
-                      <span>{doc.elaborador}</span>
-                      {doc.status === "Em Verificação" && (
-                        <span className="text-[9px] text-amber-600 font-bold">Aguardando: {doc.verificador_pendente?.split(";")[0]}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center font-bold text-slate-700">{doc.dt_vencimento}</td>
-                </tr>
-              ))}
-              {docsFiltrados.length === 0 && !isLoading && (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-bold">Nenhum documento localizado.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────
- * PAINEL CÓPIAS CONTROLADAS
- * ───────────────────────────────────────────────────────────────*/
-function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: {
-  documentos: Documento[];
-  empresaId: string | null;
-  setMensagemSistema: (m: MensagemSistema) => void;
-}) {
-  const [busca, setBusca] = useState("");
-
-  const docsFiltrados = documentos.filter((doc) =>
-    doc.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
-    doc.codigo?.toLowerCase().includes(busca.toLowerCase())
-  );
-
-  // ✅ Registra cópia controlada no banco
-  const handleRegistrarCopia = async (doc: Documento) => {
-    if (!empresaId) return;
-    const entregueA = prompt(`Registrar cópia de "${doc.titulo}"\n\nNome do destinatário:`);
-    if (!entregueA?.trim()) return;
-
-    const { error } = await supabase.from("copias_controladas").insert({
-      empresa_id: empresaId,
-      documento_id: doc.id,
-      numero_copia: Date.now(), // substituir por sequência real
-      entregue_a: entregueA,
-      setor_destino: doc.setor,
-      status: "EM_USO",
+    setData({
+      documentos: documentos.data ?? [],
+      riscos: riscos.data ?? [],
+      ocorrencias: ocorrencias.data ?? [],
+      registros: registros.data ?? [],
+      indicadores: indicadores.data ?? [],
+      medicoes: medicoes.data ?? [],
+      objetivos: objetivos.data ?? [],
+      iniciativas: iniciativas.data ?? [],
+      processos,
     });
 
-    if (!error) {
-      setMensagemSistema({ tipo: "sucesso", texto: `Cópia registrada para ${entregueA}.` });
-    } else {
-      setMensagemSistema({ tipo: "erro", texto: "Erro ao registrar cópia." });
-    }
-  };
-
-  return (
-    <div className="animate-in slide-in-from-bottom-4">
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-          <h3 className="text-lg font-bold text-slate-800">Controle de Cópias Físicas</h3>
-          <p className="text-sm text-slate-500 font-medium mt-1">Gere cópias rastreáveis para distribuição nos setores.</p>
-        </div>
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-2.5 rounded-lg w-full md:w-96 shadow-inner">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input type="text" placeholder="Buscar documento vigente..." value={busca} onChange={(e) => setBusca(e.target.value)}
-            className="w-full bg-transparent text-sm outline-none font-bold text-slate-700" />
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr className="text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                <th className="px-6 py-4">Código Oficial</th>
-                <th className="px-6 py-4">Título do Documento</th>
-                <th className="px-6 py-4 text-center">Revisão</th>
-                <th className="px-6 py-4">Setor Origem</th>
-                <th className="px-6 py-4 text-right">Controle</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {docsFiltrados.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-mono font-bold text-blue-700">{doc.codigo}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800">{doc.titulo}</td>
-                  <td className="px-6 py-4 text-center font-bold text-slate-500">{doc.versao}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-600">{doc.setor}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleRegistrarCopia(doc)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 shadow-md transition-colors"
-                    >
-                      <Copy className="w-3 h-3" /> Registrar Cópia
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {docsFiltrados.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-bold">Nenhum documento vigente encontrado.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────
- * PAINEL CONFIGURAÇÃO ADMIN
- * ───────────────────────────────────────────────────────────────*/
-function PainelConfiguracaoAdmin({ empresaId, setMensagemSistema }: {
-  empresaId: string | null;
-  setMensagemSistema: (m: MensagemSistema) => void;
-}) {
-  const [activeTab, setActiveTab] = useState<"tipos" | "diretorias" | "setores">("tipos");
-  const [tipos, setTipos]         = useState<any[]>([]);
-  const [diretorias, setDiretorias] = useState<any[]>([]);
-  const [setores, setSetores]     = useState<any[]>([]);
-  const [novoNome, setNovoNome]   = useState("");
-  const [novaSigla, setNovaSigla] = useState("");
-  const [novoDirId, setNovoDirId] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
-  const carregarTudo = useCallback(async () => {
-    if (!empresaId) return;
-    setIsLoading(true);
-    const [resTipos, resDir, resSetores] = await Promise.all([
-      supabase.from("config_tipos_doc").select("*").eq("empresa_id", empresaId).order("sigla"),
-      supabase.from("config_diretorias").select("*").eq("empresa_id", empresaId).order("nome"),
-      supabase.from("config_setores").select("*, config_diretorias(nome)").eq("empresa_id", empresaId).order("nome"),
-    ]);
-    if (resTipos.data)   setTipos(resTipos.data);
-    if (resDir.data)     setDiretorias(resDir.data);
-    if (resSetores.data) setSetores(resSetores.data);
     setIsLoading(false);
-  }, [empresaId]);
+  }, [router]);
 
-  useEffect(() => { carregarTudo(); }, [carregarTudo]);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void carregarPainel();
+    }, 0);
 
-  const handleAdd = async () => {
-    if (!novoNome || !empresaId) return;
-    let error;
+    return () => window.clearTimeout(timeoutId);
+  }, [carregarPainel]);
 
-    if (activeTab === "tipos" && novaSigla) {
-      ({ error } = await supabase.from("config_tipos_doc").insert({ nome: novoNome, sigla: novaSigla.toUpperCase(), empresa_id: empresaId }));
-    } else if (activeTab === "diretorias") {
-      ({ error } = await supabase.from("config_diretorias").insert({ nome: novoNome, empresa_id: empresaId }));
-    } else if (activeTab === "setores" && novaSigla && novoDirId) {
-      ({ error } = await supabase.from("config_setores").insert({ nome: novoNome, sigla: novaSigla.toUpperCase(), diretoria_id: novoDirId, empresa_id: empresaId }));
-    }
-
-    if (!error) {
-      setNovoNome(""); setNovaSigla(""); setNovoDirId("");
-      carregarTudo();
-      setMensagemSistema({ tipo: "sucesso", texto: "Item adicionado com sucesso!" });
-    } else {
-      setMensagemSistema({ tipo: "erro", texto: "Erro ao adicionar item." });
-    }
-  };
-
-  const removerItem = async (tabela: string, id: string) => {
-    if (!confirm("Deseja remover este item?")) return;
-    const { error } = await supabase.from(tabela).delete().eq("id", id);
-    if (!error) {
-      carregarTudo();
-    } else {
-      setMensagemSistema({ tipo: "erro", texto: "Não foi possível remover. Verifique se há itens vinculados." });
-    }
-  };
-
-  if (isLoading) return (
-    <div className="text-center p-12 text-slate-500 font-bold flex justify-center bg-white rounded-xl border border-slate-100">
-      <RefreshCw className="animate-spin w-6 h-6 mr-2" /> Carregando Configurações...
-    </div>
+  const pendingItems = useMemo(
+    () => buildPendingItems(data, perfil, emailUsuario),
+    [data, emailUsuario, perfil]
+  );
+  const moduleSummaries = useMemo(
+    () => buildModuleSummaries(data, pendingItems),
+    [data, pendingItems]
   );
 
-  return (
-    <div className="flex bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden min-h-[500px] animate-in fade-in">
-      <div className="w-64 bg-slate-50 border-r border-slate-100 p-4 shrink-0">
-        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Parâmetros do Sistema</h3>
-        <nav className="space-y-1">
-          {[
-            { key: "tipos",      label: "Tipos de Documento", icon: <BookOpen className="w-4 h-4" /> },
-            { key: "diretorias", label: "Diretorias",         icon: <Building2 className="w-4 h-4" /> },
-            { key: "setores",    label: "Setores",            icon: <Layers className="w-4 h-4" /> },
-          ].map((tab) => (
-            <button key={tab.key} onClick={() => { setActiveTab(tab.key as typeof activeTab); setNovoNome(""); setNovaSigla(""); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === tab.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-200"}`}>
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+  const myItems = pendingItems.filter((item) => item.isMine);
+  const visibleItems = myItems.length > 0 ? myItems : pendingItems;
+  const criticalItems = pendingItems.filter((item) => item.priority === "critica" || item.priority === "alta");
+  const weekItems = pendingItems.filter((item) => {
+    const days = daysUntil(item.dueDate);
+    return days !== null && days >= 0 && days <= 7;
+  });
+  const completedModules = moduleSummaries.filter((module) => module.open === 0).length;
+  const healthScore = moduleSummaries.length
+    ? Math.round((completedModules / moduleSummaries.length) * 100)
+    : 0;
 
-      <div className="flex-1 p-8 flex flex-col bg-white">
-        <div className="mb-6 pb-6 border-b border-slate-50">
-          <h2 className="text-xl font-bold text-slate-800 mb-1">
-            {activeTab === "tipos" ? "Tipos Documentais" : activeTab === "diretorias" ? "Estrutura de Diretorias" : "Mapeamento de Setores"}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {activeTab === "tipos" ? "Gerencie as nomenclaturas (Ex: POP, MAN)." : activeTab === "diretorias" ? "Defina a alta gestão." : "Cadastre as unidades operacionais."}
-          </p>
+  const hoje = new Date().toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-bold text-slate-500 shadow-sm">
+          <Loader2 className="h-5 w-5 animate-spin text-[#2655e8]" />
+          Carregando painel executivo...
         </div>
+      </div>
+    );
+  }
 
-        <div className="flex gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 items-end">
-          {activeTab === "setores" && (
-            <div className="w-64">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Diretoria Mãe</label>
-              <select value={novoDirId} onChange={(e) => setNovoDirId(e.target.value)} className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none">
-                <option value="">Selecione...</option>
-                {diretorias.map((d: any) => <option key={d.id} value={d.id}>{d.nome}</option>)}
-              </select>
+  return (
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-[#dbeafe] bg-[#eef2ff] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#2655e8]">
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              Painel Executivo
             </div>
-          )}
-          {(activeTab === "tipos" || activeTab === "setores") && (
-            <div className="w-32">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Sigla</label>
-              <input type="text" value={novaSigla} onChange={(e) => setNovaSigla(e.target.value)} placeholder="Ex: UTI"
-                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm uppercase font-bold outline-none" />
-            </div>
-          )}
-          <div className="flex-1">
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Nome por Extenso</label>
-            <input type="text" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Digite o nome..."
-              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none" />
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 md:text-4xl">
+              Olá, {perfil?.nome?.split(" ")[0] ?? "usuário"}
+            </h1>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              {hoje}. Resumo consolidado das pendências e sinais de atenção do SGQ.
+            </p>
           </div>
-          <button onClick={handleAdd} className="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-lg text-sm hover:bg-blue-700 shadow-md flex items-center gap-2 h-[42px] transition-all">
-            <Plus className="w-4 h-4" /> Adicionar
-          </button>
-        </div>
 
-        <div className="flex-1 border border-slate-100 rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-500 tracking-widest">
-              <tr>
-                {(activeTab === "tipos" || activeTab === "setores") && <th className="px-4 py-3 w-32">Sigla</th>}
-                <th className="px-4 py-3">Nome / Descrição</th>
-                {activeTab === "setores" && <th className="px-4 py-3">Diretoria Vinculada</th>}
-                <th className="px-4 py-3 text-right">Ação</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 bg-white">
-              {activeTab === "tipos" && tipos.map((t: any) => (
-                <tr key={t.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono font-bold text-blue-700">{t.sigla}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{t.nome}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => removerItem("config_tipos_doc", t.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4" /></button></td>
-                </tr>
-              ))}
-              {activeTab === "diretorias" && diretorias.map((d: any) => (
-                <tr key={d.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{d.nome}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => removerItem("config_diretorias", d.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4" /></button></td>
-                </tr>
-              ))}
-              {activeTab === "setores" && setores.map((s: any) => (
-                <tr key={s.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono font-bold text-blue-700">{s.sigla}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{s.nome}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs font-bold">{s.config_diretorias?.nome || "Sem vínculo"}</td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => removerItem("config_setores", s.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4" /></button></td>
-                </tr>
-              ))}
-              {activeTab === "tipos"      && tipos.length === 0      && <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-medium">Nenhum Tipo cadastrado.</td></tr>}
-              {activeTab === "diretorias" && diretorias.length === 0  && <tr><td colSpan={2} className="p-8 text-center text-slate-400 font-medium">Nenhuma Diretoria cadastrada.</td></tr>}
-              {activeTab === "setores"    && setores.length === 0     && <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-medium">Nenhum Setor cadastrado.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={carregarPainel}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Atualizar
+            </button>
+            <Link
+              href="/documentos"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2655e8] px-5 text-sm font-bold text-white shadow-md transition hover:bg-[#1e40af]"
+            >
+              <FileText className="h-4 w-4" />
+              Abrir Documentos
+            </Link>
+          </div>
+        </header>
 
-/* ─────────────────────────────────────────────────────────────────
- * SUB-COMPONENTES
- * ───────────────────────────────────────────────────────────────*/
-function DashboardBlock({ title, desc, count, icon, color, onClick, isLoading }: any) {
-  const colorMap: Record<string, string> = {
-    emerald: "text-emerald-600 bg-emerald-50",
-    blue:    "text-blue-600 bg-blue-50",
-    amber:   "text-amber-600 bg-amber-50",
-    purple:  "text-purple-600 bg-purple-50",
-    slate:   "text-slate-600 bg-slate-50",
-    red:     "text-red-600 bg-red-50",
-  };
-  return (
-    <div onClick={onClick} className="bg-white rounded-2xl p-5 border border-slate-100 cursor-pointer hover:shadow-md transition-all flex flex-col justify-between h-32">
-      <div className="flex justify-between items-start">
-        <div className={`p-2 rounded-lg ${colorMap[color]}`}>{icon}</div>
-        <span className="text-2xl font-black">{isLoading ? "..." : count}</span>
-      </div>
-      <div>
-        <h3 className="text-xs font-black text-slate-800 uppercase">{title}</h3>
-        <p className="text-[10px] text-slate-500">{desc}</p>
-      </div>
-    </div>
-  );
-}
+        {loadError && (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+            <AlertCircle className="h-5 w-5" />
+            {loadError}
+          </div>
+        )}
 
-function ResumoCard({ titulo, valor, icon, cor }: any) {
-  const cores: Record<string, string> = {
-    blue:    "text-blue-600 bg-blue-50",
-    amber:   "text-amber-600 bg-amber-50",
-    emerald: "text-emerald-600 bg-emerald-50",
-  };
-  return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
-      <div className={`p-3 rounded-xl ${cores[cor]}`}>{icon}</div>
-      <div>
-        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{titulo}</p>
-        <p className="text-2xl font-black text-slate-800">{valor}</p>
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ExecutiveMetric
+            title="Minhas pendências"
+            value={myItems.length}
+            subtitle={myItems.length > 0 ? "Itens vinculados ao seu usuário" : "Nenhum item nominal encontrado"}
+            icon={<Sparkles className="h-5 w-5" />}
+            tone="blue"
+          />
+          <ExecutiveMetric
+            title="Atenção executiva"
+            value={criticalItems.length}
+            subtitle="Atrasos, criticidade alta ou fora da meta"
+            icon={<AlertTriangle className="h-5 w-5" />}
+            tone="red"
+          />
+          <ExecutiveMetric
+            title="Próximos 7 dias"
+            value={weekItems.length}
+            subtitle="Prazos chegando no curto prazo"
+            icon={<CalendarClock className="h-5 w-5" />}
+            tone="amber"
+          />
+          <ExecutiveMetric
+            title="Saúde do SGQ"
+            value={`${healthScore}%`}
+            subtitle={`${completedModules} de ${moduleSummaries.length} módulos sem pendência`}
+            icon={<Gauge className="h-5 w-5" />}
+            tone="emerald"
+          />
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">
+                  {myItems.length > 0 ? "Minha fila prioritária" : "Fila prioritária da empresa"}
+                </h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  {visibleItems.length} item(ns) ordenado(s) por criticidade e prazo.
+                </p>
+              </div>
+              <span className="hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-widest text-slate-400 shadow-sm sm:inline-flex">
+                Top {Math.min(8, visibleItems.length)}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {visibleItems.slice(0, 8).map((item) => (
+                <PendingRow key={item.id} item={item} />
+              ))}
+
+              {visibleItems.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center shadow-sm">
+                  <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
+                  <h3 className="mt-4 text-lg font-black text-slate-900">Fila limpa</h3>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Nenhuma pendência aberta foi encontrada nos módulos monitorados.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <aside className="flex flex-col gap-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Agenda da Semana</h2>
+                  <p className="mt-1 text-xs font-medium text-slate-500">Prazos em até 7 dias</p>
+                </div>
+                <Clock3 className="h-5 w-5 text-slate-400" />
+              </div>
+
+              <div className="space-y-3">
+                {weekItems.slice(0, 5).map((item) => (
+                  <Link key={item.id} href={item.href} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 transition hover:border-[#2655e8] hover:bg-[#eef2ff]">
+                    <div className={cn("mt-1 h-2.5 w-2.5 rounded-full", item.priority === "critica" ? "bg-red-500" : item.priority === "alta" ? "bg-amber-500" : "bg-blue-500")} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-black text-slate-800">{item.title}</p>
+                      <p className="mt-1 text-[11px] font-bold text-slate-400">{formatDate(item.dueDate)} · {item.moduleLabel}</p>
+                    </div>
+                  </Link>
+                ))}
+
+                {weekItems.length === 0 && (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-5 text-center text-sm font-bold text-slate-400">
+                    Sem vencimentos próximos.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Pulso do Sistema</h2>
+                  <p className="mt-1 text-xs font-medium text-slate-500">Leitura executiva por volume</p>
+                </div>
+                <Activity className="h-5 w-5 text-slate-400" />
+              </div>
+
+              <div className="space-y-4">
+                {[
+                  { label: "Itens abertos", value: pendingItems.length, icon: <BarChart3 className="h-4 w-4" />, color: "text-blue-700 bg-blue-50" },
+                  { label: "Itens críticos", value: criticalItems.length, icon: <XCircle className="h-4 w-4" />, color: "text-red-700 bg-red-50" },
+                  { label: "Módulos monitorados", value: moduleSummaries.length, icon: <FileCheck2 className="h-4 w-4" />, color: "text-emerald-700 bg-emerald-50" },
+                  { label: "Pendências não nominais", value: Math.max(pendingItems.length - myItems.length, 0), icon: <TrendingUp className="h-4 w-4" />, color: "text-amber-700 bg-amber-50" },
+                ].map((metric) => (
+                  <div key={metric.label} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", metric.color)}>
+                        {metric.icon}
+                      </div>
+                      <span className="text-sm font-bold text-slate-700">{metric.label}</span>
+                    </div>
+                    <span className="text-lg font-black text-slate-900">{metric.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section>
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Pendências por módulo</h2>
+              <p className="mt-1 text-sm font-medium text-slate-500">Consolidação operacional para navegação rápida.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {moduleSummaries.map((module) => (
+              <ModuleCard key={module.key} module={module} />
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

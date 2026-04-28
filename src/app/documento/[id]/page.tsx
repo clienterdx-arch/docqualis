@@ -128,7 +128,7 @@ export default function SalaRevisaoPage() {
       if (error) throw error;
 
       setFeedback({ tipo: "sucesso", msg: `Documento ${acao === "Aprovar" ? "aprovado e avançado" : "devolvido para ajustes"} com sucesso!` });
-      setTimeout(() => router.push("/"), 2000);
+      setTimeout(() => router.push("/documentos"), 2000);
 
     } catch (e: any) {
       setFeedback({ tipo: "erro", msg: e.message });
@@ -173,7 +173,7 @@ export default function SalaRevisaoPage() {
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
-            <Link href="/" className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-[#2655e8] hover:border-[#2655e8] hover:shadow-md transition-all">
+            <Link href="/documentos" className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-[#2655e8] hover:border-[#2655e8] hover:shadow-md transition-all">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
