@@ -70,14 +70,21 @@ export default function GestaoDocumentosPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
 
-      const { data: perfil } = await supabase
+      const { data: perfis, error: perfilError } = await supabase
         .from("perfis")
         .select("empresa_id")
         .eq("id", session.user.id)
-        .single();
+        .limit(1);
 
-      if (perfil?.empresa_id) {
+      const perfil = perfis?.[0];
+      if (perfilError) {
+        mostrarMensagem("erro", "Não foi possível carregar os dados do seu perfil.");
+        setIsLoading(false);
+      } else if (perfil?.empresa_id) {
         setEmpresaId(perfil.empresa_id);
+      } else {
+        mostrarMensagem("erro", "Não foi possível identificar a empresa vinculada ao seu usuário.");
+        setIsLoading(false);
       }
     }
     iniciar();

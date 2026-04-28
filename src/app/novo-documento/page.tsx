@@ -63,16 +63,21 @@ export default function NovoDocumentoPage() {
         if (!session) { router.push("/login"); return; }
         setEmailUsuario(session.user.email ?? "");
 
-        const { data: perfil, error: perfilError } = await supabase
+        const { data: perfis, error: perfilError } = await supabase
           .from("perfis")
           .select("empresa_id, nome")
           .eq("id", session.user.id)
-          .single();
+          .limit(1);
 
-        if (perfilError) throw perfilError;
+        if (perfilError) {
+          setErro("Não foi possível carregar os dados do seu perfil. Tente novamente em instantes.");
+          return;
+        }
+
+        const perfil = perfis?.[0];
         if (!perfil?.empresa_id) {
           setEmpresaId(null);
-          setErro("Nao foi possivel identificar a empresa vinculada ao seu usuario. Revise o cadastro do perfil antes de criar documentos.");
+          setErro("Não foi possível identificar a empresa vinculada ao seu usuário. Revise o cadastro do perfil antes de criar documentos.");
           return;
         }
 
@@ -94,8 +99,8 @@ export default function NovoDocumentoPage() {
         setDbDiretorias(resDir.data ?? []);
         setDbSetores(resSetores.data ?? []);
         setDbUsuarios(resUsuarios.data ?? []);
-      } catch (e: any) {
-        setErro(e?.message ?? "Nao foi possivel carregar as configuracoes para criar documentos.");
+      } catch {
+        setErro("Não foi possível carregar as configurações para criar documentos. Tente novamente em instantes.");
       } finally {
         if (isMounted) setIsCarregandoConfigs(false);
       }
@@ -138,7 +143,7 @@ export default function NovoDocumentoPage() {
   const verificarDuplicidade = useCallback(async () => {
     if (!numeroDoc || prefixoCodigo === "XXX.XXX") return false;
     if (!empresaId) {
-      setErro("Nao foi possivel identificar a empresa vinculada ao seu usuario. Revise o cadastro do perfil antes de salvar.");
+      setErro("Não foi possível identificar a empresa vinculada ao seu usuário. Revise o cadastro do perfil antes de salvar.");
       return true;
     }
     const { data } = await supabase
@@ -188,7 +193,7 @@ export default function NovoDocumentoPage() {
 
   const handleSalvarRascunho = async () => {
     setErro(null);
-    if (!empresaId) { setErro("Nao foi possivel identificar a empresa vinculada ao seu usuario. Revise o cadastro do perfil antes de salvar."); return; }
+    if (!empresaId) { setErro("Não foi possível identificar a empresa vinculada ao seu usuário. Revise o cadastro do perfil antes de salvar."); return; }
     if (!titulo) { setErro("Para salvar rascunho, preencha o Título do Documento."); return; }
     setIsLoading(true);
     if (await verificarDuplicidade()) { setIsLoading(false); return; }
@@ -204,7 +209,7 @@ export default function NovoDocumentoPage() {
 
   const handleSubmit = async () => {
     setErro(null);
-    if (!empresaId) { setErro("Nao foi possivel identificar a empresa vinculada ao seu usuario. Revise o cadastro do perfil antes de protocolar."); return; }
+    if (!empresaId) { setErro("Não foi possível identificar a empresa vinculada ao seu usuário. Revise o cadastro do perfil antes de protocolar."); return; }
     if (!tipoDocumento || !setor || !numeroDoc || !titulo || !dtVencimento || !homologador) {
       setErro("Existem campos obrigatórios não preenchidos. Verifique os asteriscos vermelhos."); return;
     }
