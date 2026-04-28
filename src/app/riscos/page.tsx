@@ -25,6 +25,7 @@ interface Risco {
   probabilidade: number;
   impacto: number;
   nivel_risco: number;
+  score: number;
   classificacao: string;
   status: string;
   estrategia: string;
