@@ -10,31 +10,42 @@ export async function carregarPerfilUsuario<T extends PerfilRecord = PerfilRecor
   if (!session?.user?.id) return null;
 
   const userId = session.user.id;
-  const userEmail = session.user.email ?? "";
+  const userEmail = session.user.email ?? undefined;
+  let primeiroPerfilDoUsuario: T | null = null;
 
-  const { data, error } = await supabase
-    .from("perfis")
-    .select(select)
-    .eq("id", userId)
-    .eq("ativo", true)
-    .maybeSingle();
+  const lookupValues: Array<[string, string | undefined]> = [
+    ["id", userId],
+    ["user_id", userId],
+    ["auth_user_id", userId],
+    ["usuario_id", userId],
+    ["auth_id", userId],
+    ["email", userEmail],
+  ];
 
-  if (!error && data) {
-    return data as unknown as T;
-  }
+  for (const [column, value] of lookupValues) {
+    if (!value) continue;
 
-  if (userEmail) {
-    const { data: perfilPorEmail, error: erroEmail } = await supabase
+    const { data: perfisComEmpresa, error: erroComEmpresa } = await supabase
       .from("perfis")
       .select(select)
-      .eq("email", userEmail)
-      .eq("ativo", true)
-      .maybeSingle();
+      .eq(column, value)
+      .not("empresa_id", "is", null)
+      .limit(1);
 
-    if (!erroEmail && perfilPorEmail) {
-      return perfilPorEmail as unknown as T;
+    if (!erroComEmpresa && perfisComEmpresa?.[0]) {
+      return perfisComEmpresa[0] as unknown as T;
+    }
+
+    const { data: perfisDoUsuario, error: erroPerfil } = await supabase
+      .from("perfis")
+      .select(select)
+      .eq(column, value)
+      .limit(1);
+
+    if (!erroPerfil && perfisDoUsuario?.[0] && !primeiroPerfilDoUsuario) {
+      primeiroPerfilDoUsuario = perfisDoUsuario[0] as unknown as T;
     }
   }
 
-  return null;
+  return primeiroPerfilDoUsuario;
 }
