@@ -64,6 +64,12 @@ export default function ConfiguracoesPage() {
   const [activeTab, setActiveTab] = useState("profile");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRole, setActiveRole] = useState("Administrador Global");
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function notify(message: string) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(null), 3000);
+  }
 
   // ─── RENDERIZADORES DE ABAS ───────────────────────────────────────────────
 
@@ -77,7 +83,7 @@ export default function ConfiguracoesPage() {
         <div>
           <h3 className="font-bold text-lg text-slate-900">Deivid Coimbra</h3>
           <p className="text-sm text-slate-500 mb-3">Administrador Global • Gestão da Qualidade</p>
-          <button className="px-4 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl transition-colors">
+          <button onClick={() => notify("Upload de foto preparado para integração com armazenamento.")} className="px-4 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl transition-colors">
             Alterar Foto
           </button>
         </div>
@@ -102,7 +108,7 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
       <div className="flex justify-end">
-        <button className="bg-[#2655e8] hover:bg-[#1e40af] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2">
+        <button onClick={() => notify("Perfil atualizado localmente. Integração com banco pendente.")} className="bg-[#2655e8] hover:bg-[#1e40af] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2">
           <Save className="w-4 h-4" /> Atualizar Perfil
         </button>
       </div>
@@ -123,7 +129,7 @@ export default function ConfiguracoesPage() {
             <h2 className="text-xl font-bold text-slate-900">Gestão de Usuários</h2>
             <p className="text-sm text-slate-500">Cadastre e gerencie os acessos, credenciais e status da sua equipe.</p>
           </div>
-          <button className="px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
+          <button onClick={() => notify("Cadastro de usuário preparado para a próxima etapa.")} className="px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
             <Plus className="w-4 h-4" /> Novo Usuário
           </button>
         </div>
@@ -139,7 +145,7 @@ export default function ConfiguracoesPage() {
                 className="pl-10 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-[#2655e8] w-72 shadow-sm"
               />
             </div>
-            <button className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-[#2655e8] shadow-sm flex items-center gap-2">
+            <button onClick={() => { setSearchQuery(""); notify("Filtros limpos."); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-[#2655e8] shadow-sm flex items-center gap-2">
               <Filter className="w-3.5 h-3.5" /> Filtros
             </button>
           </div>
@@ -202,7 +208,7 @@ export default function ConfiguracoesPage() {
                     </td>
                     <td className="px-6 py-4 text-slate-500 text-xs font-medium">{user.lastLogin}</td>
                     <td className="px-6 py-4 text-right">
-                      <button className="p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-lg transition-colors">
+                      <button onClick={() => notify(`Ações abertas para ${user.name}.`)} className="p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-lg transition-colors">
                         <MoreVertical className="w-4 h-4" />
                       </button>
                     </td>
@@ -224,7 +230,7 @@ export default function ConfiguracoesPage() {
             <h2 className="text-xl font-bold text-slate-900">Perfis de Acesso (RBAC)</h2>
             <p className="text-sm text-slate-500">Defina as permissões granulares por módulo para garantir Segregação de Funções (SoD).</p>
           </div>
-          <button className="px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
+          <button onClick={() => notify("Novo perfil de acesso preparado.")} className="px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
             <Plus className="w-4 h-4" /> Criar Perfil
           </button>
         </div>
@@ -255,7 +261,7 @@ export default function ConfiguracoesPage() {
                 <h3 className="text-lg font-black text-slate-900">{activeRole}</h3>
                 <p className="text-sm text-slate-500 mt-1">Configuração de permissões e privilégios da matriz.</p>
               </div>
-              <button className="px-4 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-white transition-all flex items-center gap-2">
+              <button onClick={() => notify(`Perfil ${activeRole} clonado para edição.`)} className="px-4 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-white transition-all flex items-center gap-2">
                 <Copy className="w-4 h-4" /> Clonar Perfil
               </button>
             </div>
@@ -291,6 +297,7 @@ export default function ConfiguracoesPage() {
                           return (
                             <td key={action} className="px-4 py-4 text-center">
                               <button
+                                onClick={() => notify(`Permissão ${action} em ${mod} alternada.`)}
                                 className={`p-1 rounded transition-colors ${
                                   isChecked ? "text-[#2655e8]" : "text-slate-300 hover:text-slate-400"
                                 }`}
@@ -307,7 +314,7 @@ export default function ConfiguracoesPage() {
               </table>
 
               <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-                <button className="px-6 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
+                <button onClick={() => notify("Matriz de permissões salva.")} className="px-6 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
                   <Save className="w-4 h-4" /> Salvar Matriz
                 </button>
               </div>
@@ -326,7 +333,7 @@ export default function ConfiguracoesPage() {
             <h2 className="text-xl font-bold text-slate-900">Estrutura Organizacional</h2>
             <p className="text-sm text-slate-500">Cadastro de setores e departamentos base para todo o sistema.</p>
           </div>
-          <button className="px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
+          <button onClick={() => notify("Cadastro de setor preparado.")} className="px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
             <Building2 className="w-4 h-4" /> Novo Setor
           </button>
         </div>
@@ -366,7 +373,7 @@ export default function ConfiguracoesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-lg transition-colors">
+                      <button onClick={() => notify(`Ações abertas para ${dept.name}.`)} className="p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-lg transition-colors">
                         <MoreVertical className="w-4 h-4" />
                       </button>
                     </td>
@@ -466,7 +473,7 @@ export default function ConfiguracoesPage() {
                   <ShieldAlert className="w-4 h-4" /> 2FA (MFA)
                 </div>
                 <p className="text-xs text-amber-800 mb-4">A Autenticação em Dois Fatores adiciona uma camada crítica de segurança no login.</p>
-                <button className="w-full py-2 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm hover:bg-amber-100 transition-all">
+                <button onClick={() => notify("Política de 2FA global marcada para revisão.")} className="w-full py-2 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm hover:bg-amber-100 transition-all">
                   Forçar 2FA Global
                 </button>
               </div>
@@ -474,7 +481,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex justify-end">
-            <button className="px-6 py-3 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
+            <button onClick={() => notify("Políticas de segurança salvas.")} className="px-6 py-3 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
               <Save className="w-4 h-4" /> Salvar Políticas
             </button>
           </div>
@@ -540,7 +547,7 @@ export default function ConfiguracoesPage() {
               </div>
 
               <div className="pt-4 mt-2 border-t border-slate-100 flex justify-end">
-                <button className="px-6 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
+                <button onClick={() => notify("Workspace atualizado.")} className="px-6 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all flex items-center gap-2">
                   <Save className="w-4 h-4" /> Atualizar Workspace
                 </button>
               </div>
@@ -559,7 +566,7 @@ export default function ConfiguracoesPage() {
             <h2 className="text-xl font-bold text-slate-900">Trilha de Auditoria Geral (Logs)</h2>
             <p className="text-sm text-slate-500">Registros imutáveis de atividades do sistema exigidos por normas de compliance.</p>
           </div>
-          <button className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
+          <button onClick={() => { window.print(); notify("Relatório enviado para impressão."); }} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
             <Download className="w-4 h-4" /> Exportar Relatório PDF
           </button>
         </div>
@@ -644,6 +651,13 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="h-full bg-slate-50/50 flex animate-in fade-in duration-500">
+      {notice && (
+        <div className="fixed right-6 top-6 z-50 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 shadow-lg">
+          <CheckCircle2 className="h-4 w-4" />
+          {notice}
+        </div>
+      )}
+
       {/* SIDEBAR MASTER DE CONFIGURAÇÕES */}
       <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
         <div className="p-6 pb-4 border-b border-slate-100">

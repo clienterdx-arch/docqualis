@@ -124,6 +124,27 @@ function generateId(prefix: string) { return `${prefix}-${Math.floor(1000 + Math
 function nowFormatted() { return new Date().toLocaleString("pt-BR"); }
 function countByStatus(responses: FormResponse[], status: ApprovalStatus) { return responses.filter(r => r.approvalStatus === status).length; }
 function getInitials(name: string) { return name.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join(""); }
+function exportResponsesCsv(filename: string, rows: FormResponse[], fields: FormField[] = []) {
+  const baseColumns = ["Registro", "Formulario", "Data", "Preenchido por", "Status", "Responsavel atual"];
+  const columns = [...baseColumns, ...fields.map((field) => field.label)];
+  const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csvRows = rows.map((row) => [
+    row.id,
+    row.formId,
+    row.submittedAt,
+    row.submittedBy,
+    row.approvalStatus,
+    row.currentOwner,
+    ...fields.map((field) => row.data[field.id] ?? ""),
+  ].map(escapeCsv).join(";"));
+  const blob = new Blob([[columns.join(";"), ...csvRows].join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE PIN
@@ -470,6 +491,19 @@ function ResponsesViewer({ form, responses, onBack, onOpenRecord }: {
     { title: "Rejeitados",     subtitle: "Devolvidos",  count: countByStatus(responses,"Rejeitado"),        status: "Rejeitado" as ApprovalStatus },
   ];
 
+  function handleExportCsv() {
+    if (filteredResponses.length === 0) {
+      window.alert("Nenhum registro encontrado para exportar.");
+      return;
+    }
+    exportResponsesCsv(`registros-${form.id.slice(0, 8)}.csv`, filteredResponses, form.fields);
+  }
+
+  function handleAdvancedFilters() {
+    setSearch("");
+    setStatusFilter("Todos");
+  }
+
   return (
     <div className="h-full bg-slate-50/50 p-8 flex flex-col gap-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-end gap-4 shrink-0">
@@ -483,7 +517,7 @@ function ResponsesViewer({ form, responses, onBack, onOpenRecord }: {
             <h1 className="text-3xl font-bold text-slate-900">{form.title}</h1>
           </div>
         </div>
-        <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 flex items-center gap-2"><Download className="w-4 h-4" />Exportar CSV</button>
+        <button onClick={handleExportCsv} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 flex items-center gap-2"><Download className="w-4 h-4" />Exportar CSV</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-5 shrink-0">
@@ -516,7 +550,7 @@ function ResponsesViewer({ form, responses, onBack, onOpenRecord }: {
               {(Object.keys(STATUS_META) as ApprovalStatus[]).map(s => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
             </select>
           </div>
-          <button className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-[#2655e8] shadow-sm flex items-center gap-2"><Filter className="w-3.5 h-3.5" />Filtros Avançados</button>
+          <button onClick={handleAdvancedFilters} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-[#2655e8] shadow-sm flex items-center gap-2"><Filter className="w-3.5 h-3.5" />Filtros Avançados</button>
         </div>
 
         <div className="overflow-auto flex-1">
@@ -736,7 +770,8 @@ export default function GestaoRegistrosPage() {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      const { data: perfil } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).single();
+      const { data: perfis } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).limit(1);
+      const perfil = perfis?.[0];
       if (perfil?.empresa_id) { setEmpresaId(perfil.empresa_id); setNomeUsuario(perfil.nome ?? "Usuário"); }
       else setIsLoading(false);
     };
@@ -865,6 +900,20 @@ export default function GestaoRegistrosPage() {
   const globalRejeitados    = countByStatus(responses, "Rejeitado");
   const globalExcluidos     = countByStatus(responses, "Excluído");
 
+  function handleExportGlobalCsv() {
+    if (filteredGlobalResponses.length === 0) {
+      mostrar("err", "Nenhum registro encontrado para exportar.");
+      return;
+    }
+    exportResponsesCsv(`registros-gerais-${new Date().toISOString().slice(0, 10)}.csv`, filteredGlobalResponses);
+    mostrar("ok", "CSV exportado com sucesso.");
+  }
+
+  function handleResetGlobalFilters() {
+    setSearch("");
+    mostrar("ok", "Filtros limpos.");
+  }
+
   /* ── VIEWS SECUNDÁRIAS ───────────────────────────────── */
   if (viewMode === "builder") {
     return <FormBuilder initialData={activeForm || undefined} onSave={handleSaveForm} onCancel={() => setViewMode("list")} onSubmitResponse={handleSubmitNewResponse} isSaving={isSaving} />;
@@ -938,7 +987,7 @@ export default function GestaoRegistrosPage() {
                   <div className="p-6 flex-1 flex flex-col">
                     <div className="flex justify-between items-start mb-4">
                       <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border shadow-sm ${form.status === "Publicado" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>{form.status}</span>
-                      <button className="text-slate-300 hover:text-slate-600"><MoreVertical className="w-5 h-5" /></button>
+                      <button onClick={() => { setActiveForm(form); setViewMode("responses"); }} className="text-slate-300 hover:text-slate-600" title="Ver respostas"><MoreVertical className="w-5 h-5" /></button>
                     </div>
                     <div className="mb-2">
                       <span className="text-[10px] font-mono font-black text-[#2655e8] bg-[#eef2ff] px-2 py-0.5 rounded border border-[#e0e7ff] mb-2 inline-block">{form.id.slice(0, 8)}...</span>
@@ -997,8 +1046,8 @@ export default function GestaoRegistrosPage() {
 
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
             <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-              <button className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-[#2655e8] shadow-sm flex items-center gap-2"><Filter className="w-3.5 h-3.5" />Filtros Avançados</button>
-              <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 flex items-center gap-2"><Download className="w-4 h-4" />Exportar CSV</button>
+              <button onClick={handleResetGlobalFilters} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:text-[#2655e8] shadow-sm flex items-center gap-2"><Filter className="w-3.5 h-3.5" />Filtros Avançados</button>
+              <button onClick={handleExportGlobalCsv} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 flex items-center gap-2"><Download className="w-4 h-4" />Exportar CSV</button>
             </div>
 
             <div className="overflow-auto flex-1">

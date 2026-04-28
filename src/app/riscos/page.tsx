@@ -70,12 +70,13 @@ export default function GestaoRiscosPage() {
         return;
       }
 
-      const { data: perfil } = await supabase
+      const { data: perfis } = await supabase
         .from("perfis")
         .select("empresa_id")
         .eq("id", session.user.id)
-        .single();
+        .limit(1);
 
+      const perfil = perfis?.[0];
       if (perfil?.empresa_id) setEmpresaId(perfil.empresa_id);
       else setIsLoading(false);
     };

@@ -7,8 +7,10 @@ import {
   Calendar, User, RefreshCw, ChevronRight, Printer
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 export default function InspecaoQualidadePage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [filtroGlobal, setFiltroGlobal] = useState("");
@@ -163,10 +165,10 @@ export default function InspecaoQualidadePage() {
                   </td>
                   <td className="px-6 py-4 text-right print:hidden">
                     <div className="flex items-center justify-end gap-2">
-                       <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Ver Histórico">
+                       <button onClick={() => router.push(`/documento/${doc.id}`)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Ver Histórico">
                          <RefreshCw className="w-4 h-4" />
                        </button>
-                       <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Visualizar">
+                       <button onClick={() => router.push(`/documento/${doc.id}`)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Visualizar">
                          <ChevronRight className="w-5 h-5" />
                        </button>
                     </div>

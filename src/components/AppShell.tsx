@@ -201,9 +201,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           )
         `)
         .eq("id", session.user.id)
-        .single();
+        .limit(1);
 
-      if (data) setPerfil(data as unknown as PerfilUsuario);
+      if (data?.[0]) setPerfil(data[0] as unknown as PerfilUsuario);
     }
 
     carregarPerfil();
@@ -299,6 +299,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               aria-label="Ver notificações"
+              onClick={() => router.push("/")}
               className="relative p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-full transition-all"
             >
               <Bell className="w-5 h-5" />

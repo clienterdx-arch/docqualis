@@ -351,15 +351,22 @@ export default function OcorrenciasPage() {
     try {
       // 1. Busca sessão e perfil do usuário
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setCarregando(false);
+        return;
+      }
 
-      const { data: perfil } = await supabase
+      const { data: perfis } = await supabase
         .from("perfis")
         .select("empresa_id, nome")
         .eq("id", session.user.id)
-        .single();
+        .limit(1);
 
-      if (!perfil?.empresa_id) return;
+      const perfil = perfis?.[0];
+      if (!perfil?.empresa_id) {
+        setCarregando(false);
+        return;
+      }
       setEmpresaId(perfil.empresa_id);
       setNomeUsuario(perfil.nome ?? "Usuário");
 

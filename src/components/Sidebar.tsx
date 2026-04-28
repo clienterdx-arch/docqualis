@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   ClipboardSignature,
@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldAlert,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type MenuItem = {
   label: string;
@@ -23,8 +24,14 @@ type MenuItem = {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   if (pathname === "/login") return null;
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   const menuItems: MenuItem[] = [
     { label: "Painel Executivo", icon: LayoutDashboard, href: "/" },
@@ -120,7 +127,7 @@ export default function Sidebar() {
           Configurações
         </Link>
 
-        <button className="mt-2 w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all">
+        <button onClick={handleLogout} className="mt-2 w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all">
           <LogOut className="w-5 h-5 shrink-0" />
           Sair
         </button>

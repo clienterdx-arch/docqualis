@@ -957,15 +957,20 @@ export default function GestaoIndicadoresPage() {
   const [isLoading, setIsLoading]       = useState(true);
   const [indicadorAtivo, setIndicadorAtivo] = useState<Indicador | null>(null);
   const [modalNovo, setModalNovo]       = useState(false);
+  const [erro, setErro]                 = useState<string | null>(null);
 
   /* ── SESSÃO ──────────────────────────────────────────── */
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      const { data: perfil } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).single();
-      if (perfil?.empresa_id) { setEmpresaId(perfil.empresa_id); setNomeUsuario(perfil.nome ?? "Usuário"); }
-      else setIsLoading(false);
+      const { data: perfis } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).limit(1);
+      const perfil = perfis?.[0];
+      if (perfil?.empresa_id) { setEmpresaId(perfil.empresa_id); setNomeUsuario(perfil.nome ?? "Usuário"); setErro(null); }
+      else {
+        setErro("Não foi possível identificar a empresa vinculada ao usuário.");
+        setIsLoading(false);
+      }
     };
     init();
   }, [router]);
@@ -984,12 +989,22 @@ export default function GestaoIndicadoresPage() {
       ]);
       setIndicadores(rI.data ?? []);
       setMedicoes(rM.data ?? []);
+      setErro(null);
     } finally {
       setIsLoading(false);
     }
   }, [empresaId]);
 
   useEffect(() => { fetchDados(); }, [fetchDados]);
+
+  function abrirNovoIndicador() {
+    if (!empresaId) {
+      setErro("Não foi possível identificar a empresa vinculada ao usuário.");
+      return;
+    }
+    setErro(null);
+    setModalNovo(true);
+  }
 
   /* ── ÚLTIMA MEDIÇÃO ──────────────────────────────────── */
   function getUltimaMedicao(indId: string): Medicao | null {
@@ -1063,7 +1078,7 @@ export default function GestaoIndicadoresPage() {
                 className="pl-10 pr-10 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-400 w-72 shadow-sm" />
               {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><XCircle className="w-4 h-4 text-slate-300 hover:text-red-500" /></button>}
             </div>
-            <button onClick={() => setModalNovo(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 shadow-md">
+            <button onClick={abrirNovoIndicador} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 shadow-md">
               <Plus className="w-4 h-4" /> Novo KPI
             </button>
           </div>
@@ -1081,6 +1096,13 @@ export default function GestaoIndicadoresPage() {
             </button>
           ))}
         </div>
+
+        {erro && (
+          <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold flex items-center gap-3 shrink-0">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{erro}</span>
+          </div>
+        )}
 
         {/* CONTEÚDO */}
         <div className="flex-1 overflow-hidden flex flex-col pb-4">
@@ -1174,7 +1196,7 @@ export default function GestaoIndicadoresPage() {
                                     <td className="px-6 py-4 text-right font-black text-slate-900">{formatValue(valor, getTipo(ind), 1)}</td>
                                     <td className="px-6 py-4 text-right font-bold text-slate-400">{formatValue(ind.meta, getTipo(ind), 1)}</td>
                                     <td className="px-6 py-4 text-right">
-                                      <button className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 shadow-sm flex items-center gap-1 ml-auto group-hover:text-blue-600 group-hover:border-blue-200">
+                                      <button onClick={(e) => { e.stopPropagation(); setIndicadorAtivo(ind); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 shadow-sm flex items-center gap-1 ml-auto group-hover:text-blue-600 group-hover:border-blue-200">
                                         <BarChart3 className="w-3.5 h-3.5" /> Analisar
                                       </button>
                                     </td>
@@ -1200,7 +1222,7 @@ export default function GestaoIndicadoresPage() {
                   <h2 className="text-xl font-bold text-slate-800">Fichas Técnicas de KPIs</h2>
                   <p className="text-sm text-slate-500">Repositório estrutural de todos os indicadores cadastrados.</p>
                 </div>
-                <button onClick={() => setModalNovo(true)} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-700">
+                <button onClick={abrirNovoIndicador} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-700">
                   <Plus className="w-4 h-4" /> Cadastrar Indicador
                 </button>
               </div>
@@ -1234,7 +1256,7 @@ export default function GestaoIndicadoresPage() {
                           <td className="px-6 py-4 text-center"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-black uppercase">{ind.frequencia}</span></td>
                           <td className="px-6 py-4 text-center text-xs font-bold text-slate-500">{ind.polaridade === "MAIOR_MELHOR" ? "↑ Maior Melhor" : "↓ Menor Melhor"}</td>
                           <td className="px-6 py-4 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${ind.status === "ATIVO" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}>{ind.status}</span></td>
-                          <td className="px-6 py-4 text-right"><button className="text-xs font-bold text-slate-400 group-hover:text-blue-600 flex items-center gap-1 ml-auto"><ChevronRight className="w-4 h-4" /></button></td>
+                          <td className="px-6 py-4 text-right"><button onClick={(e) => { e.stopPropagation(); setIndicadorAtivo(ind); }} className="text-xs font-bold text-slate-400 group-hover:text-blue-600 flex items-center gap-1 ml-auto"><ChevronRight className="w-4 h-4" /></button></td>
                         </tr>
                       ))}
                     </tbody>

@@ -64,6 +64,38 @@ export default function GestaoDocumentosPage() {
     setTimeout(() => setMensagemSistema(null), 3500);
   }
 
+  function exportarListaMestra() {
+    if (documentos.length === 0) {
+      mostrarMensagem("alerta", "Nenhum documento encontrado para exportar.");
+      return;
+    }
+
+    const colunas = ["Codigo", "Titulo", "Tipo", "Diretoria", "Setor", "Status", "Versao", "Elaborador", "Aprovador", "Vencimento"];
+    const escaparCsv = (valor: unknown) => `"${String(valor ?? "").replace(/"/g, '""')}"`;
+    const linhas = documentos.map((doc) => [
+      doc.codigo,
+      doc.titulo,
+      doc.tipo_documento,
+      doc.diretoria,
+      doc.setor,
+      doc.status,
+      doc.versao,
+      doc.elaborador,
+      doc.aprovador,
+      doc.dt_vencimento,
+    ].map(escaparCsv).join(";"));
+
+    const blob = new Blob([[colunas.join(";"), ...linhas].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lista-mestra-documentos-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setIsExportModalOpen(false);
+    mostrarMensagem("sucesso", "Lista Mestra exportada com sucesso.");
+  }
+
   /* ── SESSÃO ───────────────────────────────────────────────── */
   useEffect(() => {
     async function iniciar() {
@@ -143,13 +175,17 @@ export default function GestaoDocumentosPage() {
   };
 
   const handleTornarObsoleto = async (id: string) => {
+    if (!empresaId) {
+      mostrarMensagem("erro", "Não foi possível identificar a empresa do usuário.");
+      return;
+    }
     if (!confirm("Tem certeza que deseja tornar este documento OBSOLETO? Ele sairá da vigência.")) return;
 
     const { error } = await supabase
       .from("documentos")
       .update({ status: "Obsoleto" })
       .eq("id", id)
-      .eq("empresa_id", empresaId!); // ✅ Segurança extra
+      .eq("empresa_id", empresaId); // ✅ Segurança extra
 
     if (!error) {
       mostrarMensagem("sucesso", "Documento arquivado como Obsoleto com sucesso.");
@@ -385,7 +421,7 @@ export default function GestaoDocumentosPage() {
             </div>
             <div className="p-6 text-center">
               <FileSpreadsheet className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-              <button onClick={() => setIsExportModalOpen(false)} className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-emerald-700 transition-colors">
+              <button onClick={exportarListaMestra} className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-emerald-700 transition-colors">
                 Exportar Base
               </button>
             </div>
@@ -763,15 +799,34 @@ function PainelConfiguracaoAdmin({ empresaId, setMensagemSistema }: {
   useEffect(() => { carregarTudo(); }, [carregarTudo]);
 
   const handleAdd = async () => {
-    if (!novoNome || !empresaId) return;
+    if (!empresaId) {
+      setMensagemSistema({ tipo: "erro", texto: "Não foi possível identificar a empresa do usuário." });
+      return;
+    }
+
+    if (!novoNome.trim()) {
+      setMensagemSistema({ tipo: "alerta", texto: "Informe o nome antes de adicionar." });
+      return;
+    }
+
+    if ((activeTab === "tipos" || activeTab === "setores") && !novaSigla.trim()) {
+      setMensagemSistema({ tipo: "alerta", texto: "Informe a sigla antes de adicionar." });
+      return;
+    }
+
+    if (activeTab === "setores" && !novoDirId) {
+      setMensagemSistema({ tipo: "alerta", texto: "Selecione a diretoria vinculada ao setor." });
+      return;
+    }
+
     let error;
 
-    if (activeTab === "tipos" && novaSigla) {
-      ({ error } = await supabase.from("config_tipos_doc").insert({ nome: novoNome, sigla: novaSigla.toUpperCase(), empresa_id: empresaId }));
+    if (activeTab === "tipos") {
+      ({ error } = await supabase.from("config_tipos_doc").insert({ nome: novoNome.trim(), sigla: novaSigla.trim().toUpperCase(), empresa_id: empresaId }));
     } else if (activeTab === "diretorias") {
-      ({ error } = await supabase.from("config_diretorias").insert({ nome: novoNome, empresa_id: empresaId }));
-    } else if (activeTab === "setores" && novaSigla && novoDirId) {
-      ({ error } = await supabase.from("config_setores").insert({ nome: novoNome, sigla: novaSigla.toUpperCase(), diretoria_id: novoDirId, empresa_id: empresaId }));
+      ({ error } = await supabase.from("config_diretorias").insert({ nome: novoNome.trim(), empresa_id: empresaId }));
+    } else if (activeTab === "setores") {
+      ({ error } = await supabase.from("config_setores").insert({ nome: novoNome.trim(), sigla: novaSigla.trim().toUpperCase(), diretoria_id: novoDirId, empresa_id: empresaId }));
     }
 
     if (!error) {
@@ -779,7 +834,7 @@ function PainelConfiguracaoAdmin({ empresaId, setMensagemSistema }: {
       carregarTudo();
       setMensagemSistema({ tipo: "sucesso", texto: "Item adicionado com sucesso!" });
     } else {
-      setMensagemSistema({ tipo: "erro", texto: "Erro ao adicionar item." });
+      setMensagemSistema({ tipo: "erro", texto: error.message || "Erro ao adicionar item." });
     }
   };
 

@@ -1997,6 +1997,7 @@ function ProcessStudioContent() {
           </button>
 
           <button
+            onClick={() => setSpacePressed((current) => !current)}
             className={cn(
               "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
               spacePressed ? "bg-[#eef2ff] text-[#2655e8] border border-[#e0e7ff]" : "text-slate-400 hover:bg-slate-50"

@@ -39,12 +39,13 @@ export default function SalaRevisaoPage() {
       if (!session) { router.push("/login"); return; }
       setEmailUsuario(session.user.email ?? "");
 
-      const { data: perfil } = await supabase
+      const { data: perfis } = await supabase
         .from("perfis")
         .select("empresa_id, nome, perfil_acesso")
         .eq("id", session.user.id)
-        .single();
+        .limit(1);
 
+      const perfil = perfis?.[0];
       if (perfil) {
         setEmpresaId(perfil.empresa_id);
         setNomeUsuario(perfil.nome ?? "Usuário");
@@ -83,6 +84,9 @@ export default function SalaRevisaoPage() {
     }
     if (acao === "Devolver" && !justificativa.trim()) {
       setFeedback({ tipo: "erro", msg: "Para devolver, preencha o parecer técnico justificando a decisão." }); return;
+    }
+    if (!empresaId) {
+      setFeedback({ tipo: "erro", msg: "Não foi possível identificar a empresa do usuário." }); return;
     }
 
     setIsProcessando(true);
@@ -123,7 +127,7 @@ export default function SalaRevisaoPage() {
           ...(novoStatus === "Repositório" ? { dt_homologacao: new Date().toISOString().slice(0, 10) } : {}),
         })
         .eq("id", documentoId)
-        .eq("empresa_id", empresaId!); // ✅ Segurança extra
+        .eq("empresa_id", empresaId); // ✅ Segurança extra
 
       if (error) throw error;
 

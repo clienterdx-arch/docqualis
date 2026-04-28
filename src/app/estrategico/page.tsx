@@ -128,8 +128,10 @@ export default function PlanejamentoEstrategicoPage() {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      const { data: perfil } = await supabase.from("perfis").select("empresa_id").eq("id", session.user.id).single();
+      const { data: perfis } = await supabase.from("perfis").select("empresa_id").eq("id", session.user.id).limit(1);
+      const perfil = perfis?.[0];
       if (perfil?.empresa_id) setEmpresaId(perfil.empresa_id);
+      else setIsLoading(false);
     };
     init();
   }, [router]);
@@ -195,9 +197,10 @@ export default function PlanejamentoEstrategicoPage() {
 
   /* ── SALVAR OBJETIVO ─────────────────────────────────── */
   async function salvarObjetivo() {
+    if (!empresaId) { mostrar("err", "Não foi possível identificar a empresa do usuário."); return; }
     if (!formObj.titulo || !formObj.perspectiva_id) { mostrar("err", "Preencha Perspectiva e Título."); return; }
     setSalvando(true);
-    const { error } = await supabase.from("planejamento_objetivos").insert({ ...formObj, empresa_id: empresaId! });
+    const { error } = await supabase.from("planejamento_objetivos").insert({ ...formObj, empresa_id: empresaId });
     if (error) mostrar("err", error.message);
     else { mostrar("ok", "Objetivo estratégico criado!"); setModalObj(false); setFormObj({ perspectiva_id: "", titulo: "", descricao: "", responsavel: "", prazo: "", status: "NAO_INICIADO", progresso: 0 }); fetchTudo(); }
     setSalvando(false);
@@ -205,9 +208,10 @@ export default function PlanejamentoEstrategicoPage() {
 
   /* ── SALVAR INICIATIVA ───────────────────────────────── */
   async function salvarIniciativa() {
+    if (!empresaId) { mostrar("err", "Não foi possível identificar a empresa do usuário."); return; }
     if (!formIni.titulo || !formIni.objetivo_id) { mostrar("err", "Preencha Objetivo vinculado e Título."); return; }
     setSalvando(true);
-    const { error } = await supabase.from("planejamento_iniciativas").insert({ ...formIni, empresa_id: empresaId! });
+    const { error } = await supabase.from("planejamento_iniciativas").insert({ ...formIni, empresa_id: empresaId });
     if (error) mostrar("err", error.message);
     else { mostrar("ok", "Iniciativa criada!"); setModalIni(false); setFormIni({ objetivo_id: "", titulo: "", descricao: "", responsavel: "", prazo: "", status: "NAO_INICIADO", progresso: 0 }); fetchTudo(); }
     setSalvando(false);
@@ -215,9 +219,10 @@ export default function PlanejamentoEstrategicoPage() {
 
   /* ── SALVAR SWOT ─────────────────────────────────────── */
   async function salvarSwot() {
+    if (!empresaId) { mostrar("err", "Não foi possível identificar a empresa do usuário."); return; }
     if (!formSwot.descricao) { mostrar("err", "Descreva o item."); return; }
     setSalvando(true);
-    const { error } = await supabase.from("planejamento_swot").insert({ ...formSwot, empresa_id: empresaId! });
+    const { error } = await supabase.from("planejamento_swot").insert({ ...formSwot, empresa_id: empresaId });
     if (error) mostrar("err", error.message);
     else { mostrar("ok", "Item SWOT adicionado!"); setModalSwot(false); setFormSwot({ tipo: "FORCA", descricao: "", impacto: "MEDIO", responsavel: "" }); fetchTudo(); }
     setSalvando(false);
@@ -225,9 +230,10 @@ export default function PlanejamentoEstrategicoPage() {
 
   /* ── SALVAR INDICADOR ────────────────────────────────── */
   async function salvarIndicador() {
+    if (!empresaId) { mostrar("err", "Não foi possível identificar a empresa do usuário."); return; }
     if (!formInd.nome) { mostrar("err", "Preencha o nome do indicador."); return; }
     setSalvando(true);
-    const { error } = await supabase.from("indicadores").insert({ ...formInd, empresa_id: empresaId! });
+    const { error } = await supabase.from("indicadores").insert({ ...formInd, empresa_id: empresaId });
     if (error) mostrar("err", error.message);
     else { mostrar("ok", "Indicador criado!"); setModalInd(false); setFormInd({ nome: "", perspectiva_bsc: "Financeira", meta: 0, tipo: "PERCENTUAL", unidade: "%", status: "ATIVO", frequencia: "MENSAL", responsavel: "" }); fetchTudo(); }
     setSalvando(false);
