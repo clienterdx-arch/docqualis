@@ -965,21 +965,28 @@ export default function GestaoIndicadoresPage() {
       if (!session) { router.push("/login"); return; }
       const { data: perfil } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).single();
       if (perfil?.empresa_id) { setEmpresaId(perfil.empresa_id); setNomeUsuario(perfil.nome ?? "Usuário"); }
+      else setIsLoading(false);
     };
     init();
   }, [router]);
 
   /* ── FETCH ───────────────────────────────────────────── */
   const fetchDados = useCallback(async () => {
-    if (!empresaId) return;
+    if (!empresaId) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
-    const [rI, rM] = await Promise.all([
-      supabase.from("indicadores").select("*").eq("empresa_id", empresaId).order("setor").order("nome"),
-      supabase.from("indicadores_medicoes").select("*").eq("empresa_id", empresaId).order("data_medicao", { ascending: false }),
-    ]);
-    setIndicadores(rI.data ?? []);
-    setMedicoes(rM.data ?? []);
-    setIsLoading(false);
+    try {
+      const [rI, rM] = await Promise.all([
+        supabase.from("indicadores").select("*").eq("empresa_id", empresaId).order("setor").order("nome"),
+        supabase.from("indicadores_medicoes").select("*").eq("empresa_id", empresaId).order("data_medicao", { ascending: false }),
+      ]);
+      setIndicadores(rI.data ?? []);
+      setMedicoes(rM.data ?? []);
+    } finally {
+      setIsLoading(false);
+    }
   }, [empresaId]);
 
   useEffect(() => { fetchDados(); }, [fetchDados]);

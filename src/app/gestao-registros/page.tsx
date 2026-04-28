@@ -738,6 +738,7 @@ export default function GestaoRegistrosPage() {
       if (!session) { router.push("/login"); return; }
       const { data: perfil } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).single();
       if (perfil?.empresa_id) { setEmpresaId(perfil.empresa_id); setNomeUsuario(perfil.nome ?? "Usuário"); }
+      else setIsLoading(false);
     };
     init();
   }, [router]);
@@ -749,15 +750,21 @@ export default function GestaoRegistrosPage() {
 
   /* ── FETCH ───────────────────────────────────────────── */
   const fetchDados = useCallback(async () => {
-    if (!empresaId) return;
+    if (!empresaId) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
-    const [rT, rR] = await Promise.all([
-      supabase.from("registros_templates").select("*").eq("empresa_id", empresaId).order("created_at", { ascending: false }),
-      supabase.from("registros_preenchidos").select("*").eq("empresa_id", empresaId).order("created_at", { ascending: false }),
-    ]);
-    setForms((rT.data ?? []).map(dbToTemplate));
-    setResponses((rR.data ?? []).map(dbToResponse));
-    setIsLoading(false);
+    try {
+      const [rT, rR] = await Promise.all([
+        supabase.from("registros_templates").select("*").eq("empresa_id", empresaId).order("created_at", { ascending: false }),
+        supabase.from("registros_preenchidos").select("*").eq("empresa_id", empresaId).order("created_at", { ascending: false }),
+      ]);
+      setForms((rT.data ?? []).map(dbToTemplate));
+      setResponses((rR.data ?? []).map(dbToResponse));
+    } finally {
+      setIsLoading(false);
+    }
   }, [empresaId]);
 
   useEffect(() => { fetchDados(); }, [fetchDados]);

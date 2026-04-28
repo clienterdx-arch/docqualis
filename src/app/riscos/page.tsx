@@ -77,6 +77,7 @@ export default function GestaoRiscosPage() {
         .single();
 
       if (perfil?.empresa_id) setEmpresaId(perfil.empresa_id);
+      else setIsLoading(false);
     };
 
     init();
@@ -84,23 +85,27 @@ export default function GestaoRiscosPage() {
 
   /* ── FETCH ─────────────────────────────────────────────── */
   const fetchRiscos = useCallback(async () => {
-    if (!empresaId) return;
+    if (!empresaId) {
+      setIsLoading(false);
+      return;
+    }
 
-    const { data } = await supabase
-      .from("riscos")
-      .select("*")
-      .eq("empresa_id", empresaId);
+    setIsLoading(true);
+    try {
+      const { data } = await supabase
+        .from("riscos")
+        .select("*")
+        .eq("empresa_id", empresaId);
 
-    if (data) {
-      const dataComScore = data.map((r: Risco) => ({
+      const dataComScore = (data ?? []).map((r: Risco) => ({
         ...r,
         score: r.nivel_risco ?? calcScore(r.probabilidade, r.impacto),
       }));
 
       setRiscos(dataComScore);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   }, [empresaId]);
 
   useEffect(() => {
