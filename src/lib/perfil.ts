@@ -20,7 +20,7 @@ export async function carregarPerfilUsuario<T extends PerfilRecord = PerfilRecor
     .maybeSingle();
 
   if (!error && data) {
-    return data as T;
+    return data as unknown as T;
   }
 
   if (userEmail) {
@@ -32,7 +32,7 @@ export async function carregarPerfilUsuario<T extends PerfilRecord = PerfilRecor
       .maybeSingle();
 
     if (!erroEmail && perfilPorEmail) {
-      return perfilPorEmail as T;
+      return perfilPorEmail as unknown as T;
     }
   }
 
