@@ -7,6 +7,7 @@ import {
   FileSpreadsheet, X, Loader2, Trash2, Save
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 import { useRouter } from "next/navigation";
 
 /* ─────────────────────────────────────────────────────────────────
@@ -70,13 +71,7 @@ export default function GestaoRiscosPage() {
         return;
       }
 
-      const { data: perfis } = await supabase
-        .from("perfis")
-        .select("empresa_id")
-        .eq("id", session.user.id)
-        .limit(1);
-
-      const perfil = perfis?.[0];
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null }>(session, "empresa_id");
       if (perfil?.empresa_id) setEmpresaId(perfil.empresa_id);
       else setIsLoading(false);
     };

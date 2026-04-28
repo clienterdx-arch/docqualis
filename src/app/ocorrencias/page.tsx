@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 import {
   AlertTriangle, ArrowRight, BarChart3, CheckCircle2, ClipboardList,
   FileWarning, HeartHandshake, LayoutTemplate, MessageSquareWarning,
@@ -356,13 +357,7 @@ export default function OcorrenciasPage() {
         return;
       }
 
-      const { data: perfis } = await supabase
-        .from("perfis")
-        .select("empresa_id, nome")
-        .eq("id", session.user.id)
-        .limit(1);
-
-      const perfil = perfis?.[0];
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null }>(session, "empresa_id, nome");
       if (!perfil?.empresa_id) {
         setCarregando(false);
         return;

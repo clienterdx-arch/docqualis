@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 import { useRouter } from "next/navigation";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -770,8 +771,7 @@ export default function GestaoRegistrosPage() {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-      const { data: perfis } = await supabase.from("perfis").select("empresa_id, nome").eq("id", session.user.id).limit(1);
-      const perfil = perfis?.[0];
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null }>(session, "empresa_id, nome");
       if (perfil?.empresa_id) { setEmpresaId(perfil.empresa_id); setNomeUsuario(perfil.nome ?? "Usuário"); }
       else setIsLoading(false);
     };

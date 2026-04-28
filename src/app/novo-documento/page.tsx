@@ -8,6 +8,7 @@ import {
   Users, CalendarClock, Plus, Trash2, FileText, Megaphone, Loader2, Save
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 export default function NovoDocumentoPage() {
   const router = useRouter();
@@ -63,18 +64,7 @@ export default function NovoDocumentoPage() {
         if (!session) { router.push("/login"); return; }
         setEmailUsuario(session.user.email ?? "");
 
-        const { data: perfis, error: perfilError } = await supabase
-          .from("perfis")
-          .select("empresa_id, nome")
-          .eq("id", session.user.id)
-          .limit(1);
-
-        if (perfilError) {
-          setErro("Não foi possível carregar os dados do seu perfil. Tente novamente em instantes.");
-          return;
-        }
-
-        const perfil = perfis?.[0];
+        const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null }>(session, "empresa_id, nome");
         if (!perfil?.empresa_id) {
           setEmpresaId(null);
           setErro("Não foi possível identificar a empresa vinculada ao seu usuário. Revise o cadastro do perfil antes de criar documentos.");

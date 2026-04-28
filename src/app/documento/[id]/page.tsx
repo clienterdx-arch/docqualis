@@ -9,6 +9,7 @@ import {
   Loader2, FileSignature, Printer, Lock
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 export default function SalaRevisaoPage() {
   const router = useRouter();
@@ -39,18 +40,12 @@ export default function SalaRevisaoPage() {
       if (!session) { router.push("/login"); return; }
       setEmailUsuario(session.user.email ?? "");
 
-      const { data: perfis } = await supabase
-        .from("perfis")
-        .select("empresa_id, nome, perfil_acesso")
-        .eq("id", session.user.id)
-        .limit(1);
-
-      const perfil = perfis?.[0];
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null; perfil_acesso?: string | null }>(session, "empresa_id, nome, perfil_acesso");
       if (perfil) {
-        setEmpresaId(perfil.empresa_id);
+        setEmpresaId(perfil.empresa_id ?? null);
         setNomeUsuario(perfil.nome ?? "Usuário");
         // ✅ Permissão real — Gestores de Qualidade e Admins podem imprimir
-        setIsQualidade(["GESTOR_QUALIDADE", "APROVADOR", "ADMIN_TENANT", "SUPERADMIN"].includes(perfil.perfil_acesso));
+        setIsQualidade(["GESTOR_QUALIDADE", "APROVADOR", "ADMIN_TENANT", "SUPERADMIN"].includes(perfil.perfil_acesso ?? ""));
       }
 
       // Carrega documento com filtro de empresa

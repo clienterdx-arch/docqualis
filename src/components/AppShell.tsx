@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useCallback, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 import {
   FileText, Workflow, LineChart, Bell, Search, Settings,
   ChevronDown, Sparkles, ClipboardSignature, ShieldAlert,
@@ -188,9 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data } = await supabase
-        .from("perfis")
-        .select(`
+      const data = await carregarPerfilUsuario<PerfilUsuario>(session, `
           nome,
           cargo,
           perfil_acesso,
@@ -199,11 +198,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             cnpj,
             logo_url
           )
-        `)
-        .eq("id", session.user.id)
-        .limit(1);
+        `);
 
-      if (data?.[0]) setPerfil(data[0] as unknown as PerfilUsuario);
+      if (data) setPerfil(data as unknown as PerfilUsuario);
     }
 
     carregarPerfil();

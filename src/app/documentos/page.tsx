@@ -12,6 +12,7 @@ import {
   Workflow, Eye, FileSearch,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 /* ─────────────────────────────────────────────────────────────────
  * TIPOS
@@ -102,17 +103,8 @@ export default function GestaoDocumentosPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
 
-      const { data: perfis, error: perfilError } = await supabase
-        .from("perfis")
-        .select("empresa_id")
-        .eq("id", session.user.id)
-        .limit(1);
-
-      const perfil = perfis?.[0];
-      if (perfilError) {
-        mostrarMensagem("erro", "Não foi possível carregar os dados do seu perfil.");
-        setIsLoading(false);
-      } else if (perfil?.empresa_id) {
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null }>(session, "empresa_id");
+      if (perfil?.empresa_id) {
         setEmpresaId(perfil.empresa_id);
       } else {
         mostrarMensagem("erro", "Não foi possível identificar a empresa vinculada ao seu usuário.");

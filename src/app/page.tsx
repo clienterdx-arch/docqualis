@@ -28,6 +28,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 type Priority = "critica" | "alta" | "media" | "baixa";
 type ModuleKey =
@@ -613,15 +614,9 @@ export default function PainelExecutivoPage() {
 
     setEmailUsuario(session.user.email ?? "");
 
-    const { data: perfisData, error: perfilError } = await supabase
-      .from("perfis")
-      .select("empresa_id, nome, cargo, perfil_acesso")
-      .eq("id", session.user.id)
-      .limit(1);
+    const perfilData = await carregarPerfilUsuario<PerfilUsuario>(session, "empresa_id, nome, cargo, perfil_acesso");
 
-    const perfilData = perfisData?.[0];
-
-    if (perfilError || !perfilData?.empresa_id) {
+    if (!perfilData?.empresa_id) {
       setLoadError("Não foi possível carregar o perfil do usuário.");
       setIsLoading(false);
       return;
