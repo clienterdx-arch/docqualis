@@ -292,10 +292,8 @@ export default function GestaoDocumentosPage() {
       {/* TABS */}
       <div className="border-b border-slate-100 mb-8 flex gap-8 text-sm font-bold text-slate-500 overflow-x-auto print:hidden">
         {[
-          { key: "blocos",   label: "Pastas de Tramitação",       icon: <Layers className="w-4 h-4" /> },
-          { key: "inspecao", label: "Inspeção 360°",              icon: <Search className="w-4 h-4" /> },
-          { key: "copias",   label: "Cópias Controladas",         icon: <Printer className="w-4 h-4" /> },
-          { key: "config",   label: "Configuração Organizacional", icon: <Settings className="w-4 h-4" /> },
+          { key: "blocos",   label: "Pastas de Tramitação", icon: <Layers className="w-4 h-4" /> },
+          { key: "inspecao", label: "Inspeção 360°",        icon: <Search className="w-4 h-4" /> },
         ].map((tab) => {
           const isActive =
             tab.key === "blocos"
@@ -348,10 +346,10 @@ export default function GestaoDocumentosPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900">Acesso administrativo</h3>
-              <p className="text-xs text-slate-500 mt-1">A configuração do módulo fica protegida para administradores e perfis autorizados.</p>
-              <button onClick={abrirConfiguracao} className="mt-5 w-full h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
-                <Settings className="w-4 h-4" /> Abrir configuração
+              <h3 className="text-sm font-bold text-slate-900">Controle de cópias controladas</h3>
+              <p className="text-xs text-slate-500 mt-1">Emita, rastreie e recolha cópias de documentos vigentes aprovados.</p>
+              <button onClick={() => setViewState("copias")} className="mt-5 w-full h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                <Copy className="w-4 h-4" /> Abrir central de cópias
               </button>
             </div>
           </div>
@@ -744,89 +742,439 @@ function PainelInspecao({ documentos, isLoading, aoAtualizar }: {
 /* ─────────────────────────────────────────────────────────────────
  * PAINEL CÓPIAS CONTROLADAS
  * ───────────────────────────────────────────────────────────────*/
+type StatusCopiaControlada = "Distribuída" | "Em uso" | "Recolhida" | "Substituída" | "Cancelada" | "Vencida";
+
+type CopiaControlada = {
+  id: string;
+  numero: number;
+  documentoId: string;
+  documentoCodigo: string;
+  documentoTitulo: string;
+  revisao: number;
+  setor: string;
+  profissional: string;
+  motivo: string;
+  quantidade: number;
+  responsavelEmissao: string;
+  dataEmissao: string;
+  previsaoRecolhimento: string;
+  status: StatusCopiaControlada;
+  recolhimento?: {
+    data: string;
+    responsavel: string;
+    origem: string;
+    destino: string;
+    observacao: string;
+  };
+  historico: string[];
+};
+
 function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: {
   documentos: Documento[];
   empresaId: string | null;
   setMensagemSistema: (m: MensagemSistema) => void;
 }) {
   const [busca, setBusca] = useState("");
+  const [copias, setCopias] = useState<CopiaControlada[]>([]);
+  const [documentoEmissao, setDocumentoEmissao] = useState<Documento | null>(null);
+  const [copiaRecolhimento, setCopiaRecolhimento] = useState<CopiaControlada | null>(null);
+  const [formEmissao, setFormEmissao] = useState({
+    profissional: "",
+    setor: "",
+    motivo: "",
+    quantidade: 1,
+    responsavel: "",
+    previsaoRecolhimento: "",
+  });
+  const [formRecolhimento, setFormRecolhimento] = useState({
+    data: new Date().toISOString().slice(0, 10),
+    responsavel: "",
+    origem: "",
+    destino: "Destruída",
+    observacao: "",
+  });
 
   const docsFiltrados = documentos.filter((doc) =>
     doc.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
     doc.codigo?.toLowerCase().includes(busca.toLowerCase())
   );
 
-  // ✅ Registra cópia controlada no banco
-  const handleRegistrarCopia = async (doc: Documento) => {
-    if (!empresaId) return;
-    const entregueA = prompt(`Registrar cópia de "${doc.titulo}"\n\nNome do destinatário:`);
-    if (!entregueA?.trim()) return;
+  const copiasAtivas = copias.filter((c) => !["Recolhida", "Cancelada", "Substituída"].includes(c.status));
+  const hojeIso = new Date().toISOString().slice(0, 10);
+  const copiasVencidas = copiasAtivas.filter((c) => c.previsaoRecolhimento && c.previsaoRecolhimento < hojeIso).length;
+  const documentosComCopiasAtivas = new Set(copiasAtivas.map((c) => c.documentoId)).size;
+  const copiasPendentes = copiasAtivas.filter((c) => c.status === "Distribuída" || c.status === "Em uso").length;
+  const copiasRecolhidas = copias.filter((c) => c.status === "Recolhida").length;
 
-    const { error } = await supabase.from("copias_controladas").insert({
-      empresa_id: empresaId,
-      documento_id: doc.id,
-      numero_copia: Date.now(), // substituir por sequência real
-      entregue_a: entregueA,
-      setor_destino: doc.setor,
-      status: "EM_USO",
+  function abrirEmissao(doc: Documento) {
+    setDocumentoEmissao(doc);
+    setFormEmissao({
+      profissional: "",
+      setor: doc.setor ?? "",
+      motivo: "",
+      quantidade: 1,
+      responsavel: "",
+      previsaoRecolhimento: "",
     });
+  }
 
-    if (!error) {
-      setMensagemSistema({ tipo: "sucesso", texto: `Cópia registrada para ${entregueA}.` });
-    } else {
-      setMensagemSistema({ tipo: "erro", texto: "Erro ao registrar cópia." });
+  function rodapeCopia(copia: CopiaControlada) {
+    const numero = String(copia.numero).padStart(3, "0");
+    const data = new Date(`${copia.dataEmissao}T00:00:00`).toLocaleDateString("pt-BR");
+    return `CÓPIA CONTROLADA Nº ${numero} | Emitida em ${data} | Emitida por: ${copia.responsavelEmissao} | Destinatário: ${copia.profissional} - ${copia.setor} | Documento: ${copia.documentoCodigo} | Revisão: ${String(copia.revisao).padStart(2, "0")}`;
+  }
+
+  function gerarPdfControlado(copia: CopiaControlada) {
+    const rodape = rodapeCopia(copia);
+    const printWindow = window.open("", "_blank", "width=900,height=900");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${copia.documentoCodigo} - Cópia Controlada ${String(copia.numero).padStart(3, "0")}</title>
+          <style>
+            body { font-family: Inter, Arial, sans-serif; margin: 32px; color: #0f172a; }
+            .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 16px; margin-bottom: 24px; }
+            .badge { display: inline-block; padding: 6px 10px; border-radius: 8px; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 800; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+            .box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; }
+            .label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .08em; }
+            .value { margin-top: 4px; font-size: 14px; font-weight: 700; }
+            .footer { position: fixed; left: 32px; right: 32px; bottom: 24px; border-top: 1px solid #94a3b8; padding-top: 10px; font-size: 10px; font-weight: 800; color: #334155; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <span class="badge">Cópia Controlada Nº ${String(copia.numero).padStart(3, "0")}</span>
+            <h1>${copia.documentoTitulo}</h1>
+            <p>${copia.documentoCodigo} · Revisão ${String(copia.revisao).padStart(2, "0")}</p>
+          </div>
+          <div class="grid">
+            <div class="box"><div class="label">Destinatário</div><div class="value">${copia.profissional}</div></div>
+            <div class="box"><div class="label">Setor / unidade</div><div class="value">${copia.setor}</div></div>
+            <div class="box"><div class="label">Emitida por</div><div class="value">${copia.responsavelEmissao}</div></div>
+            <div class="box"><div class="label">Quantidade</div><div class="value">${copia.quantidade}</div></div>
+            <div class="box"><div class="label">Motivo</div><div class="value">${copia.motivo}</div></div>
+            <div class="box"><div class="label">Previsão de recolhimento</div><div class="value">${copia.previsaoRecolhimento || "Não aplicável"}</div></div>
+          </div>
+          <div class="footer">${rodape}</div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
+  async function salvarEmissao() {
+    if (!documentoEmissao || !empresaId) return;
+    if (!formEmissao.profissional.trim() || !formEmissao.setor.trim() || !formEmissao.motivo.trim() || !formEmissao.responsavel.trim()) {
+      setMensagemSistema({ tipo: "alerta", texto: "Preencha destinatário, setor, motivo e responsável pela emissão." });
+      return;
     }
-  };
+
+    const numero = copias.length + 1;
+    const dataEmissao = new Date().toISOString().slice(0, 10);
+    const novaCopia: CopiaControlada = {
+      id: crypto.randomUUID(),
+      numero,
+      documentoId: documentoEmissao.id,
+      documentoCodigo: documentoEmissao.codigo,
+      documentoTitulo: documentoEmissao.titulo,
+      revisao: documentoEmissao.versao,
+      setor: formEmissao.setor.trim(),
+      profissional: formEmissao.profissional.trim(),
+      motivo: formEmissao.motivo.trim(),
+      quantidade: Number(formEmissao.quantidade || 1),
+      responsavelEmissao: formEmissao.responsavel.trim(),
+      dataEmissao,
+      previsaoRecolhimento: formEmissao.previsaoRecolhimento,
+      status: "Distribuída",
+      historico: [`${new Date().toLocaleString("pt-BR")} - Cópia emitida por ${formEmissao.responsavel.trim()} para ${formEmissao.profissional.trim()} (${formEmissao.setor.trim()}).`],
+    };
+
+    setCopias((atuais) => [novaCopia, ...atuais]);
+    setDocumentoEmissao(null);
+    gerarPdfControlado(novaCopia);
+
+    const payloadCompleto = {
+      empresa_id: empresaId,
+      documento_id: documentoEmissao.id,
+      numero_copia: numero,
+      entregue_a: novaCopia.profissional,
+      setor_destino: novaCopia.setor,
+      status: novaCopia.status,
+      motivo: novaCopia.motivo,
+      quantidade: novaCopia.quantidade,
+      responsavel_emissao: novaCopia.responsavelEmissao,
+      data_emissao: dataEmissao,
+      previsao_recolhimento: novaCopia.previsaoRecolhimento || null,
+      rodape_pdf: rodapeCopia(novaCopia),
+      historico: novaCopia.historico.join("\n"),
+    };
+
+    const { error } = await supabase.from("copias_controladas").insert(payloadCompleto);
+    if (error) {
+      await supabase.from("copias_controladas").insert({
+        empresa_id: empresaId,
+        documento_id: documentoEmissao.id,
+        numero_copia: numero,
+        entregue_a: novaCopia.profissional,
+        setor_destino: novaCopia.setor,
+        status: novaCopia.status,
+      });
+    }
+
+    setMensagemSistema({ tipo: "sucesso", texto: `Cópia controlada nº ${String(numero).padStart(3, "0")} emitida.` });
+  }
+
+  function abrirRecolhimento(copia: CopiaControlada) {
+    setCopiaRecolhimento(copia);
+    setFormRecolhimento({
+      data: new Date().toISOString().slice(0, 10),
+      responsavel: "",
+      origem: `${copia.profissional} - ${copia.setor}`,
+      destino: "Destruída",
+      observacao: "",
+    });
+  }
+
+  function salvarRecolhimento() {
+    if (!copiaRecolhimento || !formRecolhimento.responsavel.trim()) {
+      setMensagemSistema({ tipo: "alerta", texto: "Informe quem recolheu a cópia." });
+      return;
+    }
+
+    setCopias((atuais) => atuais.map((copia) => {
+      if (copia.id !== copiaRecolhimento.id) return copia;
+      return {
+        ...copia,
+        status: "Recolhida",
+        recolhimento: { ...formRecolhimento },
+        historico: [
+          `${new Date().toLocaleString("pt-BR")} - Cópia recolhida por ${formRecolhimento.responsavel} de ${formRecolhimento.origem}. Destino: ${formRecolhimento.destino}.`,
+          ...copia.historico,
+        ],
+      };
+    }));
+    setCopiaRecolhimento(null);
+    setMensagemSistema({ tipo: "sucesso", texto: "Cópia recolhida e encerrada formalmente." });
+  }
+
+  function classeStatus(status: StatusCopiaControlada) {
+    if (status === "Recolhida") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (status === "Vencida") return "bg-red-50 text-red-700 border-red-200";
+    if (status === "Cancelada" || status === "Substituída") return "bg-slate-100 text-slate-600 border-slate-200";
+    return "bg-blue-50 text-blue-700 border-blue-200";
+  }
 
   return (
-    <div className="animate-in slide-in-from-bottom-4">
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div className="animate-in slide-in-from-bottom-4 space-y-6">
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col xl:flex-row justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold text-slate-800">Controle de Cópias Físicas</h3>
-          <p className="text-sm text-slate-500 font-medium mt-1">Gere cópias rastreáveis para distribuição nos setores.</p>
+          <h3 className="text-xl font-bold text-slate-900">Controle de Cópias Controladas</h3>
+          <p className="text-sm text-slate-500 font-medium mt-1 max-w-3xl">
+            Central para emissão, distribuição, recolhimento e rastreabilidade de cópias controladas de documentos vigentes.
+          </p>
         </div>
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-2.5 rounded-lg w-full md:w-96 shadow-inner">
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-2.5 rounded-xl w-full xl:w-96 shadow-inner">
           <Search className="w-4 h-4 text-slate-400" />
           <input type="text" placeholder="Buscar documento vigente..." value={busca} onChange={(e) => setBusca(e.target.value)}
             className="w-full bg-transparent text-sm outline-none font-bold text-slate-700" />
         </div>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr className="text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                <th className="px-6 py-4">Código Oficial</th>
-                <th className="px-6 py-4">Título do Documento</th>
-                <th className="px-6 py-4 text-center">Revisão</th>
-                <th className="px-6 py-4">Setor Origem</th>
-                <th className="px-6 py-4 text-right">Controle</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {docsFiltrados.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-mono font-bold text-blue-700">{doc.codigo}</td>
-                  <td className="px-6 py-4 font-bold text-slate-800">{doc.titulo}</td>
-                  <td className="px-6 py-4 text-center font-bold text-slate-500">{doc.versao}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-600">{doc.setor}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleRegistrarCopia(doc)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 shadow-md transition-colors"
-                    >
-                      <Copy className="w-3 h-3" /> Registrar Cópia
-                    </button>
-                  </td>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <ResumoCopiaCard titulo="Cópias distribuídas" valor={copiasAtivas.length} icon={<Copy className="w-5 h-5" />} cor="blue" />
+        <ResumoCopiaCard titulo="Pendentes de recolhimento" valor={copiasPendentes} icon={<Clock className="w-5 h-5" />} cor="amber" />
+        <ResumoCopiaCard titulo="Cópias recolhidas" valor={copiasRecolhidas} icon={<CheckCircle2 className="w-5 h-5" />} cor="emerald" />
+        <ResumoCopiaCard titulo="Cópias vencidas" valor={copiasVencidas} icon={<AlertCircle className="w-5 h-5" />} cor="red" />
+        <ResumoCopiaCard titulo="Documentos com cópias ativas" valor={documentosComCopiasAtivas} icon={<FileText className="w-5 h-5" />} cor="slate" />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-6">
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100">
+            <h4 className="text-sm font-bold text-slate-900">Documentos vigentes para emissão</h4>
+            <p className="text-xs text-slate-500 mt-1">Somente documentos aprovados no repositório podem gerar cópia controlada.</p>
+          </div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
+                <tr className="text-[10px] uppercase font-black text-slate-500 tracking-widest">
+                  <th className="px-5 py-3">Documento</th>
+                  <th className="px-5 py-3 text-center">Rev</th>
+                  <th className="px-5 py-3 text-right">Ação</th>
                 </tr>
-              ))}
-              {docsFiltrados.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-bold">Nenhum documento vigente encontrado.</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {docsFiltrados.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-4">
+                      <p className="font-mono font-bold text-blue-700">{doc.codigo}</p>
+                      <p className="font-bold text-slate-800 text-xs max-w-[280px] truncate">{doc.titulo}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{doc.setor}</p>
+                    </td>
+                    <td className="px-5 py-4 text-center font-bold text-slate-500">{String(doc.versao).padStart(2, "0")}</td>
+                    <td className="px-5 py-4 text-right">
+                      <button onClick={() => abrirEmissao(doc)} className="inline-flex items-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 shadow-sm transition-colors">
+                        <Plus className="w-3 h-3" /> Emitir cópia
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {docsFiltrados.length === 0 && (
+                  <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-bold">Nenhum documento vigente encontrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100">
+            <h4 className="text-sm font-bold text-slate-900">Registros emitidos</h4>
+            <p className="text-xs text-slate-500 mt-1">Histórico de emissão, status e recolhimento.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr className="text-[10px] uppercase font-black text-slate-500 tracking-widest">
+                  <th className="px-4 py-3">Nº Cópia</th>
+                  <th className="px-4 py-3">Documento</th>
+                  <th className="px-4 py-3">Revisão</th>
+                  <th className="px-4 py-3">Setor</th>
+                  <th className="px-4 py-3">Profissional</th>
+                  <th className="px-4 py-3">Emissão</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Recolhimento</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {copias.map((copia) => (
+                  <tr key={copia.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-mono font-black text-blue-700">{String(copia.numero).padStart(3, "0")}</td>
+                    <td className="px-4 py-3 font-bold text-slate-800 max-w-[180px] truncate">{copia.documentoTitulo}</td>
+                    <td className="px-4 py-3 font-bold text-slate-500">Rev. {String(copia.revisao).padStart(2, "0")}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-600">{copia.setor}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-700">{copia.profissional}</td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(`${copia.dataEmissao}T00:00:00`).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-4 py-3"><span className={`px-2 py-1 rounded-md border text-[10px] font-black uppercase ${classeStatus(copia.status)}`}>{copia.status}</span></td>
+                    <td className="px-4 py-3 text-slate-500">{copia.recolhimento?.data ? new Date(`${copia.recolhimento.data}T00:00:00`).toLocaleDateString("pt-BR") : "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => gerarPdfControlado(copia)} className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50">PDF</button>
+                        {!["Recolhida", "Cancelada", "Substituída"].includes(copia.status) && (
+                          <button onClick={() => abrirRecolhimento(copia)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Recolher</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {copias.length === 0 && (
+                  <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-500 font-bold">Nenhuma cópia controlada emitida ainda.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+        <h4 className="text-sm font-black">Regra crítica de revisão</h4>
+        <p className="text-xs font-medium mt-1">Quando uma nova revisão for aprovada, o sistema deve alertar: existem cópias controladas ativas da revisão anterior. É necessário recolher ou substituir.</p>
+      </div>
+
+      {documentoEmissao && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Emitir cópia controlada</h3>
+                <p className="text-xs text-slate-500 mt-1">{documentoEmissao.codigo} · Rev. {String(documentoEmissao.versao).padStart(2, "0")}</p>
+              </div>
+              <button onClick={() => setDocumentoEmissao(null)} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Profissional destinatário" value={formEmissao.profissional} onChange={(v) => setFormEmissao((f) => ({ ...f, profissional: v }))} />
+              <Field label="Setor / unidade" value={formEmissao.setor} onChange={(v) => setFormEmissao((f) => ({ ...f, setor: v }))} />
+              <Field label="Motivo da distribuição" value={formEmissao.motivo} onChange={(v) => setFormEmissao((f) => ({ ...f, motivo: v }))} />
+              <Field label="Responsável pela emissão" value={formEmissao.responsavel} onChange={(v) => setFormEmissao((f) => ({ ...f, responsavel: v }))} />
+              <Field label="Quantidade de cópias" type="number" value={String(formEmissao.quantidade)} onChange={(v) => setFormEmissao((f) => ({ ...f, quantidade: Number(v || 1) }))} />
+              <Field label="Previsão de recolhimento" type="date" value={formEmissao.previsaoRecolhimento} onChange={(v) => setFormEmissao((f) => ({ ...f, previsaoRecolhimento: v }))} />
+            </div>
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setDocumentoEmissao(null)} className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-bold">Cancelar</button>
+              <button onClick={salvarEmissao} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-md hover:bg-blue-700">Emitir e gerar PDF</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {copiaRecolhimento && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="text-lg font-bold text-slate-900">Recolher cópia nº {String(copiaRecolhimento.numero).padStart(3, "0")}</h3>
+              <button onClick={() => setCopiaRecolhimento(null)} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Data do recolhimento" type="date" value={formRecolhimento.data} onChange={(v) => setFormRecolhimento((f) => ({ ...f, data: v }))} />
+              <Field label="Quem recolheu" value={formRecolhimento.responsavel} onChange={(v) => setFormRecolhimento((f) => ({ ...f, responsavel: v }))} />
+              <Field label="De quem/setor foi recolhida" value={formRecolhimento.origem} onChange={(v) => setFormRecolhimento((f) => ({ ...f, origem: v }))} />
+              <label>
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Destino</span>
+                <select value={formRecolhimento.destino} onChange={(e) => setFormRecolhimento((f) => ({ ...f, destino: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-blue-500">
+                  <option>Destruída</option>
+                  <option>Arquivada</option>
+                  <option>Substituída</option>
+                </select>
+              </label>
+              <div className="md:col-span-2">
+                <Field label="Observação" value={formRecolhimento.observacao} onChange={(v) => setFormRecolhimento((f) => ({ ...f, observacao: v }))} />
+              </div>
+            </div>
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setCopiaRecolhimento(null)} className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-bold">Cancelar</button>
+              <button onClick={salvarRecolhimento} className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold shadow-md hover:bg-emerald-700">Confirmar recolhimento</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+  return (
+    <label>
+      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-blue-500"
+      />
+    </label>
+  );
+}
+
+function ResumoCopiaCard({ titulo, valor, icon, cor }: { titulo: string; valor: number; icon: React.ReactNode; cor: string }) {
+  const cores: Record<string, string> = {
+    blue: "text-blue-600 bg-blue-50",
+    amber: "text-amber-600 bg-amber-50",
+    emerald: "text-emerald-600 bg-emerald-50",
+    red: "text-red-600 bg-red-50",
+    slate: "text-slate-600 bg-slate-100",
+  };
+
+  return (
+    <div className="h-32 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${cores[cor]}`}>{icon}</div>
+      <div>
+        <p className="text-2xl font-black text-slate-900">{valor}</p>
+        <p className="text-[10px] font-bold uppercase text-slate-500 leading-tight mt-1">{titulo}</p>
       </div>
     </div>
   );
