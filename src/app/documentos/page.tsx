@@ -114,6 +114,24 @@ export default function GestaoDocumentosPage() {
     iniciar();
   }, [router]);
 
+  const obterEmpresaId = useCallback(async () => {
+    if (empresaId) return empresaId;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push("/login");
+      return null;
+    }
+
+    const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null }>(session, "empresa_id");
+    if (perfil?.empresa_id) {
+      setEmpresaId(perfil.empresa_id);
+      return perfil.empresa_id;
+    }
+
+    return null;
+  }, [empresaId, router]);
+
   /* ── FETCH DOCUMENTOS ─────────────────────────────────────── */
   const fetchDocumentos = useCallback(async () => {
     if (!empresaId) return;
@@ -400,7 +418,11 @@ export default function GestaoDocumentosPage() {
 
       {/* VISÃO: CONFIG */}
       {viewState === "config" && (
-        <PainelConfiguracaoAdmin empresaId={empresaId} setMensagemSistema={setMensagemSistema} />
+        <PainelConfiguracaoAdmin
+          empresaId={empresaId}
+          obterEmpresaId={obterEmpresaId}
+          setMensagemSistema={setMensagemSistema}
+        />
       )}
 
       {/* MODAL EXPORTAR */}
@@ -761,8 +783,9 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
 /* ─────────────────────────────────────────────────────────────────
  * PAINEL CONFIGURAÇÃO ADMIN
  * ───────────────────────────────────────────────────────────────*/
-function PainelConfiguracaoAdmin({ empresaId, setMensagemSistema }: {
+function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema }: {
   empresaId: string | null;
+  obterEmpresaId: () => Promise<string | null>;
   setMensagemSistema: (m: MensagemSistema) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"tipos" | "diretorias" | "setores">("tipos");
@@ -775,23 +798,27 @@ function PainelConfiguracaoAdmin({ empresaId, setMensagemSistema }: {
   const [isLoading, setIsLoading] = useState(false);
 
   const carregarTudo = useCallback(async () => {
-    if (!empresaId) return;
+    const empresaAtualId = empresaId ?? await obterEmpresaId();
+    if (!empresaAtualId) return;
+
     setIsLoading(true);
     const [resTipos, resDir, resSetores] = await Promise.all([
-      supabase.from("config_tipos_doc").select("*").eq("empresa_id", empresaId).order("sigla"),
-      supabase.from("config_diretorias").select("*").eq("empresa_id", empresaId).order("nome"),
-      supabase.from("config_setores").select("*, config_diretorias(nome)").eq("empresa_id", empresaId).order("nome"),
+      supabase.from("config_tipos_doc").select("*").eq("empresa_id", empresaAtualId).order("sigla"),
+      supabase.from("config_diretorias").select("*").eq("empresa_id", empresaAtualId).order("nome"),
+      supabase.from("config_setores").select("*, config_diretorias(nome)").eq("empresa_id", empresaAtualId).order("nome"),
     ]);
     if (resTipos.data)   setTipos(resTipos.data);
     if (resDir.data)     setDiretorias(resDir.data);
     if (resSetores.data) setSetores(resSetores.data);
     setIsLoading(false);
-  }, [empresaId]);
+  }, [empresaId, obterEmpresaId]);
 
   useEffect(() => { carregarTudo(); }, [carregarTudo]);
 
   const handleAdd = async () => {
-    if (!empresaId) {
+    const empresaAtualId = empresaId ?? await obterEmpresaId();
+
+    if (!empresaAtualId) {
       setMensagemSistema({ tipo: "erro", texto: "Não foi possível identificar a empresa do usuário." });
       return;
     }
@@ -814,11 +841,11 @@ function PainelConfiguracaoAdmin({ empresaId, setMensagemSistema }: {
     let error;
 
     if (activeTab === "tipos") {
-      ({ error } = await supabase.from("config_tipos_doc").insert({ nome: novoNome.trim(), sigla: novaSigla.trim().toUpperCase(), empresa_id: empresaId }));
+      ({ error } = await supabase.from("config_tipos_doc").insert({ nome: novoNome.trim(), sigla: novaSigla.trim().toUpperCase(), empresa_id: empresaAtualId }));
     } else if (activeTab === "diretorias") {
-      ({ error } = await supabase.from("config_diretorias").insert({ nome: novoNome.trim(), empresa_id: empresaId }));
+      ({ error } = await supabase.from("config_diretorias").insert({ nome: novoNome.trim(), empresa_id: empresaAtualId }));
     } else if (activeTab === "setores") {
-      ({ error } = await supabase.from("config_setores").insert({ nome: novoNome.trim(), sigla: novaSigla.trim().toUpperCase(), diretoria_id: novoDirId, empresa_id: empresaId }));
+      ({ error } = await supabase.from("config_setores").insert({ nome: novoNome.trim(), sigla: novaSigla.trim().toUpperCase(), diretoria_id: novoDirId, empresa_id: empresaAtualId }));
     }
 
     if (!error) {

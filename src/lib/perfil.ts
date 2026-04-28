@@ -10,9 +10,9 @@ async function buscarEmpresaPadrao() {
     const { data, error } = await supabase
       .from(tabela)
       .select("id, nome, cnpj, logo_url")
-      .limit(2);
+      .limit(1);
 
-    if (!error && data?.length === 1) return data[0];
+    if (!error && data?.[0]) return data[0];
   }
 
   return null;
@@ -39,10 +39,14 @@ export async function carregarPerfilUsuario<T extends PerfilRecord = PerfilRecor
   session: Session,
   select = "empresa_id, nome"
 ): Promise<T | null> {
+  let primeiroPerfilEncontrado: T | null = null;
+
   const lookupValues: Array<[string, string | undefined]> = [
     ["id", session.user.id],
     ["user_id", session.user.id],
     ["auth_user_id", session.user.id],
+    ["usuario_id", session.user.id],
+    ["auth_id", session.user.id],
     ["email", session.user.email ?? undefined],
   ];
 
@@ -56,18 +60,21 @@ export async function carregarPerfilUsuario<T extends PerfilRecord = PerfilRecor
       .limit(1);
 
     if (!error && data?.[0]) {
-      return aplicarEmpresaFallback(data[0] as unknown as T);
+      const perfil = data[0] as unknown as T;
+      if (perfil.empresa_id) return perfil;
+      primeiroPerfilEncontrado ??= perfil;
     }
   }
 
   const { data, error } = await supabase
     .from("perfis")
     .select(select)
-    .limit(2);
+    .not("empresa_id", "is", null)
+    .limit(1);
 
-  if (!error && data?.length === 1) {
-    return aplicarEmpresaFallback(data[0] as unknown as T);
+  if (!error && data?.[0]) {
+    return data[0] as unknown as T;
   }
 
-  return aplicarEmpresaFallback<T>(null);
+  return aplicarEmpresaFallback<T>(primeiroPerfilEncontrado);
 }
