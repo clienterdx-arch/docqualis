@@ -22,8 +22,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR">
-      <body className={`${inter.variable} font-sans antialiased bg-slate-50 overflow-hidden`}>
+    <html lang="pt-BR" className={`${inter.variable} ${inter.className}`}>
+      <body className={`${inter.variable} ${inter.className} font-sans antialiased bg-slate-50 overflow-hidden`}>
         <div className="flex h-screen w-screen overflow-hidden">
           <Sidebar />
 
