@@ -187,6 +187,35 @@ export default function IndicadorDetalhePage() {
     return descriptions[activeTab];
   }, [activeTab]);
 
+  function exportarFicha() {
+    if (!indicador) return;
+
+    const linhas = [
+      ["Campo", "Valor"],
+      ["Nome", indicador.nome],
+      ["Codigo", indicador.codigo ?? ""],
+      ["Setor", indicador.setor ?? ""],
+      ["Responsavel", indicador.responsavel ?? ""],
+      ["Categoria", indicador.categoria_donabedian],
+      ["Dimensao", indicador.dimensao_qualidade ?? ""],
+      ["Tipo de calculo", indicador.tipo_calculo],
+      ["Meta", formatNumber(indicador.meta, indicador.unidade)],
+      ["Polaridade", indicador.polaridade],
+      ["Frequencia", indicador.frequencia],
+      ["Status", statusLabel(indicador.status)],
+    ];
+
+    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csv = linhas.map((row) => row.map(escape).join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ficha-indicador-${indicador.id}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (isLoading) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 text-blue-600">
@@ -249,11 +278,19 @@ export default function IndicadorDetalhePage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button type="button" className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm">
+              <button
+                type="button"
+                onClick={exportarFicha}
+                className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm"
+              >
                 <FileText className="h-4 w-4" />
                 Exportar ficha
               </button>
-              <button type="button" className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20">
+              <button
+                type="button"
+                onClick={() => setActiveTab("dados")}
+                className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20"
+              >
                 <CheckCircle2 className="h-4 w-4" />
                 Alimentar dado
               </button>
