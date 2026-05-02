@@ -939,8 +939,13 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
 }) {
   const [busca, setBusca] = useState("");
   const [copias, setCopias] = useState<CopiaControlada[]>([]);
+  const [setoresList, setSetoresList] = useState<string[]>([]);
+  const [usuariosList, setUsuariosList] = useState<string[]>([]);
+  const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("");
+  const [isCarregando, setIsCarregando] = useState(true);
   const [documentoEmissao, setDocumentoEmissao] = useState<Documento | null>(null);
   const [copiaRecolhimento, setCopiaRecolhimento] = useState<CopiaControlada | null>(null);
+  const [filtroReg, setFiltroReg] = useState({ doc: "", setor: "", profissional: "", status: "" });
   const [formEmissao, setFormEmissao] = useState({
     profissional: "",
     setor: "",
@@ -956,6 +961,50 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
     destino: "Destruída",
     observacao: "",
   });
+
+  useEffect(() => {
+    if (!empresaId) return;
+    async function carregar() {
+      setIsCarregando(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const perfil = await carregarPerfilUsuario<{ nome?: string }>(session, "nome");
+        if (perfil?.nome) setNomeUsuarioLogado(perfil.nome);
+      }
+      const [resSetores, resPerfis, resCopias] = await Promise.all([
+        supabase.from("config_setores").select("nome").eq("empresa_id", empresaId).order("nome"),
+        supabase.from("perfis").select("nome").eq("empresa_id", empresaId).order("nome"),
+        supabase.from("copias_controladas").select("*").eq("empresa_id", empresaId).order("created_at", { ascending: false }),
+      ]);
+      if (resSetores.data) setSetoresList(resSetores.data.map((s: any) => s.nome).filter(Boolean));
+      if (resPerfis.data) setUsuariosList(resPerfis.data.map((p: any) => p.nome).filter(Boolean));
+      if (resCopias.data) {
+        const mapa = Object.fromEntries(documentos.map((d) => [d.id, d]));
+        setCopias(resCopias.data.map((c: any) => {
+          const doc = mapa[c.documento_id];
+          return {
+            id: c.id,
+            numero: c.numero_copia ?? 0,
+            documentoId: c.documento_id,
+            documentoCodigo: c.documento_codigo ?? doc?.codigo ?? "",
+            documentoTitulo: c.documento_titulo ?? doc?.titulo ?? "",
+            revisao: c.revisao ?? doc?.versao ?? 0,
+            setor: c.setor_destino ?? "",
+            profissional: c.entregue_a ?? "",
+            motivo: c.motivo ?? "",
+            quantidade: c.quantidade ?? 1,
+            responsavelEmissao: c.responsavel_emissao ?? "",
+            dataEmissao: c.data_emissao ?? "",
+            previsaoRecolhimento: c.previsao_recolhimento ?? "",
+            status: (c.status ?? "Distribuída") as StatusCopiaControlada,
+            historico: (c.historico ?? "").split("\n").filter(Boolean),
+          };
+        }));
+      }
+      setIsCarregando(false);
+    }
+    carregar();
+  }, [empresaId, documentos]);
 
   const docsFiltrados = documentos.filter((doc) =>
     doc.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
@@ -980,21 +1029,23 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
       setor: doc.setor ?? "",
       motivo: "",
       quantidade: 1,
-      responsavel: "",
+      responsavel: nomeUsuarioLogado,
       previsaoRecolhimento: "",
     });
   }
 
   function rodapeCopia(copia: CopiaControlada) {
     const numero = String(copia.numero).padStart(3, "0");
-    const data = new Date(`${copia.dataEmissao}T00:00:00`).toLocaleDateString("pt-BR");
-    return `CÓPIA CONTROLADA Nº ${numero} | Emitida em ${data} | Emitida por: ${copia.responsavelEmissao} | Destinatário: ${copia.profissional} - ${copia.setor} | Documento: ${copia.documentoCodigo} | Revisão: ${String(copia.revisao).padStart(2, "0")}`;
+    const dataRecolhimento = copia.previsaoRecolhimento
+      ? new Date(`${copia.previsaoRecolhimento}T00:00:00`).toLocaleDateString("pt-BR")
+      : "Não definida";
+    return `CÓPIA CONTROLADA IMPRESSA Nº ${numero} — Emissor: ${copia.responsavelEmissao} — Data de recolhimento: ${dataRecolhimento}`;
   }
 
   function gerarPdfControlado(copia: CopiaControlada) {
     const rodape = rodapeCopia(copia);
     const printWindow = window.open("", "_blank", "width=900,height=900");
-    if (!printWindow) return;
+    if (!printWindow) { setMensagemSistema({ tipo: "alerta", texto: "Popup bloqueado. Permita popups para este site e tente novamente." }); return; }
 
     printWindow.document.write(`
       <html>
@@ -1008,7 +1059,7 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
             .box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; }
             .label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .08em; }
             .value { margin-top: 4px; font-size: 14px; font-weight: 700; }
-            .footer { position: fixed; left: 32px; right: 32px; bottom: 24px; border-top: 1px solid #94a3b8; padding-top: 10px; font-size: 10px; font-weight: 800; color: #334155; text-align: center; }
+            .footer { position: fixed; left: 0; right: 0; bottom: 0; border-top: 2px solid #1d4ed8; padding: 10px 32px; font-size: 11px; font-weight: 800; color: #1d4ed8; text-align: center; background: #eff6ff; letter-spacing: .04em; }
           </style>
         </head>
         <body>
@@ -1026,7 +1077,7 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
             <div class="box"><div class="label">Previsão de recolhimento</div><div class="value">${copia.previsaoRecolhimento || "Não aplicável"}</div></div>
           </div>
           <div class="footer">${rodape}</div>
-          <script>window.print();</script>
+          <script>window.onload = function() { window.print(); };</script>
         </body>
       </html>
     `);
@@ -1036,15 +1087,24 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
   async function salvarEmissao() {
     if (!documentoEmissao || !empresaId) return;
     if (!podeDistribuir) {
-      setMensagemSistema({ tipo: "alerta", texto: "A emissÃ£o de cÃ³pias controladas Ã© restrita Ã  Qualidade." });
+      setMensagemSistema({ tipo: "alerta", texto: "A emissão de cópias controladas é restrita à Qualidade." });
       return;
     }
     if (!formEmissao.profissional.trim() || !formEmissao.setor.trim() || !formEmissao.motivo.trim() || !formEmissao.responsavel.trim()) {
       setMensagemSistema({ tipo: "alerta", texto: "Preencha destinatário, setor, motivo e responsável pela emissão." });
       return;
     }
-
-    const numero = copias.length + 1;
+    const duplicata = copias.find((cp) =>
+      cp.documentoId === documentoEmissao.id &&
+      normalizarTexto(cp.setor) === normalizarTexto(formEmissao.setor) &&
+      !["Recolhida", "Cancelada", "Substituída"].includes(cp.status)
+    );
+    if (duplicata) {
+      setMensagemSistema({ tipo: "alerta", texto: "Já existe cópia ativa Nº " + String(duplicata.numero).padStart(3, "0") + " para o setor \"" + duplicata.setor + "\". Recolha antes de emitir uma nova." });
+      return;
+    }
+    const copiasDoDoc = copias.filter((cp) => cp.documentoId === documentoEmissao.id);
+    const numero = copiasDoDoc.length > 0 ? Math.max(...copiasDoDoc.map((cp) => cp.numero)) + 1 : 1;
     const dataEmissao = new Date().toISOString().slice(0, 10);
     const novaCopia: CopiaControlada = {
       id: crypto.randomUUID(),
@@ -1061,16 +1121,14 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
       dataEmissao,
       previsaoRecolhimento: formEmissao.previsaoRecolhimento,
       status: "Distribuída",
-      historico: [`${new Date().toLocaleString("pt-BR")} - Cópia emitida por ${formEmissao.responsavel.trim()} para ${formEmissao.profissional.trim()} (${formEmissao.setor.trim()}).`],
+      historico: [new Date().toLocaleString("pt-BR") + " - Cópia emitida por " + formEmissao.responsavel.trim() + " para " + formEmissao.profissional.trim() + " (" + formEmissao.setor.trim() + ")."],
     };
-
-    setCopias((atuais) => [novaCopia, ...atuais]);
-    setDocumentoEmissao(null);
-    gerarPdfControlado(novaCopia);
-
-    const payloadCompleto = {
+    const { error } = await supabase.from("copias_controladas").insert({
       empresa_id: empresaId,
       documento_id: documentoEmissao.id,
+      documento_codigo: documentoEmissao.codigo,
+      documento_titulo: documentoEmissao.titulo,
+      revisao: documentoEmissao.versao,
       numero_copia: numero,
       entregue_a: novaCopia.profissional,
       setor_destino: novaCopia.setor,
@@ -1082,23 +1140,16 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
       previsao_recolhimento: novaCopia.previsaoRecolhimento || null,
       rodape_pdf: rodapeCopia(novaCopia),
       historico: novaCopia.historico.join("\n"),
-    };
-
-    const { error } = await supabase.from("copias_controladas").insert(payloadCompleto);
+    });
     if (error) {
-      await supabase.from("copias_controladas").insert({
-        empresa_id: empresaId,
-        documento_id: documentoEmissao.id,
-        numero_copia: numero,
-        entregue_a: novaCopia.profissional,
-        setor_destino: novaCopia.setor,
-        status: novaCopia.status,
-      });
+      setMensagemSistema({ tipo: "erro", texto: "Erro ao salvar cópia. Tente novamente." });
+      return;
     }
-
-    setMensagemSistema({ tipo: "sucesso", texto: `Cópia controlada nº ${String(numero).padStart(3, "0")} emitida.` });
+    setCopias((atuais) => [novaCopia, ...atuais]);
+    setDocumentoEmissao(null);
+    gerarPdfControlado(novaCopia);
+    setMensagemSistema({ tipo: "sucesso", texto: "Cópia controlada Nº " + String(numero).padStart(3, "0") + " emitida com sucesso." });
   }
-
   function abrirRecolhimento(copia: CopiaControlada) {
     if (!podeRecolher) {
       setMensagemSistema({ tipo: "alerta", texto: "O recolhimento de cÃ³pias controladas Ã© restrito Ã  Qualidade." });
@@ -1114,32 +1165,38 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
     });
   }
 
-  function salvarRecolhimento() {
+  async function salvarRecolhimento() {
     if (!podeRecolher) {
-      setMensagemSistema({ tipo: "alerta", texto: "O recolhimento de cÃ³pias controladas Ã© restrito Ã  Qualidade." });
+      setMensagemSistema({ tipo: "alerta", texto: "O recolhimento de cópias controladas é restrito à Qualidade." });
       return;
     }
     if (!copiaRecolhimento || !formRecolhimento.responsavel.trim()) {
       setMensagemSistema({ tipo: "alerta", texto: "Informe quem recolheu a cópia." });
       return;
     }
-
-    setCopias((atuais) => atuais.map((copia) => {
-      if (copia.id !== copiaRecolhimento.id) return copia;
+    const { error } = await supabase
+      .from("copias_controladas")
+      .update({ status: "Recolhida" })
+      .eq("id", copiaRecolhimento.id);
+    if (error) {
+      setMensagemSistema({ tipo: "erro", texto: "Erro ao registrar recolhimento." });
+      return;
+    }
+    setCopias((atuais) => atuais.map((cp) => {
+      if (cp.id !== copiaRecolhimento.id) return cp;
       return {
-        ...copia,
-        status: "Recolhida",
+        ...cp,
+        status: "Recolhida" as StatusCopiaControlada,
         recolhimento: { ...formRecolhimento },
         historico: [
-          `${new Date().toLocaleString("pt-BR")} - Cópia recolhida por ${formRecolhimento.responsavel} de ${formRecolhimento.origem}. Destino: ${formRecolhimento.destino}.`,
-          ...copia.historico,
+          new Date().toLocaleString("pt-BR") + " - Recolhida por " + formRecolhimento.responsavel + " de " + formRecolhimento.origem + ". Destino: " + formRecolhimento.destino + ".",
+          ...cp.historico,
         ],
       };
     }));
     setCopiaRecolhimento(null);
     setMensagemSistema({ tipo: "sucesso", texto: "Cópia recolhida e encerrada formalmente." });
   }
-
   function classeStatus(status: StatusCopiaControlada) {
     if (status === "Recolhida") return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (status === "Vencida") return "bg-red-50 text-red-700 border-red-200";
@@ -1147,6 +1204,21 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
     return "bg-blue-50 text-blue-700 border-blue-200";
   }
 
+
+  const copiasFiltradas = copias.filter((cp) => {
+    if (filtroReg.doc && !cp.documentoTitulo.toLowerCase().includes(filtroReg.doc.toLowerCase()) && !cp.documentoCodigo.toLowerCase().includes(filtroReg.doc.toLowerCase())) return false;
+    if (filtroReg.setor && normalizarTexto(cp.setor) !== normalizarTexto(filtroReg.setor)) return false;
+    if (filtroReg.profissional && !normalizarTexto(cp.profissional).includes(normalizarTexto(filtroReg.profissional))) return false;
+    if (filtroReg.status && cp.status !== filtroReg.status) return false;
+    return true;
+  });
+
+  if (isCarregando) return (
+    <div className="flex items-center justify-center p-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
+      <RefreshCw className="animate-spin w-5 h-5 text-blue-600 mr-2" />
+      <span className="text-sm font-bold text-slate-500">Carregando central de cópias...</span>
+    </div>
+  );
   return (
     <div className="animate-in slide-in-from-bottom-4 space-y-6">
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col xl:flex-row justify-between gap-4">
@@ -1221,12 +1293,29 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
           </div>
         </div>
 
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden flex flex-col">
           <div className="p-5 border-b border-slate-100">
             <h4 className="text-sm font-bold text-slate-900">Registros emitidos</h4>
             <p className="text-xs text-slate-500 mt-1">Histórico de emissão, status e recolhimento.</p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="p-3 border-b border-slate-100 grid grid-cols-2 gap-2 bg-slate-50/60">
+            <input placeholder="Documento..." value={filtroReg.doc} onChange={(e) => setFiltroReg((f) => ({ ...f, doc: e.target.value }))} className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none focus:border-blue-500" />
+            <select value={filtroReg.setor} onChange={(e) => setFiltroReg((f) => ({ ...f, setor: e.target.value }))} className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none focus:border-blue-500">
+              <option value="">Todos os setores</option>
+              {setoresList.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input placeholder="Profissional..." value={filtroReg.profissional} onChange={(e) => setFiltroReg((f) => ({ ...f, profissional: e.target.value }))} className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none focus:border-blue-500" />
+            <select value={filtroReg.status} onChange={(e) => setFiltroReg((f) => ({ ...f, status: e.target.value }))} className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold outline-none focus:border-blue-500">
+              <option value="">Todos os status</option>
+              <option value="Distribuída">Distribuída</option>
+              <option value="Em uso">Em uso</option>
+              <option value="Recolhida">Recolhida</option>
+              <option value="Cancelada">Cancelada</option>
+              <option value="Substituída">Substituída</option>
+              <option value="Vencida">Vencida</option>
+            </select>
+          </div>
+          <div className="overflow-x-auto flex-1">
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr className="text-[10px] uppercase font-black text-slate-500 tracking-widest">
@@ -1242,16 +1331,16 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {copias.map((copia) => (
+                {copiasFiltradas.map((copia) => (
                   <tr key={copia.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-mono font-black text-blue-700">{String(copia.numero).padStart(3, "0")}</td>
                     <td className="px-4 py-3 font-bold text-slate-800 max-w-[180px] truncate">{copia.documentoTitulo}</td>
                     <td className="px-4 py-3 font-bold text-slate-500">Rev. {String(copia.revisao).padStart(2, "0")}</td>
                     <td className="px-4 py-3 font-semibold text-slate-600">{copia.setor}</td>
                     <td className="px-4 py-3 font-semibold text-slate-700">{copia.profissional}</td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(`${copia.dataEmissao}T00:00:00`).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-4 py-3 text-slate-500">{copia.dataEmissao ? new Date(copia.dataEmissao + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-1 rounded-md border text-[10px] font-black uppercase ${classeStatus(copia.status)}`}>{copia.status}</span></td>
-                    <td className="px-4 py-3 text-slate-500">{copia.recolhimento?.data ? new Date(`${copia.recolhimento.data}T00:00:00`).toLocaleDateString("pt-BR") : "—"}</td>
+                    <td className="px-4 py-3 text-slate-500">{copia.recolhimento?.data ? new Date(copia.recolhimento.data + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => gerarPdfControlado(copia)} className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50">PDF</button>
@@ -1262,8 +1351,8 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
                     </td>
                   </tr>
                 ))}
-                {copias.length === 0 && (
-                  <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-500 font-bold">Nenhuma cópia controlada emitida ainda.</td></tr>
+                {copiasFiltradas.length === 0 && (
+                  <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-500 font-bold">{copias.length === 0 ? "Nenhuma cópia controlada emitida ainda." : "Nenhuma cópia encontrada com os filtros."}</td></tr>
                 )}
               </tbody>
             </table>
@@ -1287,10 +1376,25 @@ function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRe
               <button onClick={() => setDocumentoEmissao(null)} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Profissional destinatário" value={formEmissao.profissional} onChange={(v) => setFormEmissao((f) => ({ ...f, profissional: v }))} />
-              <Field label="Setor / unidade" value={formEmissao.setor} onChange={(v) => setFormEmissao((f) => ({ ...f, setor: v }))} />
+              <label>
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Profissional Destinatário</span>
+                <select value={formEmissao.profissional} onChange={(e) => setFormEmissao((f) => ({ ...f, profissional: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-blue-500">
+                  <option value="">Selecione o profissional...</option>
+                  {usuariosList.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Setor / Unidade</span>
+                <select value={formEmissao.setor} onChange={(e) => setFormEmissao((f) => ({ ...f, setor: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-blue-500">
+                  <option value="">Selecione o setor...</option>
+                  {setoresList.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
               <Field label="Motivo da distribuição" value={formEmissao.motivo} onChange={(v) => setFormEmissao((f) => ({ ...f, motivo: v }))} />
-              <Field label="Responsável pela emissão" value={formEmissao.responsavel} onChange={(v) => setFormEmissao((f) => ({ ...f, responsavel: v }))} />
+              <label>
+                <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Responsável pela Emissão</span>
+                <input type="text" value={formEmissao.responsavel} readOnly className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none text-slate-600 cursor-default" />
+              </label>
               <Field label="Quantidade de cópias" type="number" value={String(formEmissao.quantidade)} onChange={(v) => setFormEmissao((f) => ({ ...f, quantidade: Number(v || 1) }))} />
               <Field label="Previsão de recolhimento" type="date" value={formEmissao.previsaoRecolhimento} onChange={(v) => setFormEmissao((f) => ({ ...f, previsaoRecolhimento: v }))} />
             </div>
