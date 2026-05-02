@@ -10,6 +10,7 @@ import {
   Edit, History, Plus, Trash2, Layers, BookOpen,
   Building2, Settings, Printer, Copy,
   Workflow, Eye, FileSearch, ShieldCheck,
+  ChevronDown, ChevronRight, FolderOpen,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { carregarPerfilUsuario } from "@/lib/perfil";
@@ -17,6 +18,17 @@ import { carregarPerfilUsuario } from "@/lib/perfil";
 /* ─────────────────────────────────────────────────────────────────
  * TIPOS
  * ───────────────────────────────────────────────────────────────*/
+interface ProcessoItem {
+  id: string;
+  code: string;
+  name: string;
+  owner: string;
+  version: number;
+  module: "SIPOC" | "BPMN";
+  status: string;
+  setor?: string;
+}
+
 interface Documento {
   id: string;
   codigo: string;
@@ -104,6 +116,9 @@ export default function GestaoDocumentosPage() {
 
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [perfilAcesso, setPerfilAcesso] = useState<string | null>(null);
+  const [processosRepo, setProcessosRepo] = useState<ProcessoItem[]>([]);
+  const [setoresAbertos, setSetoresAbertos] = useState<Set<string>>(new Set());
+  const [filtroLateral, setFiltroLateral] = useState<{ setor: string; tipo: string } | null>(null);
 
   /* ── FEEDBACK ─────────────────────────────────────────────── */
   function mostrarMensagem(tipo: MensagemSistema["tipo"], texto: string) {
@@ -216,6 +231,15 @@ export default function GestaoDocumentosPage() {
 
   useEffect(() => { fetchDocumentos(); }, [fetchDocumentos]);
 
+  useEffect(() => {
+    fetch("/api/processos", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: ProcessoItem[]) => {
+        if (Array.isArray(data)) setProcessosRepo(data.filter((p) => p.status === "REPOSITORIO"));
+      })
+      .catch(() => {});
+  }, []);
+
   /* ── HANDLERS ─────────────────────────────────────────────── */
   const abrirFicha = (doc: Documento, tab: "detalhes" | "historico" = "detalhes") => {
     setDocSelecionado(doc);
@@ -317,6 +341,36 @@ export default function GestaoDocumentosPage() {
     new Set(documentos.filter((doc) => statusRepositorio(doc.status)).map((doc) => doc.setor).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
+  const docsRepositorio = React.useMemo(
+    () => documentos.filter((d) => statusRepositorio(d.status)),
+    [documentos]
+  );
+
+  const arvoreRepositorio = React.useMemo(() => {
+    const setorMap = new Map<string, Set<string>>();
+    docsRepositorio.forEach((doc) => {
+      const setor = doc.setor || "Sem setor";
+      if (!setorMap.has(setor)) setorMap.set(setor, new Set());
+      const tipo = doc.tipo_documento || "Outros";
+      setorMap.get(setor)!.add(tipo);
+    });
+    processosRepo.forEach((proc) => {
+      const setor = proc.setor || proc.owner || "Sem setor";
+      if (!setorMap.has(setor)) setorMap.set(setor, new Set());
+      setorMap.get(setor)!.add("Mapa de processo");
+    });
+    return Array.from(setorMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
+      .map(([setor, tipos]) => ({
+        setor,
+        tipos: Array.from(tipos).sort((a, b) => {
+          if (a === "Mapa de processo") return 1;
+          if (b === "Mapa de processo") return -1;
+          return a.localeCompare(b, "pt-BR");
+        }),
+      }));
+  }, [docsRepositorio, processosRepo]);
+
   function documentoPassaFiltrosRepositorio(doc: Documento) {
     if (!statusRepositorio(doc.status)) return false;
 
@@ -343,9 +397,21 @@ export default function GestaoDocumentosPage() {
     if (pasta.includes("homologacao")) return statusHomologacao(doc.status);
     if (pasta.includes("rejeitados")) return statusRejeitado(doc.status);
     if (pasta.includes("obsoleto")) return statusObsoleto(doc.status);
-    if (isRepositorioAtivo) return documentoPassaFiltrosRepositorio(doc);
+    if (isRepositorioAtivo) {
+      if (!documentoPassaFiltrosRepositorio(doc)) return false;
+      if (filtroLateral) {
+        if (filtroLateral.tipo === "Mapa de processo") return false;
+        if (normalizarTexto(doc.setor) !== normalizarTexto(filtroLateral.setor)) return false;
+        if (normalizarTexto(doc.tipo_documento) !== normalizarTexto(filtroLateral.tipo)) return false;
+      }
+      return true;
+    }
     return normalizarTexto(doc.status) === pasta;
   });
+
+  const processosLateral = filtroLateral?.tipo === "Mapa de processo"
+    ? processosRepo.filter((p) => normalizarTexto(p.setor ?? p.owner) === normalizarTexto(filtroLateral.setor))
+    : [];
 
   /* ── RENDER ───────────────────────────────────────────────── */
   return (
@@ -456,162 +522,291 @@ export default function GestaoDocumentosPage() {
 
       {/* VISÃO: LISTA */}
       {viewState === "lista" && (
-        <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
-          <div className="flex items-center gap-4 mb-2">
-            <button onClick={() => setViewState("blocos")} className="p-2 bg-white border border-slate-100 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-all">
+        <div className="animate-in slide-in-from-right-8 duration-300">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => { setViewState("blocos"); setFiltroLateral(null); }} className="p-2 bg-white border border-slate-100 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-all">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <h2 className="text-xl font-bold text-slate-800">Pasta: <span className="text-blue-600">{pastaAtiva}</span></h2>
+            {filtroLateral && (
+              <div className="flex items-center gap-2 ml-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700">
+                <FolderOpen className="w-3.5 h-3.5" />
+                {filtroLateral.setor} / {filtroLateral.tipo}
+                <button onClick={() => setFiltroLateral(null)} className="ml-1 hover:text-blue-900">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {isRepositorioAtivo && (
-            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Filtros do repositório</h3>
-                  <p className="mt-1 text-xs font-medium text-slate-500">Busque por código, palavra-chave, elaborador, data de elaboração ou setor.</p>
+          {isRepositorioAtivo ? (
+            <div className="flex gap-4 items-start">
+              {/* SIDEBAR HIERÁRQUICA */}
+              <div className="w-56 shrink-0 bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-4">
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Navegar por setor</p>
                 </div>
-                {filtrosRepositorioAtivos && (
-                  <button
-                    onClick={() => setFiltrosRepositorio({ codigo: "", nome: "", elaborador: "", data: "", setor: "" })}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
-                  >
-                    Limpar filtros
-                  </button>
+                <div className="py-1.5 max-h-[calc(100vh-220px)] overflow-y-auto">
+                  {arvoreRepositorio.length === 0 && (
+                    <p className="px-4 py-6 text-xs font-medium text-slate-400 text-center">Nenhum setor encontrado.</p>
+                  )}
+                  {arvoreRepositorio.map(({ setor, tipos }) => {
+                    const aberto = setoresAbertos.has(setor);
+                    const selecionadoNesteSetor = filtroLateral?.setor === setor;
+                    return (
+                      <div key={setor}>
+                        <button
+                          onClick={() => {
+                            const novo = new Set(setoresAbertos);
+                            if (aberto) novo.delete(setor); else novo.add(setor);
+                            setSetoresAbertos(novo);
+                            if (selecionadoNesteSetor) setFiltroLateral(null);
+                          }}
+                          className={"w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs font-bold transition-colors hover:bg-slate-50 " + (selecionadoNesteSetor ? "text-blue-700" : "text-slate-700")}
+                        >
+                          {aberto
+                            ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                            : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-slate-400" />}
+                          <FolderOpen className={"w-4 h-4 shrink-0 " + (selecionadoNesteSetor ? "text-blue-500" : "text-amber-500")} />
+                          <span className="truncate">{setor}</span>
+                          <span className="ml-auto shrink-0 text-[10px] font-black text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5">{tipos.length}</span>
+                        </button>
+                        {aberto && (
+                          <div className="ml-3 border-l border-slate-100 pl-1.5 mb-1">
+                            {tipos.map((tipo) => {
+                              const ativo = filtroLateral?.setor === setor && filtroLateral?.tipo === tipo;
+                              const eMapa = tipo === "Mapa de processo";
+                              return (
+                                <button
+                                  key={tipo}
+                                  onClick={() => setFiltroLateral(ativo ? null : { setor, tipo })}
+                                  className={"w-full flex items-center gap-2 px-2.5 py-2 text-left text-xs font-semibold rounded-lg transition-colors " + (ativo ? "bg-blue-50 text-blue-700 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")}
+                                >
+                                  <span className={"w-4 h-4 shrink-0 flex items-center justify-center rounded text-[9px] font-black " + (eMapa ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")}>
+                                    {eMapa ? "M" : tipo.slice(0, 2).toUpperCase()}
+                                  </span>
+                                  <span className="truncate">{tipo}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CONTEÚDO PRINCIPAL */}
+              <div className="flex-1 min-w-0 space-y-4">
+                {!filtroLateral && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Filtros do repositório</h3>
+                        <p className="mt-0.5 text-xs font-medium text-slate-500">Busque por código, título, elaborador, data ou setor.</p>
+                      </div>
+                      {filtrosRepositorioAtivos && (
+                        <button onClick={() => setFiltrosRepositorio({ codigo: "", nome: "", elaborador: "", data: "", setor: "" })} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-700">
+                          Limpar filtros
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                      <input value={filtrosRepositorio.codigo} onChange={(e) => setFiltrosRepositorio((a) => ({ ...a, codigo: e.target.value }))} placeholder="Código" className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white" />
+                      <input value={filtrosRepositorio.nome} onChange={(e) => setFiltrosRepositorio((a) => ({ ...a, nome: e.target.value }))} placeholder="Nome ou palavra-chave" className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white" />
+                      <input value={filtrosRepositorio.elaborador} onChange={(e) => setFiltrosRepositorio((a) => ({ ...a, elaborador: e.target.value }))} placeholder="Elaborador" className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white" />
+                      <input type="date" value={filtrosRepositorio.data} onChange={(e) => setFiltrosRepositorio((a) => ({ ...a, data: e.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white" />
+                      <select value={filtrosRepositorio.setor} onChange={(e) => setFiltrosRepositorio((a) => ({ ...a, setor: e.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white">
+                        <option value="">Todos os setores</option>
+                        {setoresRepositorio.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {filtroLateral && (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-2.5 text-xs font-semibold text-blue-700 flex items-center gap-2">
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    Exibindo: <strong>{filtroLateral.setor}</strong> &rsaquo; <strong>{filtroLateral.tipo}</strong>
+                    {filtroLateral.tipo === "Mapa de processo"
+                      ? <span className="ml-auto text-emerald-700 font-bold">{processosLateral.length} processo(s)</span>
+                      : <span className="ml-auto text-blue-700 font-bold">{documentosFiltrados.length} documento(s)</span>
+                    }
+                  </div>
+                )}
+
+                {filtroLateral?.tipo === "Mapa de processo" ? (
+                  <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-500 tracking-widest">
+                          <th className="px-4 py-3">Código</th>
+                          <th className="px-4 py-3">Módulo</th>
+                          <th className="px-4 py-3">Nome do Processo</th>
+                          <th className="px-4 py-3 text-center">Rev</th>
+                          <th className="px-4 py-3">Responsável</th>
+                          <th className="px-4 py-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {processosLateral.map((proc) => (
+                          <tr key={proc.id} className="hover:bg-blue-50/40 transition-colors text-sm">
+                            <td className="px-4 py-3 font-mono font-bold text-emerald-700">{proc.code}</td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border bg-emerald-50 text-emerald-700 border-emerald-200">{proc.module}</span>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{proc.name}</td>
+                            <td className="px-4 py-3 text-center text-slate-500 font-medium">{proc.version}</td>
+                            <td className="px-4 py-3 text-slate-600 font-medium">
+                              <span className="flex items-center gap-1.5"><User className="w-3 h-3 text-slate-400" />{proc.owner}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <a href="/processos" className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
+                                <Eye className="w-3.5 h-3.5" /> Abrir
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                        {processosLateral.length === 0 && (
+                          <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400 font-bold text-sm">Nenhum processo no repositório para este setor.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[1000px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-500 tracking-widest">
+                          <th className="px-4 py-3">Código</th>
+                          <th className="px-4 py-3">Tipo</th>
+                          <th className="px-4 py-3">Título do Documento</th>
+                          <th className="px-4 py-3 text-center">Rev</th>
+                          <th className="px-4 py-3">Elaborador</th>
+                          <th className="px-4 py-3">Elaboração</th>
+                          <th className="px-4 py-3">Setor</th>
+                          <th className="px-4 py-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {documentosFiltrados.map((doc) => (
+                          <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors group text-sm">
+                            <td className="px-4 py-3 font-mono font-bold text-blue-700">{doc.codigo}</td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border bg-slate-100 text-slate-500 border-slate-100">{doc.tipo_documento}</span>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{doc.titulo}</td>
+                            <td className="px-4 py-3 text-center text-slate-500 font-medium">{doc.versao}</td>
+                            <td className="px-4 py-3 text-slate-600 font-medium">
+                              <span className="flex items-center gap-1.5"><User className="w-3 h-3 text-slate-400" />{doc.elaborador}</span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 font-medium">{doc.dt_elaboracao}</td>
+                            <td className="px-4 py-3 font-bold text-slate-700">{doc.setor}</td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={(e) => handleVisualizarConteudo(e, doc)} title="Visualizar" className="p-2 bg-white border border-slate-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc); }} title="Ficha Técnica" className="p-2 bg-white border border-slate-100 text-slate-600 rounded-lg hover:bg-slate-100 transition-all shadow-sm">
+                                  <FileSearch className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {documentosFiltrados.length === 0 && !isLoading && (
+                          <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-400 font-bold text-sm">Nenhum documento encontrado.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <input
-                  value={filtrosRepositorio.codigo}
-                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, codigo: event.target.value }))}
-                  placeholder="Código"
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
-                />
-                <input
-                  value={filtrosRepositorio.nome}
-                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, nome: event.target.value }))}
-                  placeholder="Nome ou palavra-chave"
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
-                />
-                <input
-                  value={filtrosRepositorio.elaborador}
-                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, elaborador: event.target.value }))}
-                  placeholder="Elaborador"
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
-                />
-                <input
-                  type="date"
-                  value={filtrosRepositorio.data}
-                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, data: event.target.value }))}
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
-                />
-                <select
-                  value={filtrosRepositorio.setor}
-                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, setor: event.target.value }))}
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
-                >
-                  <option value="">Todos os setores</option>
-                  {setoresRepositorio.map((setor) => (
-                    <option key={setor} value={setor}>{setor}</option>
-                  ))}
-                </select>
+            </div>
+          ) : (
+            /* PIPELINE / OBSOLETOS */
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[1000px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-500 tracking-widest">
+                      <th className="px-4 py-3">Código</th>
+                      <th className="px-4 py-3">Tipo</th>
+                      <th className="px-4 py-3">Título do Documento</th>
+                      <th className="px-4 py-3 text-center">Rev</th>
+                      <th className="px-4 py-3">Elaborador</th>
+                      <th className="px-4 py-3">Elaboração</th>
+                      <th className="px-4 py-3">Setor</th>
+                      {isPipelineAtivo && <th className="px-4 py-3">Status</th>}
+                      {pastaAtiva === "Em Verificação" && <th className="px-4 py-3">Pendente de</th>}
+                      <th className="px-4 py-3 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {documentosFiltrados.map((doc) => (
+                      <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors group text-sm">
+                        <td className="px-4 py-3 font-mono font-bold text-blue-700">{doc.codigo}</td>
+                        <td className="px-4 py-3">
+                          <span className={"px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border whitespace-nowrap " + (doc.isProcesso ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-slate-100 text-slate-500 border-slate-100")}>
+                            {doc.tipo_documento}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-800">{doc.titulo}</td>
+                        <td className="px-4 py-3 text-center text-slate-500 font-medium">{doc.versao}</td>
+                        <td className="px-4 py-3 text-slate-600 font-medium flex items-center gap-1.5">
+                          <User className="w-3 h-3 text-slate-400" />{doc.elaborador}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 font-medium">{doc.dt_elaboracao}</td>
+                        <td className="px-4 py-3 font-bold text-slate-700">{doc.setor}</td>
+                        {isPipelineAtivo && (
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{doc.status}</span>
+                          </td>
+                        )}
+                        {pastaAtiva === "Em Verificação" && (
+                          <td className="px-4 py-3 font-bold text-amber-600 text-xs truncate max-w-[150px]">{doc.verificador_pendente?.split(";")[0]}</td>
+                        )}
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {(statusElaboracao(doc.status) || statusRejeitado(doc.status)) && (
+                              <a href={"/editar-documento/" + doc.id} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
+                                <Edit className="w-3.5 h-3.5" /> Retomar
+                              </a>
+                            )}
+                            {(statusVerificacao(doc.status) || statusHomologacao(doc.status)) && (
+                              statusHomologacao(doc.status) && !podeHomologar ? (
+                                <a href={"/documento/" + doc.id} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-500 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
+                                  <Eye className="w-3.5 h-3.5" /> Acompanhar
+                                </a>
+                              ) : (
+                                <a href={"/documento/" + doc.id} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
+                                  <Search className="w-3.5 h-3.5" /> Analisar
+                                </a>
+                              )
+                            )}
+                            {pastaAtiva === "Obsoletos" && (
+                              <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc, "historico"); }} className="text-slate-500 font-bold flex items-center justify-end gap-1.5 hover:text-blue-600 transition-colors">
+                                <History className="w-3.5 h-3.5" /> Histórico
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {documentosFiltrados.length === 0 && !isLoading && (
+                  <div className="p-8 text-center text-slate-500 font-medium">Nenhum documento encontrado nesta pasta.</div>
+                )}
               </div>
             </div>
           )}
-
-          <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-500 tracking-widest">
-                  <th className="px-4 py-3">Código</th>
-                  <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Título do Documento</th>
-                  <th className="px-4 py-3 text-center">Rev</th>
-                  <th className="px-4 py-3">Elaborador</th>
-                  <th className="px-4 py-3">Elaboração</th>
-                  <th className="px-4 py-3">Setor</th>
-                  {isPipelineAtivo && <th className="px-4 py-3">Status</th>}
-                  {pastaAtiva === "Em Verificação" && <th className="px-4 py-3">Pendente de</th>}
-                  <th className="px-4 py-3 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {documentosFiltrados.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors group text-sm">
-                    <td className="px-4 py-3 font-mono font-bold text-blue-700">{doc.codigo}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border whitespace-nowrap
-                        ${doc.isProcesso ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-slate-100 text-slate-500 border-slate-100"}`}>
-                        {doc.tipo_documento}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-bold text-slate-800">{doc.titulo}</td>
-                    <td className="px-4 py-3 text-center text-slate-500 font-medium">{doc.versao}</td>
-                    <td className="px-4 py-3 text-slate-600 font-medium flex items-center gap-1.5">
-                      <User className="w-3 h-3 text-slate-400" />{doc.elaborador}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 font-medium">{doc.dt_elaboracao}</td>
-                    <td className="px-4 py-3 font-bold text-slate-700">{doc.setor}</td>
-                    {isPipelineAtivo && (
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
-                          {doc.status}
-                        </span>
-                      </td>
-                    )}
-                    {pastaAtiva === "Em Verificação" && (
-                      <td className="px-4 py-3 font-bold text-amber-600 text-xs truncate max-w-[150px]">
-                        {doc.verificador_pendente?.split(";")[0]}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      {pastaAtiva === "Repositório" ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={(e) => handleVisualizarConteudo(e, doc)} title="Visualizar Documento" className="p-2 bg-white border border-slate-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc); }} title="Ver Ficha Técnica" className="p-2 bg-white border border-slate-100 text-slate-600 rounded-lg hover:bg-slate-100 transition-all shadow-sm">
-                            <FileSearch className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-end gap-2">
-                          {(statusElaboracao(doc.status) || statusRejeitado(doc.status)) && (
-                            <Link href={`/editar-documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
-                              <Edit className="w-3.5 h-3.5" /> Retomar
-                            </Link>
-                          )}
-                          {(statusVerificacao(doc.status) || statusHomologacao(doc.status)) && (
-                            statusHomologacao(doc.status) && !podeHomologar ? (
-                              <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-500 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
-                                <Eye className="w-3.5 h-3.5" /> Acompanhar
-                              </Link>
-                            ) : (
-                              <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
-                                <Search className="w-3.5 h-3.5" /> Analisar
-                              </Link>
-                            )
-                          )}
-                          {pastaAtiva === "Obsoletos" && (
-                            <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc, "historico"); }} className="text-slate-500 font-bold flex items-center justify-end gap-1.5 hover:text-blue-600 transition-colors">
-                              <History className="w-3.5 h-3.5" /> Histórico
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {documentosFiltrados.length === 0 && !isLoading && (
-              <div className="p-8 text-center text-slate-500 font-medium">Nenhum documento encontrado nesta pasta.</div>
-            )}
-          </div>
         </div>
       )}
 
-      {/* VISÃO: INSPEÇÃO */}
+            {/* VISÃO: INSPEÇÃO */}
       {viewState === "inspecao" && (
         <PainelInspecao documentos={documentos} isLoading={isLoading} aoAtualizar={fetchDocumentos} />
       )}
