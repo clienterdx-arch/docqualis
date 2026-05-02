@@ -70,6 +70,7 @@ export default function SalaRevisaoPage() {
   /* Derivados */
   const isFormulario = documento?.tipo_documento?.toLowerCase().includes("formul") || documento?.codigo?.includes("FOR");
   const podeImprimir = isQualidade || isFormulario;
+  const bloqueiaHomologacao = documento?.status === "Em Homologação" && !isQualidade;
 
   /* Assinatura eletrônica */
   const handleAssinatura = async (acao: "Aprovar" | "Devolver") => {
@@ -80,6 +81,9 @@ export default function SalaRevisaoPage() {
     }
     if (acao === "Devolver" && !justificativa.trim()) {
       setFeedback({ tipo: "erro", msg: "Para devolver, preencha o parecer técnico justificando a decisão." }); return;
+    }
+    if (acao === "Aprovar" && documento.status === "Em Homologação" && !isQualidade) {
+      setFeedback({ tipo: "erro", msg: "A homologação final é restrita à Qualidade ou administradores autorizados." }); return;
     }
     if (!empresaId) {
       setFeedback({ tipo: "erro", msg: "Não foi possível identificar a empresa do usuário." }); return;
@@ -295,15 +299,24 @@ export default function SalaRevisaoPage() {
                 </div>
 
                 {/* Botões de ação */}
+                {bloqueiaHomologacao && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-[11px] font-bold leading-relaxed text-blue-800">
+                    Homologação final restrita à Qualidade ou administradores autorizados. Você pode acompanhar a tramitação, mas não concluir a aprovação final.
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <button onClick={() => handleAssinatura("Devolver")} disabled={isProcessando}
                     className="h-11 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-100 flex items-center justify-center gap-2 transition-all disabled:opacity-50">
                     <XCircle className="w-4 h-4" /> Devolver
                   </button>
-                  <button onClick={() => handleAssinatura("Aprovar")} disabled={isProcessando}
-                    className="h-11 bg-[#2655e8] text-white rounded-xl text-xs font-bold hover:bg-[#1e40af] shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                  <button onClick={() => handleAssinatura("Aprovar")} disabled={isProcessando || bloqueiaHomologacao}
+                    className={`h-11 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-70 ${
+                      bloqueiaHomologacao
+                        ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 shadow-none"
+                        : "bg-[#2655e8] text-white hover:bg-[#1e40af] shadow-lg shadow-blue-600/20"
+                    }`}>
                     {isProcessando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    Aprovar
+                    {bloqueiaHomologacao ? "Restrito" : "Aprovar"}
                   </button>
                 </div>
 

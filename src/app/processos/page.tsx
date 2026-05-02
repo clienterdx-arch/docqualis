@@ -25,7 +25,6 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Target,
   TimerReset,
@@ -34,6 +33,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 type ViewState = "home" | "list" | "sipoc" | "raci" | "vsm";
 type ModuloAtivo = "SIPOC" | "BPMN";
@@ -59,8 +60,10 @@ type SipocRow = {
   id: string;
   fornecedor: string;
   entrada: string;
+  acordoEntrada: string;
   etapa: string;
   saida: string;
+  acordoSaida: string;
   cliente: string;
   slaEsperado: number;
   slaReal: number;
@@ -83,8 +86,9 @@ type VsmRow = {
   valor: "VA" | "NVA" | "NNVA";
 };
 
-type SipocMode = "quadro" | "lista";
 type SipocWorkspace = "catalogo" | "editor";
+type SipocWizardStep = "identificacao" | "quadro" | "indicadores" | "interacoes";
+type SipocCatalogFilter = "TODOS" | "REPOSITORIO" | "PIPELINE" | "OBSOLETO";
 type SipocClassification = "ASSISTENCIAL" | "APOIO" | "GERENCIAL" | "ESTRATEGICO";
 type SipocWorkflowStatus =
   | "RASCUNHO"
@@ -98,6 +102,7 @@ type RiskCategory = "ASSISTENCIAL" | "OPERACIONAL" | "FINANCEIRO" | "REPUTACIONA
 type SipocProfile = {
   nome: string;
   codigo: string;
+  setor: string;
   versao: string;
   classificacao: SipocClassification;
   status: SipocWorkflowStatus;
@@ -110,6 +115,7 @@ type SipocCatalogItem = {
   id: string;
   nome: string;
   codigo: string;
+  setor: string;
   versao: string;
   classificacao: SipocClassification;
   status: SipocWorkflowStatus;
@@ -194,8 +200,10 @@ const DEFAULT_SIPOC_ROWS: SipocRow[] = [
     id: "sipoc-1",
     fornecedor: "Diretoria",
     entrada: "Diretriz estratégica",
+    acordoEntrada: "Diretriz aprovada e comunicada em até 48h",
     etapa: "Planejar processo",
     saida: "Escopo aprovado",
+    acordoSaida: "Escopo validado com dono do processo",
     cliente: "Gestor do processo",
     slaEsperado: 48,
     slaReal: 32,
@@ -204,8 +212,10 @@ const DEFAULT_SIPOC_ROWS: SipocRow[] = [
     id: "sipoc-2",
     fornecedor: "Cliente interno",
     entrada: "Solicitação validada",
+    acordoEntrada: "Solicitação completa, registrada e priorizada",
     etapa: "Executar atividade crítica",
     saida: "Entrega operacional",
+    acordoSaida: "Entrega conforme requisito e prazo acordado",
     cliente: "Área solicitante",
     slaEsperado: 24,
     slaReal: 29,
@@ -214,8 +224,10 @@ const DEFAULT_SIPOC_ROWS: SipocRow[] = [
     id: "sipoc-3",
     fornecedor: "Qualidade",
     entrada: "Checklist de controle",
+    acordoEntrada: "Checklist vigente preenchido sem campos críticos ausentes",
     etapa: "Verificar conformidade",
     saida: "Parecer técnico",
+    acordoSaida: "Parecer emitido com evidência e recomendação",
     cliente: "Dono do processo",
     slaEsperado: 12,
     slaReal: 8,
@@ -314,6 +326,7 @@ const RISK_CATEGORY_META: Record<RiskCategory, { label: string; tone: string }> 
 const DEFAULT_SIPOC_PROFILE: SipocProfile = {
   nome: "Atendimento e Resolução de Solicitações",
   codigo: "SIPOC.PROC.001",
+  setor: "Qualidade",
   versao: "01",
   classificacao: "ASSISTENCIAL",
   status: "RASCUNHO",
@@ -327,6 +340,7 @@ const DEFAULT_SIPOC_CATALOG: SipocCatalogItem[] = [
     id: "sipoc-doc-1",
     nome: DEFAULT_SIPOC_PROFILE.nome,
     codigo: DEFAULT_SIPOC_PROFILE.codigo,
+    setor: DEFAULT_SIPOC_PROFILE.setor,
     versao: DEFAULT_SIPOC_PROFILE.versao,
     classificacao: DEFAULT_SIPOC_PROFILE.classificacao,
     status: DEFAULT_SIPOC_PROFILE.status,
@@ -340,6 +354,7 @@ const DEFAULT_SIPOC_CATALOG: SipocCatalogItem[] = [
     id: "sipoc-doc-2",
     nome: "Gestão de Documentos Controlados",
     codigo: "SIPOC.DOC.002",
+    setor: "Qualidade",
     versao: "01",
     classificacao: "APOIO",
     status: "EM_REVISAO",
@@ -353,6 +368,7 @@ const DEFAULT_SIPOC_CATALOG: SipocCatalogItem[] = [
     id: "sipoc-doc-3",
     nome: "Revisão Estratégica do SGQ",
     codigo: "SIPOC.SGQ.003",
+    setor: "Diretoria Executiva",
     versao: "02",
     classificacao: "ESTRATEGICO",
     status: "APROVADO",
@@ -792,7 +808,10 @@ export default function ProcessosPage() {
   const [sipocCatalog, setSipocCatalog] = useState<SipocCatalogItem[]>(
     DEFAULT_SIPOC_CATALOG
   );
-  const [sipocMode, setSipocMode] = useState<SipocMode>("quadro");
+  const [sipocWizardStep, setSipocWizardStep] =
+    useState<SipocWizardStep>("identificacao");
+  const [sipocCatalogFilter, setSipocCatalogFilter] =
+    useState<SipocCatalogFilter>("TODOS");
   const [sipocProfile, setSipocProfile] =
     useState<SipocProfile>(DEFAULT_SIPOC_PROFILE);
   const [sipocIndicators, setSipocIndicators] = useState<SipocIndicator[]>(
@@ -832,6 +851,49 @@ export default function ProcessosPage() {
 
   useEffect(() => {
     loadItems();
+  }, []);
+
+  useEffect(() => {
+    async function carregarRiscosCadastrados() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session) return;
+
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null }>(
+        session,
+        "empresa_id"
+      );
+      if (!perfil?.empresa_id) return;
+
+      const { data, error } = await supabase
+        .from("riscos")
+        .select("*")
+        .eq("empresa_id", perfil.empresa_id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error || !data?.length) return;
+
+      const riscos = data.map((row: Record<string, unknown>): SipocRisk => ({
+        id: String(row.id),
+        nome: String(row.titulo ?? row.nome ?? row.descricao ?? "Risco cadastrado"),
+        categoria: String(row.categoria ?? row.tipo ?? "OPERACIONAL").toUpperCase().includes("FINANCE")
+          ? "FINANCEIRO"
+          : String(row.categoria ?? row.tipo ?? "").toUpperCase().includes("REPUT")
+            ? "REPUTACIONAL"
+            : String(row.categoria ?? row.tipo ?? "").toUpperCase().includes("ASSIST")
+              ? "ASSISTENCIAL"
+              : "OPERACIONAL",
+        probabilidade: Number(row.probabilidade ?? row.probability ?? 1) || 1,
+        impacto: Number(row.impacto ?? row.impact ?? 1) || 1,
+        planoAcao: String(row.plano_acao ?? row.planoAcao ?? "Plano de acao vinculado ao risco"),
+        controles: String(row.controles ?? row.controle ?? "Controle existente no modulo de riscos"),
+      }));
+
+      setSipocRisks(riscos);
+    }
+
+    void carregarRiscosCadastrados();
   }, []);
 
   useEffect(() => {
@@ -980,6 +1042,21 @@ export default function ProcessosPage() {
     ? Math.round((vsmTempoValor / vsmLeadTime) * 100)
     : 0;
 
+  const sipocCatalogFiltrado = useMemo(() => {
+    if (sipocCatalogFilter === "REPOSITORIO") {
+      return sipocCatalog.filter((item) => item.status === "APROVADO");
+    }
+    if (sipocCatalogFilter === "PIPELINE") {
+      return sipocCatalog.filter((item) =>
+        ["RASCUNHO", "EM_REVISAO", "EM_APROVACAO"].includes(item.status)
+      );
+    }
+    if (sipocCatalogFilter === "OBSOLETO") {
+      return sipocCatalog.filter((item) => item.status === "OBSOLETO");
+    }
+    return sipocCatalog;
+  }, [sipocCatalog, sipocCatalogFilter]);
+
   const gargalo = useMemo(
     () =>
       [...vsmRows].sort((a, b) => {
@@ -1083,6 +1160,7 @@ export default function ProcessosPage() {
           ...item,
           nome: field === "nome" ? String(value) : item.nome,
           codigo: field === "codigo" ? String(value) : item.codigo,
+          setor: field === "setor" ? String(value) : item.setor,
           versao: field === "versao" ? String(value) : item.versao,
           classificacao:
             field === "classificacao"
@@ -1102,6 +1180,7 @@ export default function ProcessosPage() {
     setSipocProfile({
       nome: item.nome,
       codigo: item.codigo,
+      setor: item.setor,
       versao: item.versao,
       classificacao: item.classificacao,
       status: item.status,
@@ -1109,7 +1188,7 @@ export default function ProcessosPage() {
       dono: item.dono,
       aprovador: DEFAULT_SIPOC_PROFILE.aprovador,
     });
-    setSipocMode("quadro");
+    setSipocWizardStep("identificacao");
     setSipocWorkspace("editor");
   }
 
@@ -1120,6 +1199,7 @@ export default function ProcessosPage() {
       id: makeId("sipoc-doc"),
       nome: "Nova SIPOC",
       codigo: `SIPOC.PROC.${nextNumber}`,
+      setor: "Setor responsavel",
       versao: "01",
       classificacao: "ASSISTENCIAL",
       status: "RASCUNHO",
@@ -1135,6 +1215,7 @@ export default function ProcessosPage() {
     setSipocProfile({
       nome: newItem.nome,
       codigo: newItem.codigo,
+      setor: newItem.setor,
       versao: newItem.versao,
       classificacao: newItem.classificacao,
       status: newItem.status,
@@ -1147,8 +1228,10 @@ export default function ProcessosPage() {
         id: makeId("sipoc-row"),
         fornecedor: "Novo fornecedor",
         entrada: "Nova entrada",
+        acordoEntrada: "Como deve chegar",
         etapa: "Nova etapa",
         saida: "Nova saída",
+        acordoSaida: "Como deve ser entregue",
         cliente: "Novo cliente",
         slaEsperado: 24,
         slaReal: 0,
@@ -1168,8 +1251,7 @@ export default function ProcessosPage() {
       },
     ]);
     setSipocIndicators([]);
-    setSipocRisks([]);
-    setSipocMode("quadro");
+    setSipocWizardStep("identificacao");
     setSipocWorkspace("editor");
   }
 
@@ -1594,7 +1676,7 @@ export default function ProcessosPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_0.9fr]">
+        <div className="grid grid-cols-1 gap-5">
           <Panel
             title="Arquitetura integrada"
             subtitle={`${totalModelos} artefato(s) monitorados entre SIPOC, BPMN, RACI e VSM.`}
@@ -1643,62 +1725,6 @@ export default function ProcessosPage() {
             </div>
           </Panel>
 
-          <Panel
-            title="Validação inteligente"
-            subtitle="Alertas para publicar processos com governança."
-          >
-            <div className="space-y-3 p-6">
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-600">
-                    <CircleAlert className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      Tarefas sem responsável
-                    </p>
-                    <p className="text-xs font-medium text-slate-500">
-                      Obrigatório antes da publicação
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xl font-black text-slate-950">
-                  {raciSemResponsavel}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-100 bg-amber-50 text-amber-600">
-                    <GitMerge className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      Conflitos de aprovador
-                    </p>
-                    <p className="text-xs font-medium text-slate-500">
-                      Evita múltiplos aprovadores na mesma tarefa
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xl font-black text-slate-950">
-                  {raciConflitosAprovador}
-                </span>
-              </div>
-
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <p className="text-sm font-black text-slate-900">
-                  Insight Lean
-                </p>
-                <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">
-                  Etapa com maior espera:{" "}
-                  <strong className="text-[#2655e8]">{gargalo?.etapa}</strong>{" "}
-                  ({gargalo?.espera}h). Priorize essa etapa para reduzir o
-                  lead time total.
-                </p>
-              </div>
-            </div>
-          </Panel>
         </div>
       </>
     );
@@ -1912,12 +1938,9 @@ export default function ProcessosPage() {
     const inFlowCount = sipocCatalog.filter((item) =>
       ["RASCUNHO", "EM_REVISAO", "EM_APROVACAO"].includes(item.status)
     ).length;
-    const riskTotal = sipocCatalog.reduce((total, item) => total + item.riscos, 0);
-    const indicatorTotal = sipocCatalog.reduce(
-      (total, item) => total + item.indicadores,
-      0
-    );
-
+    const obsoleteCount = sipocCatalog.filter(
+      (item) => item.status === "OBSOLETO"
+    ).length;
     return (
       <>
         <ModuleHeader
@@ -1936,34 +1959,30 @@ export default function ProcessosPage() {
           }
         />
 
-        <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            title="SIPOCs cadastradas"
-            value={sipocCatalog.length}
-            subtitle="Mapas de processo"
-            icon={<Network className="h-4 w-4" />}
-            tone="blue"
-          />
-          <MetricCard
-            title="Em tramitação"
-            value={inFlowCount}
-            subtitle="Rascunho, revisão ou aprovação"
-            icon={<History className="h-4 w-4" />}
-            tone="amber"
-          />
-          <MetricCard
-            title="Aprovadas"
+        <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-3">
+          <ModuleDashboardCard
+            title="Repositório"
+            subtitle="SIPOCs aprovadas concentradas no repositório documental"
             value={approvedCount}
-            subtitle="Controladas e vigentes"
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            tone="emerald"
+            icon={<FileCheck className="h-5 w-5" />}
+            accent="emerald"
+            onClick={() => setSipocCatalogFilter("REPOSITORIO")}
           />
-          <MetricCard
-            title="Vínculos"
-            value={indicatorTotal + riskTotal}
-            subtitle={`${indicatorTotal} indicador(es) e ${riskTotal} risco(s)`}
-            icon={<Link2 className="h-4 w-4" />}
-            tone="violet"
+          <ModuleDashboardCard
+            title="Pipeline de documentos"
+            subtitle="Rascunho, revisão e aprovação do SIPOC"
+            value={inFlowCount}
+            icon={<Workflow className="h-5 w-5" />}
+            accent="blue"
+            onClick={() => setSipocCatalogFilter("PIPELINE")}
+          />
+          <ModuleDashboardCard
+            title="Obsoletos"
+            subtitle="SIPOCs arquivadas ou fora de vigência"
+            value={obsoleteCount}
+            icon={<FolderArchive className="h-5 w-5" />}
+            accent="violet"
+            onClick={() => setSipocCatalogFilter("OBSOLETO")}
           />
         </div>
 
@@ -1971,13 +1990,23 @@ export default function ProcessosPage() {
           title="SIPOCs cadastradas"
           subtitle="Abra uma SIPOC por vez para editar o quadro clássico e vincular indicadores, riscos, documentos e BPM."
           action={
-            <button
-              onClick={createSipocDocument}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
-            >
-              <Plus className="h-4 w-4" />
-              Criar SIPOC
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {sipocCatalogFilter !== "TODOS" && (
+                <button
+                  onClick={() => setSipocCatalogFilter("TODOS")}
+                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
+                >
+                  Ver todas
+                </button>
+              )}
+              <button
+                onClick={createSipocDocument}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
+              >
+                <Plus className="h-4 w-4" />
+                Criar SIPOC
+              </button>
+            </div>
           }
         >
           <div className="overflow-x-auto custom-scrollbar">
@@ -1986,6 +2015,7 @@ export default function ProcessosPage() {
                 <tr>
                   <th className="px-6 py-4">Código</th>
                   <th className="px-6 py-4">Nome da SIPOC</th>
+                  <th className="px-6 py-4">Setor</th>
                   <th className="px-6 py-4">Classificação</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-center">Etapas</th>
@@ -1995,7 +2025,7 @@ export default function ProcessosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {sipocCatalog.map((item) => {
+                {sipocCatalogFiltrado.map((item) => {
                   const workflow = SIPOC_WORKFLOW_META[item.status];
                   const classification =
                     SIPOC_CLASSIFICATION_META[item.classificacao];
@@ -2015,6 +2045,9 @@ export default function ProcessosPage() {
                         <div className="mt-0.5 text-xs font-medium text-slate-500">
                           Rev. {item.versao} • Dono: {item.dono}
                         </div>
+                      </td>
+                      <td className="px-6 py-5 font-bold text-slate-600">
+                        {item.setor}
                       </td>
                       <td className="px-6 py-5">
                         <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">
@@ -2145,32 +2178,34 @@ export default function ProcessosPage() {
                 <Download className="h-4 w-4" />
                 Exportar PDF
               </button>
-              <button
-                onClick={() =>
-                  setSipocStages((current) => [
-                    ...current,
-                    {
-                      id: makeId("stage"),
-                      nome: "Nova etapa",
-                      responsavel: "Responsável",
-                      sla: 8,
-                      riskIds: [],
-                      indicatorIds: [],
-                      bpmLink: "/modelagem",
-                      documentLink: "/documentos",
-                      comentario: "",
-                    },
-                  ])
-                }
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2655e8] px-5 text-sm font-bold text-white shadow-md transition hover:bg-[#1e40af]"
-              >
-                <Plus className="h-4 w-4" />
-                Nova etapa
-              </button>
             </div>
           }
         />
 
+        <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
+          {[
+            { key: "identificacao", title: "1. Identificação", text: "Setor, nome, código e governança" },
+            { key: "quadro", title: "2. Quadro SIPOC", text: "SIPOC clássico com riscos por etapa" },
+            { key: "indicadores", title: "3. Indicadores", text: "Estrutura, processo, resultado e estratégico" },
+            { key: "interacoes", title: "4. Interações", text: "Fornecedores, entregas e acordos SLA" },
+          ].map((step) => (
+            <button
+              key={step.key}
+              onClick={() => setSipocWizardStep(step.key as SipocWizardStep)}
+              className={cn(
+                "rounded-2xl border p-4 text-left shadow-sm transition",
+                sipocWizardStep === step.key
+                  ? "border-[#2655e8] bg-blue-50 text-[#2655e8]"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-200"
+              )}
+            >
+              <p className="text-xs font-black uppercase tracking-widest">{step.title}</p>
+              <p className="mt-1 text-[11px] font-semibold leading-relaxed">{step.text}</p>
+            </button>
+          ))}
+        </div>
+
+        {sipocWizardStep === "identificacao" && (
         <Panel
           title="Documento controlado SIPOC"
           subtitle="Identificação, classificação obrigatória e workflow de revisão do processo."
@@ -2193,6 +2228,15 @@ export default function ProcessosPage() {
                 <TableInput
                   value={sipocProfile.codigo}
                   onChange={(value) => updateSipocProfile("codigo", value)}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Setor
+                </span>
+                <TableInput
+                  value={sipocProfile.setor}
+                  onChange={(value) => updateSipocProfile("setor", value)}
                 />
               </label>
               <label className="space-y-2">
@@ -2341,7 +2385,9 @@ export default function ProcessosPage() {
             </div>
           </div>
         </Panel>
+        )}
 
+        {sipocWizardStep === "identificacao" && (
         <div className="my-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             title="Performance"
@@ -2372,81 +2418,96 @@ export default function ProcessosPage() {
             tone={sipocForaSla ? "amber" : "emerald"}
           />
         </div>
+        )}
 
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {[
-              {
-                key: "quadro",
-                label: "Modo quadro",
-                icon: <Network className="h-4 w-4" />,
-              },
-              {
-                key: "lista",
-                label: "Modo lista",
-                icon: <SlidersHorizontal className="h-4 w-4" />,
-              },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setSipocMode(item.key as SipocMode)}
-                className={cn(
-                  "inline-flex h-9 items-center gap-2 rounded-lg px-4 text-xs font-black uppercase tracking-widest transition",
-                  sipocMode === item.key
-                    ? "bg-[#2655e8] text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                )}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
+        {sipocWizardStep !== "identificacao" && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Etapa atual</p>
+            <p className="mt-1 text-sm font-black text-slate-900">
+              {sipocWizardStep === "quadro" && "Quadro SIPOC clássico"}
+              {sipocWizardStep === "indicadores" && "Indicadores vinculados"}
+              {sipocWizardStep === "interacoes" && "Interações cliente-fornecedor"}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() =>
-                setSipocIndicators((current) => [
-                  ...current,
-                  {
-                    id: makeId("indicator"),
-                    nome: "Novo indicador",
-                    categoria: "PROCESSO",
-                    meta: "100",
-                    atual: "0",
-                    unidade: "%",
-                  },
-                ])
-              }
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
-            >
-              <Plus className="h-4 w-4" />
-              Novo indicador
-            </button>
-            <button
-              onClick={() =>
-                setSipocRisks((current) => [
-                  ...current,
-                  {
-                    id: makeId("risk"),
-                    nome: "Novo risco do processo",
-                    categoria: "OPERACIONAL",
-                    probabilidade: 1,
-                    impacto: 1,
-                    planoAcao: "Definir plano de ação",
-                    controles: "Definir controles existentes",
-                  },
-                ])
-              }
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-red-300 hover:text-red-600"
-            >
-              <Plus className="h-4 w-4" />
-              Novo risco
-            </button>
+            {sipocWizardStep === "quadro" && (
+              <>
+                <button
+                  onClick={() =>
+                    setSipocStages((current) => [
+                      ...current,
+                      {
+                        id: makeId("stage"),
+                        nome: "Nova etapa",
+                        responsavel: "Responsável",
+                        sla: 8,
+                        riskIds: [],
+                        indicatorIds: [],
+                        bpmLink: "/modelagem",
+                        documentLink: "/documentos",
+                        comentario: "",
+                      },
+                    ])
+                  }
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2655e8] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e40af]"
+                >
+                  <Plus className="h-4 w-4" />
+                  Nova etapa
+                </button>
+                <button
+                  onClick={() =>
+                    setSipocRisks((current) => [
+                      ...current,
+                      {
+                        id: makeId("risk"),
+                        nome: "Novo risco do processo",
+                        categoria: "OPERACIONAL",
+                        probabilidade: 1,
+                        impacto: 1,
+                        planoAcao: "Definir plano de ação",
+                        controles: "Definir controles existentes",
+                      },
+                    ])
+                  }
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:border-red-300 hover:text-red-600"
+                >
+                  <Plus className="h-4 w-4" />
+                  Novo risco
+                </button>
+              </>
+            )}
+            {sipocWizardStep === "interacoes" && (
+              <button
+                onClick={() =>
+                  setSipocRows((current) => [
+                    ...current,
+                    {
+                      id: makeId("sipoc-row"),
+                      fornecedor: "Novo fornecedor",
+                      entrada: "Nova entrada",
+                      acordoEntrada: "Como deve chegar",
+                      etapa: "Interação",
+                      saida: "Nova saída",
+                      acordoSaida: "Como deve ser entregue",
+                      cliente: "Novo cliente",
+                      slaEsperado: 24,
+                      slaReal: 0,
+                    },
+                  ])
+                }
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2655e8] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e40af]"
+              >
+                <Plus className="h-4 w-4" />
+                Nova interação
+              </button>
+            )}
           </div>
         </div>
+        )}
 
-        {sipocMode === "quadro" && (
+        {sipocWizardStep === "quadro" && (
           <div className="grid gap-6">
             <Panel
               title="Quadro SIPOC clássico"
@@ -2666,7 +2727,8 @@ export default function ProcessosPage() {
               </div>
             </Panel>
 
-            <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+            <div className="grid gap-6">
+              {(["indicadores"] as SipocWizardStep[]).includes(sipocWizardStep) && (
               <Panel
                 title="Indicadores de performance"
                 subtitle="Estrutura, processo, resultado e estratégia."
@@ -2732,6 +2794,7 @@ export default function ProcessosPage() {
                   })}
                 </div>
               </Panel>
+              )}
 
               <Panel
                 title="Mapa de riscos integrado"
@@ -2850,7 +2913,82 @@ export default function ProcessosPage() {
           </div>
         )}
 
-        {sipocMode === "lista" && (
+        {sipocWizardStep === "indicadores" && (
+          <Panel
+            title="Indicadores vinculados ao processo"
+            subtitle="Cadastre o nome do indicador e classifique como estrutura, processo, resultado ou estratégico."
+            action={
+              <button
+                onClick={() =>
+                  setSipocIndicators((current) => [
+                    ...current,
+                    {
+                      id: makeId("indicator"),
+                      nome: "Novo indicador",
+                      categoria: "PROCESSO",
+                      meta: "",
+                      atual: "",
+                      unidade: "",
+                    },
+                  ])
+                }
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2655e8] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#1e40af]"
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar indicador
+              </button>
+            }
+          >
+            <div className="grid gap-3 p-6">
+              {sipocIndicators.map((indicator) => {
+                const meta = INDICATOR_CATEGORY_META[indicator.categoria];
+
+                return (
+                  <div key={indicator.id} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_220px]">
+                    <input
+                      value={indicator.nome}
+                      onChange={(event) =>
+                        updateSipocIndicator(indicator.id, "nome", event.target.value)
+                      }
+                      placeholder="Nome do indicador"
+                      className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-black text-slate-900 outline-none focus:border-[#2655e8] focus:bg-white"
+                    />
+                    <select
+                      value={indicator.categoria}
+                      onChange={(event) =>
+                        updateSipocIndicator(
+                          indicator.id,
+                          "categoria",
+                          event.target.value as IndicatorCategory
+                        )
+                      }
+                      className={cn(
+                        "h-10 rounded-lg border px-3 text-xs font-black uppercase tracking-widest outline-none",
+                        meta.tone
+                      )}
+                    >
+                      {Object.entries(INDICATOR_CATEGORY_META).map(([value, category]) => (
+                        <option key={value} value={value}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+
+              {sipocIndicators.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
+                  <BarChart3 className="mx-auto h-8 w-8 text-slate-300" />
+                  <p className="mt-3 text-sm font-black text-slate-700">Nenhum indicador vinculado</p>
+                  <p className="mt-1 text-xs font-medium text-slate-500">Adicione os indicadores que medem este processo.</p>
+                </div>
+              )}
+            </div>
+          </Panel>
+        )}
+
+        {sipocWizardStep === "interacoes" && (
           <Panel
             title="Gestão em lista"
             subtitle="Base analítica para auditoria, SLA, fornecedores, entradas, saídas e clientes."
@@ -2860,12 +2998,13 @@ export default function ProcessosPage() {
                 <thead className="border-b border-slate-100 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <tr>
                     <th className="px-5 py-4">Fornecedor</th>
-                    <th className="px-5 py-4">Entrada</th>
-                    <th className="px-5 py-4">Processo / etapa</th>
-                    <th className="px-5 py-4">Saída</th>
+                    <th className="px-5 py-4">Entrada / Produto recebido</th>
+                    <th className="px-5 py-4">Acordo / Requisito de entrada</th>
+                    <th className="px-5 py-4">Saída / Produto entregue</th>
                     <th className="px-5 py-4">Cliente</th>
-                    <th className="px-5 py-4 text-center">SLA esperado</th>
-                    <th className="px-5 py-4 text-center">Tempo real</th>
+                    <th className="px-5 py-4">Acordo / Requisito de saída</th>
+                    <th className="px-5 py-4 text-center">SLA (h)</th>
+                    <th className="px-5 py-4 text-center">Real (h)</th>
                     <th className="px-5 py-4">Status</th>
                   </tr>
                 </thead>
@@ -2879,9 +3018,10 @@ export default function ProcessosPage() {
                           [
                             "fornecedor",
                             "entrada",
-                            "etapa",
+                            "acordoEntrada",
                             "saida",
                             "cliente",
+                            "acordoSaida",
                           ] as Array<keyof SipocRow>
                         ).map((field) => (
                           <td key={field} className="px-5 py-4">
@@ -2947,6 +3087,7 @@ export default function ProcessosPage() {
           </Panel>
         )}
 
+        {sipocWizardStep === "identificacao" && (
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <Panel
             title="Integrações do processo"
@@ -3039,6 +3180,7 @@ export default function ProcessosPage() {
             </div>
           </Panel>
         </div>
+        )}
       </>
     );
   }
@@ -3064,8 +3206,10 @@ export default function ProcessosPage() {
                     id: makeId("sipoc"),
                     fornecedor: "Novo fornecedor",
                     entrada: "Nova entrada",
+                    acordoEntrada: "Como deve chegar",
                     etapa: "Nova etapa",
                     saida: "Nova saída",
+                    acordoSaida: "Como deve ser entregue",
                     cliente: "Novo cliente",
                     slaEsperado: 24,
                     slaReal: 0,

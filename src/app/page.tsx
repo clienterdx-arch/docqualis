@@ -560,35 +560,74 @@ function PendingRow({ item }: { item: PendingItem }) {
   );
 }
 
-function ModuleCard({ module }: { module: ModuleSummary }) {
+function ModulePendingBoard({
+  module,
+  items,
+}: {
+  module: ModuleSummary;
+  items: PendingItem[];
+}) {
+  const topItems = items.slice(0, 4);
+
   return (
-    <Link
-      href={module.href}
-      className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#2655e8] hover:shadow-md"
-    >
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-5 flex items-start justify-between gap-4">
-        <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl border", moduleAccentClasses(module.accent))}>
-          {module.icon}
+        <div className="flex items-start gap-3">
+          <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl border", moduleAccentClasses(module.accent))}>
+            {module.icon}
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-slate-900">{module.label}</h3>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {items.length > 0
+                ? `${items.length} pendencia(s) com rota direta`
+                : "Sem pendencia aberta no modulo"}
+            </p>
+          </div>
         </div>
-        <ArrowRight className="h-4 w-4 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-[#2655e8]" />
+        <Link
+          href={module.href}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 shadow-sm transition hover:border-[#2655e8] hover:text-[#2655e8]"
+        >
+          Abrir
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
-      <p className="text-sm font-black text-slate-900">{module.label}</p>
-      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-slate-50 px-2 py-2">
-          <p className="text-lg font-black text-slate-900">{module.open}</p>
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Abertas</p>
-        </div>
-        <div className="rounded-lg bg-blue-50 px-2 py-2">
-          <p className="text-lg font-black text-blue-700">{module.mine}</p>
-          <p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Minhas</p>
-        </div>
-        <div className="rounded-lg bg-red-50 px-2 py-2">
-          <p className="text-lg font-black text-red-700">{module.critical}</p>
-          <p className="text-[9px] font-black uppercase tracking-widest text-red-500">Atenção</p>
-        </div>
+      <div className="space-y-2">
+        {topItems.map((item) => (
+          <Link
+            key={item.id}
+            href={item.href}
+            className="group flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 transition hover:border-[#2655e8] hover:bg-[#eef2ff]"
+          >
+            <div className="min-w-0">
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                <span className={cn("rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest", priorityClasses(item.priority))}>
+                  {priorityLabel(item.priority)}
+                </span>
+                <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                  {item.status || "Pendente"}
+                </span>
+              </div>
+              <p className="truncate text-xs font-black text-slate-900">{item.title}</p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-500">{dueLabel(item.dueDate)}</p>
+            </div>
+            <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-[#2655e8]" />
+          </Link>
+        ))}
+
+        {items.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+            <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-500" />
+            <p className="mt-2 text-xs font-black text-slate-700">Fila limpa</p>
+            <p className="mt-1 text-[11px] font-medium text-slate-400">
+              Nenhuma acao pendente encontrada.
+            </p>
+          </div>
+        )}
       </div>
-    </Link>
+    </section>
   );
 }
 
@@ -690,6 +729,14 @@ export default function PainelExecutivoPage() {
   const moduleSummaries = useMemo(
     () => buildModuleSummaries(data, pendingItems),
     [data, pendingItems]
+  );
+  const pendingBoards = useMemo(
+    () =>
+      moduleSummaries.map((module) => ({
+        module,
+        items: pendingItems.filter((item) => item.module === module.key),
+      })),
+    [moduleSummaries, pendingItems]
   );
 
   const myItems = pendingItems.filter((item) => item.isMine);
@@ -892,13 +939,13 @@ export default function PainelExecutivoPage() {
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <h2 className="text-xl font-black text-slate-900">Pendências por módulo</h2>
-              <p className="mt-1 text-sm font-medium text-slate-500">Consolidação operacional para navegação rápida.</p>
+              <p className="mt-1 text-sm font-medium text-slate-500">Quadros operacionais com acesso direto ao item dentro de cada módulo.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {moduleSummaries.map((module) => (
-              <ModuleCard key={module.key} module={module} />
+            {pendingBoards.map(({ module, items }) => (
+              <ModulePendingBoard key={module.key} module={module} items={items} />
             ))}
           </div>
         </section>

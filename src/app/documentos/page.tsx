@@ -9,7 +9,7 @@ import {
   User, RefreshCw, FileText, CheckCircle2, AlertCircle,
   Edit, History, Plus, Trash2, Layers, BookOpen,
   Building2, Settings, Printer, Copy,
-  Workflow, Eye, FileSearch,
+  Workflow, Eye, FileSearch, ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { carregarPerfilUsuario } from "@/lib/perfil";
@@ -32,7 +32,9 @@ interface Documento {
   justificativa: string;
   arquivo_url: string;
   dt_elaboracao: string;
+  dt_elaboracao_raw?: string | null;
   dt_vencimento: string;
+  dt_vencimento_raw?: string | null;
   isProcesso: boolean;
   empresa_id: string;
 }
@@ -40,6 +42,43 @@ interface Documento {
 interface MensagemSistema {
   tipo: "sucesso" | "alerta" | "erro";
   texto: string;
+}
+
+function normalizarTexto(valor: unknown) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+function statusRepositorio(status: string) {
+  const atual = normalizarTexto(status);
+  return atual.includes("repositorio") || atual.includes("aprovado") || atual.includes("vigente");
+}
+
+function statusObsoleto(status: string) {
+  const atual = normalizarTexto(status);
+  return atual.includes("obsoleto") || atual.includes("arquivado") || atual.includes("fora de vigencia");
+}
+
+function statusElaboracao(status: string) {
+  const atual = normalizarTexto(status);
+  return atual.includes("elaboracao") || atual.includes("em fluxo") || atual === "em fluxo";
+}
+
+function statusVerificacao(status: string) {
+  return normalizarTexto(status).includes("verificacao");
+}
+
+function statusHomologacao(status: string) {
+  return normalizarTexto(status).includes("homologacao");
+}
+
+function statusRejeitado(status: string) {
+  const atual = normalizarTexto(status);
+  return atual.includes("rejeitado") || atual.includes("devolvido");
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -55,6 +94,13 @@ export default function GestaoDocumentosPage() {
   const [mensagemSistema, setMensagemSistema] = useState<MensagemSistema | null>(null);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [filtrosRepositorio, setFiltrosRepositorio] = useState({
+    codigo: "",
+    nome: "",
+    elaborador: "",
+    data: "",
+    setor: "",
+  });
 
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [perfilAcesso, setPerfilAcesso] = useState<string | null>(null);
@@ -154,6 +200,8 @@ export default function GestaoDocumentosPage() {
       ...doc,
       isProcesso: false,
       status: doc.status ?? "Em Elaboração",
+      dt_elaboracao_raw: doc.dt_elaboracao ?? doc.created_at ?? null,
+      dt_vencimento_raw: doc.dt_vencimento ?? null,
       dt_elaboracao: doc.dt_elaboracao
         ? new Date(doc.dt_elaboracao).toLocaleDateString("pt-BR", { timeZone: "UTC" })
         : "-",
@@ -190,11 +238,23 @@ export default function GestaoDocumentosPage() {
       mostrarMensagem("erro", "Não foi possível identificar a empresa do usuário.");
       return;
     }
+    if (!podeTornarObsoleto) {
+      mostrarMensagem("alerta", "Apenas Qualidade ou administradores autorizados podem tornar documentos obsoletos.");
+      return;
+    }
     if (!confirm("Tem certeza que deseja tornar este documento OBSOLETO? Ele sairá da vigência.")) return;
+    const motivo = window.prompt("Informe o motivo obrigatório da obsolescência:");
+    if (!motivo?.trim()) {
+      mostrarMensagem("alerta", "Para tornar obsoleto, o motivo deve ser preenchido.");
+      return;
+    }
 
     const { error } = await supabase
       .from("documentos")
-      .update({ status: "Obsoleto" })
+      .update({
+        status: "Obsoleto",
+        justificativa: `Obsolescência registrada em ${new Date().toLocaleDateString("pt-BR")}: ${motivo.trim()}`,
+      })
       .eq("id", id)
       .eq("empresa_id", empresaId); // ✅ Segurança extra
 
@@ -222,15 +282,24 @@ export default function GestaoDocumentosPage() {
   };
 
   /* ── CONTADORES ───────────────────────────────────────────── */
-  const countRepositorio  = documentos.filter((d) => d.status === "Repositório").length;
-  const countElaboracao   = documentos.filter((d) => d.status === "Em Elaboração" || d.status === "EM_FLUXO").length;
-  const countVerificacao  = documentos.filter((d) => d.status === "Em Verificação").length;
-  const countHomologacao  = documentos.filter((d) => d.status === "Em Homologação").length;
-  const countRejeitados   = documentos.filter((d) => d.status === "Rejeitado" || d.status === "Devolvido").length;
-  const countObsoleto     = documentos.filter((d) => d.status === "Obsoleto").length;
-  const pipelineStatuses = ["Em Elaboração", "EM_FLUXO", "Em Verificação", "Em Homologação", "Rejeitado", "Devolvido"];
-  const countPipeline = documentos.filter((d) => pipelineStatuses.includes(d.status)).length;
-  const podeConfigurarDocumentos = ["SUPERADMIN", "ADMIN_TENANT", "GESTOR_QUALIDADE"].includes(perfilAcesso ?? "");
+  const countRepositorio  = documentos.filter((d) => statusRepositorio(d.status)).length;
+  const countElaboracao   = documentos.filter((d) => statusElaboracao(d.status)).length;
+  const countVerificacao  = documentos.filter((d) => statusVerificacao(d.status)).length;
+  const countHomologacao  = documentos.filter((d) => statusHomologacao(d.status)).length;
+  const countRejeitados   = documentos.filter((d) => statusRejeitado(d.status)).length;
+  const countObsoleto     = documentos.filter((d) => statusObsoleto(d.status)).length;
+  const countPipeline = documentos.filter((d) => statusElaboracao(d.status) || statusVerificacao(d.status) || statusHomologacao(d.status) || statusRejeitado(d.status)).length;
+  const perfilNormalizado = normalizarTexto(perfilAcesso);
+  const perfilQualidade =
+    perfilNormalizado.includes("qualidade") ||
+    perfilNormalizado.includes("nqsp") ||
+    perfilNormalizado.includes("admin") ||
+    perfilNormalizado.includes("super");
+  const podeConfigurarDocumentos = perfilQualidade;
+  const podeTornarObsoleto = perfilQualidade;
+  const podeHomologar = perfilQualidade;
+  const podeDistribuirCopias = perfilQualidade;
+  const podeRecolherCopias = perfilQualidade;
 
   function abrirConfiguracao() {
     if (!podeConfigurarDocumentos) {
@@ -241,13 +310,42 @@ export default function GestaoDocumentosPage() {
     setViewState("config");
   }
 
+  const isPipelineAtivo = normalizarTexto(pastaAtiva).includes("pipeline");
+  const isRepositorioAtivo = normalizarTexto(pastaAtiva).includes("repositorio");
+  const filtrosRepositorioAtivos = Object.values(filtrosRepositorio).some(Boolean);
+  const setoresRepositorio = Array.from(
+    new Set(documentos.filter((doc) => statusRepositorio(doc.status)).map((doc) => doc.setor).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  function documentoPassaFiltrosRepositorio(doc: Documento) {
+    if (!statusRepositorio(doc.status)) return false;
+
+    const codigo = normalizarTexto(doc.codigo);
+    const titulo = normalizarTexto(doc.titulo);
+    const elaborador = normalizarTexto(doc.elaborador);
+    const setor = normalizarTexto(doc.setor);
+    const dataElaboracao = doc.dt_elaboracao_raw?.slice(0, 10) ?? "";
+
+    if (filtrosRepositorio.codigo && !codigo.includes(normalizarTexto(filtrosRepositorio.codigo))) return false;
+    if (filtrosRepositorio.nome && !titulo.includes(normalizarTexto(filtrosRepositorio.nome))) return false;
+    if (filtrosRepositorio.elaborador && !elaborador.includes(normalizarTexto(filtrosRepositorio.elaborador))) return false;
+    if (filtrosRepositorio.setor && setor !== normalizarTexto(filtrosRepositorio.setor)) return false;
+    if (filtrosRepositorio.data && dataElaboracao !== filtrosRepositorio.data) return false;
+
+    return true;
+  }
+
   const documentosFiltrados = documentos.filter((doc) => {
-    if (pastaAtiva === "Pipeline de Documentos") return pipelineStatuses.includes(doc.status);
-    if (pastaAtiva === "Em Elaboração") return doc.status === "Em Elaboração" || doc.status === "EM_FLUXO";
-    if (pastaAtiva === "Rejeitados")    return doc.status === "Rejeitado" || doc.status === "Devolvido";
-    return doc.status === pastaAtiva;
+    const pasta = normalizarTexto(pastaAtiva);
+    if (isPipelineAtivo) return statusElaboracao(doc.status) || statusVerificacao(doc.status) || statusHomologacao(doc.status) || statusRejeitado(doc.status);
+    if (pasta.includes("elaboracao")) return statusElaboracao(doc.status);
+    if (pasta.includes("verificacao")) return statusVerificacao(doc.status);
+    if (pasta.includes("homologacao")) return statusHomologacao(doc.status);
+    if (pasta.includes("rejeitados")) return statusRejeitado(doc.status);
+    if (pasta.includes("obsoleto")) return statusObsoleto(doc.status);
+    if (isRepositorioAtivo) return documentoPassaFiltrosRepositorio(doc);
+    return normalizarTexto(doc.status) === pasta;
   });
-  const isPipelineAtivo = pastaAtiva === "Pipeline de Documentos";
 
   /* ── RENDER ───────────────────────────────────────────────── */
   return (
@@ -366,6 +464,61 @@ export default function GestaoDocumentosPage() {
             <h2 className="text-xl font-bold text-slate-800">Pasta: <span className="text-blue-600">{pastaAtiva}</span></h2>
           </div>
 
+          {isRepositorioAtivo && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Filtros do repositório</h3>
+                  <p className="mt-1 text-xs font-medium text-slate-500">Busque por código, palavra-chave, elaborador, data de elaboração ou setor.</p>
+                </div>
+                {filtrosRepositorioAtivos && (
+                  <button
+                    onClick={() => setFiltrosRepositorio({ codigo: "", nome: "", elaborador: "", data: "", setor: "" })}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <input
+                  value={filtrosRepositorio.codigo}
+                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, codigo: event.target.value }))}
+                  placeholder="Código"
+                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+                <input
+                  value={filtrosRepositorio.nome}
+                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, nome: event.target.value }))}
+                  placeholder="Nome ou palavra-chave"
+                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+                <input
+                  value={filtrosRepositorio.elaborador}
+                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, elaborador: event.target.value }))}
+                  placeholder="Elaborador"
+                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+                <input
+                  type="date"
+                  value={filtrosRepositorio.data}
+                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, data: event.target.value }))}
+                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+                <select
+                  value={filtrosRepositorio.setor}
+                  onChange={(event) => setFiltrosRepositorio((atual) => ({ ...atual, setor: event.target.value }))}
+                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+                >
+                  <option value="">Todos os setores</option>
+                  {setoresRepositorio.map((setor) => (
+                    <option key={setor} value={setor}>{setor}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
@@ -423,15 +576,21 @@ export default function GestaoDocumentosPage() {
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
-                          {(pastaAtiva === "Em Elaboração" || pastaAtiva === "Rejeitados" || (isPipelineAtivo && ["Em Elaboração", "EM_FLUXO", "Rejeitado", "Devolvido"].includes(doc.status))) && (
+                          {(statusElaboracao(doc.status) || statusRejeitado(doc.status)) && (
                             <Link href={`/editar-documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
                               <Edit className="w-3.5 h-3.5" /> Retomar
                             </Link>
                           )}
-                          {(pastaAtiva === "Em Verificação" || pastaAtiva === "Em Homologação" || (isPipelineAtivo && ["Em Verificação", "Em Homologação"].includes(doc.status))) && (
-                            <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
-                              <Search className="w-3.5 h-3.5" /> Analisar
-                            </Link>
+                          {(statusVerificacao(doc.status) || statusHomologacao(doc.status)) && (
+                            statusHomologacao(doc.status) && !podeHomologar ? (
+                              <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-500 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
+                                <Eye className="w-3.5 h-3.5" /> Acompanhar
+                              </Link>
+                            ) : (
+                              <Link href={`/documento/${doc.id}`} onClick={(e) => e.stopPropagation()} className="px-3 py-1.5 bg-white border border-slate-100 text-slate-700 font-bold rounded-lg text-xs hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 shadow-sm transition-all inline-flex items-center gap-1.5">
+                                <Search className="w-3.5 h-3.5" /> Analisar
+                              </Link>
+                            )
                           )}
                           {pastaAtiva === "Obsoletos" && (
                             <button onClick={(e) => { e.stopPropagation(); abrirFicha(doc, "historico"); }} className="text-slate-500 font-bold flex items-center justify-end gap-1.5 hover:text-blue-600 transition-colors">
@@ -460,8 +619,10 @@ export default function GestaoDocumentosPage() {
       {/* VISÃO: CÓPIAS */}
       {viewState === "copias" && (
         <PainelCopiasControladas
-          documentos={documentos.filter((d) => d.status === "Repositório" && !d.isProcesso)}
+          documentos={documentos.filter((d) => statusRepositorio(d.status) && !d.isProcesso)}
           empresaId={empresaId}
+          podeDistribuir={podeDistribuirCopias}
+          podeRecolher={podeRecolherCopias}
           setMensagemSistema={setMensagemSistema}
         />
       )}
@@ -609,9 +770,9 @@ export default function GestaoDocumentosPage() {
               </section>
             </div>
 
-            {docSelecionado.status === "Repositório" && (
+            {statusRepositorio(docSelecionado.status) && (
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-4 shrink-0">
-                <button onClick={() => handleTornarObsoleto(docSelecionado.id)} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 font-bold rounded-xl text-sm hover:bg-red-50 transition-all shadow-sm">
+                <button onClick={() => handleTornarObsoleto(docSelecionado.id)} disabled={!podeTornarObsoleto} className={`flex items-center justify-center gap-2 px-5 py-2.5 bg-white border font-bold rounded-xl text-sm transition-all shadow-sm ${podeTornarObsoleto ? "border-red-200 text-red-600 hover:bg-red-50" : "border-slate-200 text-slate-400 cursor-not-allowed"}`}>
                   <Archive className="w-4 h-4" /> Tornar Obsoleto
                 </button>
                 <button onClick={() => handleCriarNovaVersao(docSelecionado)} className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition-all shadow-md">
@@ -769,9 +930,11 @@ type CopiaControlada = {
   historico: string[];
 };
 
-function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: {
+function PainelCopiasControladas({ documentos, empresaId, podeDistribuir, podeRecolher, setMensagemSistema }: {
   documentos: Documento[];
   empresaId: string | null;
+  podeDistribuir: boolean;
+  podeRecolher: boolean;
   setMensagemSistema: (m: MensagemSistema) => void;
 }) {
   const [busca, setBusca] = useState("");
@@ -807,6 +970,10 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
   const copiasRecolhidas = copias.filter((c) => c.status === "Recolhida").length;
 
   function abrirEmissao(doc: Documento) {
+    if (!podeDistribuir) {
+      setMensagemSistema({ tipo: "alerta", texto: "A emissÃ£o de cÃ³pias controladas Ã© restrita Ã  Qualidade." });
+      return;
+    }
     setDocumentoEmissao(doc);
     setFormEmissao({
       profissional: "",
@@ -868,6 +1035,10 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
 
   async function salvarEmissao() {
     if (!documentoEmissao || !empresaId) return;
+    if (!podeDistribuir) {
+      setMensagemSistema({ tipo: "alerta", texto: "A emissÃ£o de cÃ³pias controladas Ã© restrita Ã  Qualidade." });
+      return;
+    }
     if (!formEmissao.profissional.trim() || !formEmissao.setor.trim() || !formEmissao.motivo.trim() || !formEmissao.responsavel.trim()) {
       setMensagemSistema({ tipo: "alerta", texto: "Preencha destinatário, setor, motivo e responsável pela emissão." });
       return;
@@ -929,6 +1100,10 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
   }
 
   function abrirRecolhimento(copia: CopiaControlada) {
+    if (!podeRecolher) {
+      setMensagemSistema({ tipo: "alerta", texto: "O recolhimento de cÃ³pias controladas Ã© restrito Ã  Qualidade." });
+      return;
+    }
     setCopiaRecolhimento(copia);
     setFormRecolhimento({
       data: new Date().toISOString().slice(0, 10),
@@ -940,6 +1115,10 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
   }
 
   function salvarRecolhimento() {
+    if (!podeRecolher) {
+      setMensagemSistema({ tipo: "alerta", texto: "O recolhimento de cÃ³pias controladas Ã© restrito Ã  Qualidade." });
+      return;
+    }
     if (!copiaRecolhimento || !formRecolhimento.responsavel.trim()) {
       setMensagemSistema({ tipo: "alerta", texto: "Informe quem recolheu a cópia." });
       return;
@@ -984,6 +1163,17 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
         </div>
       </div>
 
+      {(!podeDistribuir || !podeRecolher) && (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-900">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
+            <p>
+              Política ativa: somente Qualidade ou administradores autorizados emitem, distribuem e recolhem cópias controladas. Usuários operacionais acompanham e visualizam documentos vigentes.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <ResumoCopiaCard titulo="Cópias distribuídas" valor={copiasAtivas.length} icon={<Copy className="w-5 h-5" />} cor="blue" />
         <ResumoCopiaCard titulo="Pendentes de recolhimento" valor={copiasPendentes} icon={<Clock className="w-5 h-5" />} cor="amber" />
@@ -1017,7 +1207,7 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
                     </td>
                     <td className="px-5 py-4 text-center font-bold text-slate-500">{String(doc.versao).padStart(2, "0")}</td>
                     <td className="px-5 py-4 text-right">
-                      <button onClick={() => abrirEmissao(doc)} className="inline-flex items-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 shadow-sm transition-colors">
+                      <button onClick={() => abrirEmissao(doc)} disabled={!podeDistribuir} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors ${podeDistribuir ? "bg-slate-900 text-white hover:bg-slate-800" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
                         <Plus className="w-3 h-3" /> Emitir cópia
                       </button>
                     </td>
@@ -1066,7 +1256,7 @@ function PainelCopiasControladas({ documentos, empresaId, setMensagemSistema }: 
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => gerarPdfControlado(copia)} className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50">PDF</button>
                         {!["Recolhida", "Cancelada", "Substituída"].includes(copia.status) && (
-                          <button onClick={() => abrirRecolhimento(copia)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Recolher</button>
+                          <button onClick={() => abrirRecolhimento(copia)} disabled={!podeRecolher} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${podeRecolher ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>Recolher</button>
                         )}
                       </div>
                     </td>
@@ -1188,7 +1378,7 @@ function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema
   obterEmpresaId: () => Promise<string | null>;
   setMensagemSistema: (m: MensagemSistema) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"tipos" | "diretorias" | "setores">("tipos");
+  const [activeTab, setActiveTab] = useState<"tipos" | "diretorias" | "setores" | "permissoes">("tipos");
   const [tipos, setTipos]         = useState<any[]>([]);
   const [diretorias, setDiretorias] = useState<any[]>([]);
   const [setores, setSetores]     = useState<any[]>([]);
@@ -1227,6 +1417,8 @@ function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema
       setMensagemSistema({ tipo: "alerta", texto: "Informe o nome antes de adicionar." });
       return;
     }
+
+    if (activeTab === "permissoes") return;
 
     if ((activeTab === "tipos" || activeTab === "setores") && !novaSigla.trim()) {
       setMensagemSistema({ tipo: "alerta", texto: "Informe a sigla antes de adicionar." });
@@ -1282,6 +1474,7 @@ function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema
             { key: "tipos",      label: "Tipos de Documento", icon: <BookOpen className="w-4 h-4" /> },
             { key: "diretorias", label: "Diretorias",         icon: <Building2 className="w-4 h-4" /> },
             { key: "setores",    label: "Setores",            icon: <Layers className="w-4 h-4" /> },
+            { key: "permissoes", label: "Permissões",         icon: <ShieldCheck className="w-4 h-4" /> },
           ].map((tab) => (
             <button key={tab.key} onClick={() => { setActiveTab(tab.key as typeof activeTab); setNovoNome(""); setNovaSigla(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === tab.key ? "bg-blue-100 text-blue-700" : "text-slate-600 hover:bg-slate-200"}`}>
@@ -1294,13 +1487,17 @@ function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema
       <div className="flex-1 p-8 flex flex-col bg-white">
         <div className="mb-6 pb-6 border-b border-slate-50">
           <h2 className="text-xl font-bold text-slate-800 mb-1">
-            {activeTab === "tipos" ? "Tipos Documentais" : activeTab === "diretorias" ? "Estrutura de Diretorias" : "Mapeamento de Setores"}
+            {activeTab === "tipos" ? "Tipos Documentais" : activeTab === "diretorias" ? "Estrutura de Diretorias" : activeTab === "setores" ? "Mapeamento de Setores" : "Matriz de Permissões"}
           </h2>
           <p className="text-sm text-slate-500">
-            {activeTab === "tipos" ? "Gerencie as nomenclaturas (Ex: POP, MAN)." : activeTab === "diretorias" ? "Defina a alta gestão." : "Cadastre as unidades operacionais."}
+            {activeTab === "tipos" ? "Gerencie as nomenclaturas (Ex: POP, MAN)." : activeTab === "diretorias" ? "Defina a alta gestão." : activeTab === "setores" ? "Cadastre as unidades operacionais." : "Estratifique quem elabora, homologa, torna obsoleto, distribui e recolhe cópias."}
           </p>
         </div>
 
+        {activeTab === "permissoes" ? (
+          <MatrizPermissoesDocumentos />
+        ) : (
+          <>
         <div className="flex gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 items-end">
           {activeTab === "setores" && (
             <div className="w-64">
@@ -1366,6 +1563,8 @@ function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema
             </tbody>
           </table>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1374,6 +1573,70 @@ function PainelConfiguracaoAdmin({ empresaId, obterEmpresaId, setMensagemSistema
 /* ─────────────────────────────────────────────────────────────────
  * SUB-COMPONENTES
  * ───────────────────────────────────────────────────────────────*/
+function MatrizPermissoesDocumentos() {
+  const regras = [
+    { acao: "Elaborar documento", usuario: true, qualidade: true, admin: true, detalhe: "Usuario cria rascunho, anexa arquivo e envia ao fluxo." },
+    { acao: "Enviar ao fluxo", usuario: true, qualidade: true, admin: true, detalhe: "Autor encaminha para verificacao e acompanha a tramitacao." },
+    { acao: "Homologar documento", usuario: false, qualidade: true, admin: true, detalhe: "Homologacao final fica restrita a Qualidade." },
+    { acao: "Tornar obsoleto", usuario: false, qualidade: true, admin: true, detalhe: "Exige motivo obrigatorio e registro em justificativa." },
+    { acao: "Emitir copia controlada", usuario: false, qualidade: true, admin: true, detalhe: "Somente documentos vigentes do repositorio podem gerar copia." },
+    { acao: "Recolher copia controlada", usuario: false, qualidade: true, admin: true, detalhe: "Encerramento formal com responsavel, origem, destino e observacao." },
+    { acao: "Visualizar repositorio", usuario: true, qualidade: true, admin: true, detalhe: "Todos visualizam documentos aprovados e vigentes." },
+    { acao: "Configurar parametros", usuario: false, qualidade: true, admin: true, detalhe: "Tipos, diretorias, setores e permissoes do modulo." },
+  ];
+
+  const Marcador = ({ ativo }: { ativo: boolean }) => (
+    <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full border text-[10px] font-black ${ativo ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
+      {ativo ? "SIM" : "NAO"}
+    </span>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {[
+          { titulo: "Usuario operacional", texto: "Elabora, envia ao fluxo, acompanha andamento e visualiza o repositorio.", cor: "bg-slate-50 text-slate-700 border-slate-200" },
+          { titulo: "Qualidade", texto: "Homologa, torna obsoleto, distribui e recolhe copias controladas.", cor: "bg-blue-50 text-blue-700 border-blue-100" },
+          { titulo: "Administrador", texto: "Mantem parametros, perfis autorizados e regras organizacionais.", cor: "bg-violet-50 text-violet-700 border-violet-100" },
+        ].map((item) => (
+          <div key={item.titulo} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <div className={`mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl border ${item.cor}`}>
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <h3 className="text-sm font-black text-slate-900">{item.titulo}</h3>
+            <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{item.texto}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+        <table className="w-full min-w-[820px] text-left text-sm">
+          <thead className="border-b border-slate-100 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <tr>
+              <th className="px-5 py-4">Acao</th>
+              <th className="px-5 py-4 text-center">Usuario</th>
+              <th className="px-5 py-4 text-center">Qualidade</th>
+              <th className="px-5 py-4 text-center">Admin</th>
+              <th className="px-5 py-4">Regra operacional</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {regras.map((regra) => (
+              <tr key={regra.acao} className="hover:bg-slate-50">
+                <td className="px-5 py-4 font-bold text-slate-900">{regra.acao}</td>
+                <td className="px-5 py-4 text-center"><Marcador ativo={regra.usuario} /></td>
+                <td className="px-5 py-4 text-center"><Marcador ativo={regra.qualidade} /></td>
+                <td className="px-5 py-4 text-center"><Marcador ativo={regra.admin} /></td>
+                <td className="px-5 py-4 text-xs font-medium leading-relaxed text-slate-500">{regra.detalhe}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function DashboardBlock({ title, desc, count, icon, color, onClick, isLoading }: any) {
   const colorMap: Record<string, string> = {
     emerald: "text-emerald-600 bg-emerald-50",
