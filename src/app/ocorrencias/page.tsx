@@ -1,1637 +1,928 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
-import { carregarPerfilUsuario } from "@/lib/perfil";
+import React, { useState } from "react";
+import Link from "next/link";
 import {
-  AlertTriangle, ArrowRight, BarChart3, CheckCircle2, ClipboardList,
-  FileWarning, HeartHandshake, LayoutTemplate, MessageSquareWarning,
-  Plus, QrCode, Search, ShieldAlert, Sparkles, Trash2, User, XCircle, Loader2,
+  AlertTriangle, CheckCircle2, Clock, FileWarning, HeartHandshake,
+  Plus, Search, Settings, X, ChevronRight, MessageSquare,
+  User, Calendar, Building2, ShieldCheck, ClipboardList,
+  MoreVertical, Eye, Ban, CheckCheck, QrCode, Loader2,
+  ArrowRight, AlertCircle, XCircle, FileText, Sparkles,
 } from "lucide-react";
 
-/* ─────────────────────────────────────────────────────────────────
- * TYPES
- * ───────────────────────────────────────────────────────────────*/
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 
-type ModuloTipo = "TEMPLATE" | "NAO_CONFORMIDADE" | "INCIDENTE" | "MELHORIA" | "OUVIDORIA";
-type StatusOcorrencia = "REGISTRO" | "ANALISE" | "TRATATIVA" | "VALIDACAO" | "CONCLUIDO" | "CANCELADO";
-type Gravidade = "BAIXA" | "MODERADA" | "ALTA" | "GRAVE" | "SENTINELA";
-type PerfilAcesso = "NOTIFICADOR" | "TRATADOR" | "GESTOR" | "QUALIDADE" | "ADMIN";
-type ClassificacaoOuvidoria = "ELOGIO" | "RECLAMACAO" | "MANIFESTACAO" | "SUGESTAO";
-type IncidenteClassificacao = "QUEDA" | "MEDICACAO" | "IDENTIFICACAO" | "LESAO_PRESSAO" | "INFECCAO" | "PROCEDIMENTO" | "OUTRO";
-type NaoConformidadeClassificacao = "PROCESSO" | "DOCUMENTO" | "TREINAMENTO" | "ESTRUTURA" | "EQUIPAMENTO" | "FORNECEDOR" | "OUTRO";
-type MelhoriaClassificacao = "PROCESSO" | "SEGURANCA" | "EXPERIENCIA" | "EFICIENCIA" | "CUSTO" | "INOVACAO" | "OUTRO";
-type HistoricoItem = { id: string; data: string; autor: string; acao: string; observacao?: string };
-type PlanoAcaoStatus = "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO";
-type PlanoAcaoItem = { id: string; descricao: string; responsavel: string; prazo: string; status: PlanoAcaoStatus };
-type TemplateFieldType = "TEXTO" | "SELECAO" | "DATA" | "UPLOAD" | "CHECKLIST" | "TEXTO_LONGO";
-type TemplateField = { id: string; label: string; tipo: TemplateFieldType; obrigatorio: boolean; opcoes?: string[] };
-type ViewMode = "TABLE" | "KANBAN";
+type TipoRegistro = "NI" | "NC" | "EL" | "RC" | "MF";
 
-type FormTemplate = {
+type StatusRegistro =
+  | "AGUARDANDO_TRIAGEM"
+  | "EM_TRATATIVA"
+  | "APROVACAO"
+  | "EFICACIA"
+  | "CONCLUIDO"
+  | "CANCELADO"
+  | "SUSPENSO";
+
+type PlanoAcaoItem = {
   id: string;
-  nome: string;
-  descricao: string;
-  tipoVinculado: Exclude<ModuloTipo, "TEMPLATE">;
-  versao: string;
-  publico: boolean;
-  workflowPadrao: StatusOcorrencia[];
-  responsavelPadrao: string;
-  qrCodeUrl: string;
-  linkPublico: string;
-  campos: TemplateField[];
-  criadoEm: string;
+  acao: string;
+  responsavel: string;
+  prazo: string;
+  status: "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO";
 };
 
-type Ocorrencia = {
+type HistoricoItem = {
   id: string;
-  numero: string;
-  tipo: Exclude<ModuloTipo, "TEMPLATE">;
-  status: StatusOcorrencia;
+  data: string;
+  autor: string;
+  acao: string;
+  obs?: string;
+};
+
+type Registro = {
+  id: string;
+  codigo: string;
+  tipo: TipoRegistro;
   titulo: string;
   descricao: string;
   setor: string;
-  areaNotificante: string;
-  dataOcorrencia: string;
   dataRegistro: string;
-  localOcorrencia: string;
+  notificador: string;
   anonimo: boolean;
-  envolvePaciente: boolean;
-  identificacaoRestrita: boolean;
-  nomeNotificador?: string;
-  perfilResponsavel: PerfilAcesso;
-  responsavelTratativa: string;
-  prioridade: "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
-  gravidade?: Gravidade;
-  danoPaciente?: boolean;
-  classificacaoIncidente?: IncidenteClassificacao;
-  classificacaoNC?: NaoConformidadeClassificacao;
-  classificacaoOuvidoria?: ClassificacaoOuvidoria;
-  classificacaoMelhoria?: MelhoriaClassificacao;
-  pacienteCodigo?: string;
-  causaRaiz?: string;
-  acaoImediata?: string;
+  status: StatusRegistro;
+  responsavel: string;
+  prazo: string;
+  justificativaRecusa?: string;
+  responsavelTratativa?: string;
+  ferramentasAnalise: ("ISHIKAWA" | "5PORQUES")[];
   planoAcao: PlanoAcaoItem[];
-  conclusao?: string;
-  motivoCancelamento?: string;
-  prazoTratativa?: string;
-  templateId?: string;
   historico: HistoricoItem[];
+  avaliadorEficacia?: string;
 };
 
-/* ─────────────────────────────────────────────────────────────────
- * CONSTANTES
- * ───────────────────────────────────────────────────────────────*/
+// ─── CONSTANTES ──────────────────────────────────────────────────────────────
 
-const SETORES = [
-  "Qualidade", "Pronto Atendimento", "UTI Adulto", "Centro Cirúrgico",
-  "Internação", "Farmácia", "SADT", "Recepção", "Ouvidoria", "Diretoria Técnica",
+const TIPO_CONFIG: Record<TipoRegistro, { label: string; cor: string; bg: string; border: string; icon: React.ReactNode }> = {
+  NI: { label: "Notif. de Incidente", cor: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+  NC: { label: "Não Conformidade",    cor: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", icon: <FileWarning className="w-3.5 h-3.5" /> },
+  EL: { label: "Elogio",             cor: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <HeartHandshake className="w-3.5 h-3.5" /> },
+  RC: { label: "Reclamação",         cor: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  MF: { label: "Manifestação",       cor: "text-sky-700",     bg: "bg-sky-50",     border: "border-sky-200",     icon: <FileText className="w-3.5 h-3.5" /> },
+};
+
+const STATUS_CONFIG: Record<StatusRegistro, { label: string; cls: string }> = {
+  AGUARDANDO_TRIAGEM: { label: "Aguardando Triagem", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  EM_TRATATIVA:       { label: "Em Tratativa",       cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  APROVACAO:          { label: "Em Aprovação",       cls: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  EFICACIA:           { label: "Aval. Eficácia",     cls: "bg-purple-50 text-purple-700 border-purple-200" },
+  CONCLUIDO:          { label: "Concluído",          cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  CANCELADO:          { label: "Cancelado",          cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  SUSPENSO:           { label: "Suspenso",           cls: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+};
+
+const WORKFLOW_STEPS: { status: StatusRegistro; label: string }[] = [
+  { status: "AGUARDANDO_TRIAGEM", label: "Triagem" },
+  { status: "EM_TRATATIVA",       label: "Tratativa" },
+  { status: "APROVACAO",          label: "Aprovação" },
+  { status: "EFICACIA",           label: "Eficácia" },
+  { status: "CONCLUIDO",          label: "Concluído" },
 ];
 
-const USUARIOS = [
-  "Ana Silva", "Dr. Carlos", "Enf. Roberta", "João Pedro", "Marina Souza", "Lucas Oliveira",
+const SETORES = ["UTI Adulto", "CME", "Farmácia", "Gestão da Qualidade", "Internação", "Centro Cirúrgico", "Pronto Atendimento", "Recepção", "SADT", "Nutrição"];
+const USUARIOS = ["Enf. Marina Costa", "Dr. Carlos Lima", "Farm. Ana Pereira", "Deivid Coimbra", "Tyago Alves", "Patricia Reis"];
+
+// ─── MOCK DATA ────────────────────────────────────────────────────────────────
+
+const MOCK: Registro[] = [
+  {
+    id: "r1", codigo: "NI-0001", tipo: "NI", titulo: "Queda de paciente na UTI",
+    descricao: "Paciente encontrado no chão às 03h45. Grade da cama estava baixa.", setor: "UTI Adulto",
+    dataRegistro: "03/05/2026", notificador: "Téc. Enfermagem (anônimo)", anonimo: true,
+    status: "AGUARDANDO_TRIAGEM", responsavel: "", prazo: "",
+    ferramentasAnalise: [], planoAcao: [],
+    historico: [{ id: "h1", data: "03/05/2026 08:12", autor: "Sistema", acao: "Registro criado. Código NI-0001 gerado automaticamente." }],
+  },
+  {
+    id: "r2", codigo: "NC-0001", tipo: "NC", titulo: "Documentação incompleta no prontuário",
+    descricao: "Auditoria identificou 12 prontuários sem evolução médica no dia anterior.", setor: "Internação",
+    dataRegistro: "02/05/2026", notificador: "Auditoria Interna", anonimo: false,
+    status: "AGUARDANDO_TRIAGEM", responsavel: "", prazo: "",
+    ferramentasAnalise: [], planoAcao: [],
+    historico: [{ id: "h1", data: "02/05/2026 14:30", autor: "Sistema", acao: "Registro criado. Código NC-0001 gerado automaticamente." }],
+  },
+  {
+    id: "r3", codigo: "RC-0001", tipo: "RC", titulo: "Tempo de espera excessivo no PA",
+    descricao: "Paciente aguardou mais de 4 horas sem atendimento médico.", setor: "Pronto Atendimento",
+    dataRegistro: "01/05/2026", notificador: "Paciente (anônimo)", anonimo: true,
+    status: "AGUARDANDO_TRIAGEM", responsavel: "", prazo: "",
+    ferramentasAnalise: [], planoAcao: [],
+    historico: [{ id: "h1", data: "01/05/2026 16:00", autor: "Sistema", acao: "Registro criado. Código RC-0001 gerado automaticamente." }],
+  },
+  {
+    id: "r4", codigo: "NI-0002", tipo: "NI", titulo: "Medicamento errado administrado",
+    descricao: "Paciente recebeu dose de heparina diferente da prescrita.", setor: "Farmácia",
+    dataRegistro: "28/04/2026", notificador: "Enf. Marina Costa", anonimo: false,
+    status: "EM_TRATATIVA", responsavel: "Farm. Ana Pereira", prazo: "10/05/2026",
+    ferramentasAnalise: ["ISHIKAWA", "5PORQUES"],
+    planoAcao: [
+      { id: "pa1", acao: "Revisar protocolo de dupla checagem de medicamentos", responsavel: "Deivid Coimbra", prazo: "07/05/2026", status: "EM_ANDAMENTO" },
+      { id: "pa2", acao: "Treinamento da equipe de farmácia", responsavel: "Farm. Ana Pereira", prazo: "12/05/2026", status: "PENDENTE" },
+    ],
+    historico: [
+      { id: "h1", data: "28/04/2026 09:00", autor: "Sistema", acao: "Registro criado." },
+      { id: "h2", data: "29/04/2026 10:15", autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido.", obs: "Incidente grave. Responsável designado: Farm. Ana Pereira." },
+    ],
+  },
+  {
+    id: "r5", codigo: "NC-0002", tipo: "NC", titulo: "Equipamento sem calibração no SADT",
+    descricao: "Autoclave do SADT com calibração vencida há 3 meses.", setor: "SADT",
+    dataRegistro: "25/04/2026", notificador: "Engenharia Clínica", anonimo: false,
+    status: "APROVACAO", responsavel: "Tyago Alves", prazo: "08/05/2026",
+    ferramentasAnalise: ["5PORQUES"],
+    planoAcao: [
+      { id: "pa1", acao: "Enviar equipamento para calibração externa", responsavel: "Engenharia", prazo: "05/05/2026", status: "CONCLUIDO" },
+      { id: "pa2", acao: "Implantar controle semestral de calibração", responsavel: "Tyago Alves", prazo: "08/05/2026", status: "EM_ANDAMENTO" },
+    ],
+    historico: [
+      { id: "h1", data: "25/04/2026 11:00", autor: "Sistema", acao: "Registro criado." },
+      { id: "h2", data: "26/04/2026 08:30", autor: "Patricia Reis", acao: "Triagem realizada. Registro assumido." },
+      { id: "h3", data: "30/04/2026 16:00", autor: "Tyago Alves", acao: "Tratativa concluída. Encaminhado para aprovação." },
+    ],
+  },
+  {
+    id: "r6", codigo: "EL-0001", tipo: "EL", titulo: "Excelente atendimento na recepção",
+    descricao: "Paciente elogiou atenção e agilidade da equipe de recepção durante admissão.", setor: "Recepção",
+    dataRegistro: "30/04/2026", notificador: "Paciente (anônimo)", anonimo: true,
+    status: "EM_TRATATIVA", responsavel: "Deivid Coimbra", prazo: "",
+    ferramentasAnalise: [],
+    planoAcao: [{ id: "pa1", acao: "Compartilhar elogio com a equipe em reunião mensal", responsavel: "Deivid Coimbra", prazo: "10/05/2026", status: "PENDENTE" }],
+    historico: [
+      { id: "h1", data: "30/04/2026 14:00", autor: "Sistema", acao: "Registro criado." },
+      { id: "h2", data: "01/05/2026 09:00", autor: "Deivid Coimbra", acao: "Registro assumido e encaminhado." },
+    ],
+  },
+  {
+    id: "r7", codigo: "NI-0003", tipo: "NI", titulo: "Falha na identificação de paciente",
+    descricao: "Paciente sem pulseira de identificação levado ao centro cirúrgico.", setor: "Centro Cirúrgico",
+    dataRegistro: "20/04/2026", notificador: "Dr. Carlos Lima", anonimo: false,
+    status: "CONCLUIDO", responsavel: "Deivid Coimbra", prazo: "30/04/2026",
+    ferramentasAnalise: ["ISHIKAWA"],
+    planoAcao: [
+      { id: "pa1", acao: "Checklist pré-cirúrgico atualizado com verificação de pulseira", responsavel: "Deivid Coimbra", prazo: "25/04/2026", status: "CONCLUIDO" },
+    ],
+    historico: [
+      { id: "h1", data: "20/04/2026", autor: "Sistema", acao: "Registro criado." },
+      { id: "h2", data: "21/04/2026", autor: "Patricia Reis", acao: "Triagem assumida." },
+      { id: "h3", data: "26/04/2026", autor: "Deivid Coimbra", acao: "Tratativa concluída." },
+      { id: "h4", data: "28/04/2026", autor: "Patricia Reis", acao: "Aprovação realizada." },
+      { id: "h5", data: "30/04/2026", autor: "Deivid Coimbra", acao: "Eficácia avaliada positivamente. Registro concluído." },
+    ],
+  },
+  {
+    id: "r8", codigo: "NC-0003", tipo: "NC", titulo: "Processo de esterilização não seguido",
+    descricao: "Instrumental cirúrgico processado sem seguir o POP CME-001.", setor: "CME",
+    dataRegistro: "15/04/2026", notificador: "Qualidade", anonimo: false,
+    status: "CANCELADO", responsavel: "José Almeida", prazo: "20/04/2026",
+    ferramentasAnalise: [], planoAcao: [],
+    justificativaRecusa: "Verificado que não houve desvio; notificação foi erro de interpretação do POP.",
+    historico: [
+      { id: "h1", data: "15/04/2026", autor: "Sistema", acao: "Registro criado." },
+      { id: "h2", data: "16/04/2026", autor: "Deivid Coimbra", acao: "Registro cancelado após verificação in loco.", obs: "Não houve desvio real." },
+    ],
+  },
+  {
+    id: "r9", codigo: "MF-0001", tipo: "MF", titulo: "Sugestão de nova rota de acesso para cadeirantes",
+    descricao: "Familiar de paciente sugere instalação de rampa de acesso no bloco B.", setor: "Recepção",
+    dataRegistro: "29/04/2026", notificador: "Familiar (anônimo)", anonimo: true,
+    status: "EM_TRATATIVA", responsavel: "Deivid Coimbra", prazo: "20/05/2026",
+    ferramentasAnalise: [], planoAcao: [
+      { id: "pa1", acao: "Levantar custo de instalação da rampa", responsavel: "Manutenção", prazo: "15/05/2026", status: "PENDENTE" },
+    ],
+    historico: [
+      { id: "h1", data: "29/04/2026", autor: "Sistema", acao: "Registro criado." },
+      { id: "h2", data: "30/04/2026", autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido." },
+    ],
+  },
 ];
 
-const KANBAN_COLUMNS: { key: StatusOcorrencia; label: string }[] = [
-  { key: "REGISTRO", label: "Registro" },
-  { key: "ANALISE", label: "Em análise" },
-  { key: "TRATATIVA", label: "Em tratativa" },
-  { key: "VALIDACAO", label: "Validação" },
-  { key: "CONCLUIDO", label: "Concluído" },
-];
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-/* ─────────────────────────────────────────────────────────────────
- * HELPERS
- * ───────────────────────────────────────────────────────────────*/
-
-function cn(...items: Array<string | false | null | undefined>) {
-  return items.filter(Boolean).join(" ");
+function TipoBadge({ tipo }: { tipo: TipoRegistro }) {
+  const cfg = TIPO_CONFIG[tipo];
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${cfg.bg} ${cfg.border} ${cfg.cor}`}>
+      {cfg.icon} {cfg.label}
+    </span>
+  );
 }
 
-function genId(prefix = "id") {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+function StatusBadge({ status }: { status: StatusRegistro }) {
+  const cfg = STATUS_CONFIG[status];
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  );
 }
 
-function formatNowPtBr() {
-  return new Date().toLocaleString("pt-BR");
+function statusWorkflowIdx(status: StatusRegistro) {
+  return WORKFLOW_STEPS.findIndex((s) => s.status === status);
 }
 
-function novoNumero(seq: number) {
-  return `OC-${new Date().getFullYear()}-${String(seq).padStart(4, "0")}`;
+// ─── TIPO SELETOR ─────────────────────────────────────────────────────────────
+
+type BoardTab = "triagem" | "NI" | "NC" | "OUV";
+type SubTab = "todos" | "aguardando" | "andamento" | "cancelados";
+
+// ─── MODAIS ───────────────────────────────────────────────────────────────────
+
+function ModalOverlay({ children, onFechar }: { children: React.ReactNode; onFechar: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="relative">{children}</div>
+    </div>
+  );
 }
 
-function statusLabel(status: StatusOcorrencia) {
-  return { REGISTRO: "Registro", ANALISE: "Em análise", TRATATIVA: "Em tratativa", VALIDACAO: "Validação", CONCLUIDO: "Concluído", CANCELADO: "Cancelado" }[status];
-}
-
-function statusClass(status: StatusOcorrencia) {
-  return {
-    REGISTRO: "bg-blue-50 text-blue-700 border-blue-200",
-    ANALISE: "bg-violet-50 text-violet-700 border-violet-200",
-    TRATATIVA: "bg-amber-50 text-amber-700 border-amber-200",
-    VALIDACAO: "bg-cyan-50 text-cyan-700 border-cyan-200",
-    CONCLUIDO: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    CANCELADO: "bg-slate-100 text-slate-600 border-slate-200",
-  }[status];
-}
-
-function tipoLabel(tipo: ModuloTipo | Exclude<ModuloTipo, "TEMPLATE">) {
-  return {
-    TEMPLATE: "Template de formulário",
-    NAO_CONFORMIDADE: "Não conformidade",
-    INCIDENTE: "Notificação de incidente",
-    MELHORIA: "Oportunidade de melhoria",
-    OUVIDORIA: "Elogios, reclamações e manifestação",
-  }[tipo];
-}
-
-function tipoCardClass(tipo: ModuloTipo, active: boolean) {
-  if (active) {
-    return {
-      TEMPLATE: "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20",
-      NAO_CONFORMIDADE: "bg-violet-600 text-white border-violet-600 shadow-lg shadow-violet-600/20",
-      INCIDENTE: "bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/20",
-      MELHORIA: "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-600/20",
-      OUVIDORIA: "bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-600/20",
-    }[tipo];
-  }
-  return "bg-white border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40";
-}
-
-function tipoIcon(tipo: ModuloTipo | Exclude<ModuloTipo, "TEMPLATE">) {
-  switch (tipo) {
-    case "TEMPLATE": return <LayoutTemplate className="w-4 h-4" />;
-    case "NAO_CONFORMIDADE": return <FileWarning className="w-4 h-4" />;
-    case "INCIDENTE": return <AlertTriangle className="w-4 h-4" />;
-    case "MELHORIA": return <Sparkles className="w-4 h-4" />;
-    case "OUVIDORIA": return <HeartHandshake className="w-4 h-4" />;
-  }
-}
-
-function prioridadeClass(prioridade: Ocorrencia["prioridade"]) {
-  return { BAIXA: "bg-slate-100 text-slate-700", MEDIA: "bg-blue-100 text-blue-700", ALTA: "bg-amber-100 text-amber-700", CRITICA: "bg-red-100 text-red-700" }[prioridade];
-}
-
-function isOcorrenciaTipo(tipo: ModuloTipo): tipo is Exclude<ModuloTipo, "TEMPLATE"> {
-  return tipo !== "TEMPLATE";
-}
-
-function getSlaStatus(item: Ocorrencia) {
-  if (!item.prazoTratativa) return "Sem SLA";
-  if (item.status === "CONCLUIDO") return "Concluído";
-  return new Date(item.prazoTratativa) < new Date() ? "Atrasado" : "Dentro do prazo";
-}
-
-function getTemplateTypeBadgeClass(tipo: Exclude<ModuloTipo, "TEMPLATE">) {
-  return {
-    NAO_CONFORMIDADE: "bg-violet-50 text-violet-700 border-violet-200",
-    INCIDENTE: "bg-orange-50 text-orange-700 border-orange-200",
-    MELHORIA: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    OUVIDORIA: "bg-rose-50 text-rose-700 border-rose-200",
-  }[tipo];
-}
-
-/* ─────────────────────────────────────────────────────────────────
- * MAPEAMENTO: banco → frontend / frontend → banco
- * ───────────────────────────────────────────────────────────────*/
-
-// Converte linha do Supabase → Ocorrencia tipada no frontend
-function dbToOcorrencia(row: any): Ocorrencia {
-  return {
-    id: row.id,
-    numero: row.numero ?? "",
-    tipo: row.tipo,
-    status: row.status,
-    titulo: row.titulo,
-    descricao: row.descricao ?? "",
-    setor: row.setor ?? "",
-    areaNotificante: row.area_notificante ?? "",
-    dataOcorrencia: row.data_ocorrencia ?? "",
-    dataRegistro: row.data_registro ?? "",
-    localOcorrencia: row.local_ocorrencia ?? "",
-    anonimo: row.anonimo ?? false,
-    envolvePaciente: row.envolve_paciente ?? false,
-    identificacaoRestrita: row.identificacao_restrita ?? false,
-    nomeNotificador: row.nome_notificador ?? "",
-    perfilResponsavel: row.perfil_responsavel ?? "QUALIDADE",
-    responsavelTratativa: row.responsavel_tratativa ?? "",
-    prioridade: row.prioridade ?? "MEDIA",
-    gravidade: row.gravidade,
-    danoPaciente: row.dano_paciente ?? false,
-    classificacaoIncidente: row.classificacao_evento,
-    classificacaoNC: row.classificacao_nc,
-    classificacaoOuvidoria: row.classificacao_manifestacao,
-    classificacaoMelhoria: undefined, // campo extra — armazenar em classificacao_nc por ora
-    pacienteCodigo: row.paciente_codigo ?? "",
-    causaRaiz: row.causa_raiz ?? "",
-    acaoImediata: row.acao_imediata ?? "",
-    planoAcao: Array.isArray(row.plano_acao) ? row.plano_acao : [],
-    conclusao: row.conclusao ?? "",
-    motivoCancelamento: row.motivo_cancelamento ?? "",
-    prazoTratativa: row.prazo_tratativa ?? "",
-    templateId: "",
-    historico: Array.isArray(row.historico) ? row.historico : [],
-  };
-}
-
-// Converte FormTemplate do frontend → linha do banco (registros_templates)
-function templateToDb(tpl: FormTemplate, empresaId: string) {
-  return {
-    empresa_id: empresaId,
-    titulo: tpl.nome,
-    descricao: tpl.descricao,
-    setor: tpl.tipoVinculado,          // reutilizando campo setor para tipo vinculado
-    responsavel: tpl.responsavelPadrao,
-    versao: parseInt(tpl.versao) || 1,
-    status: tpl.publico ? "ATIVO" : "RASCUNHO",
-    campos: tpl.campos,
-    workflow: {
-      workflowPadrao: tpl.workflowPadrao,
-      responsavelPadrao: tpl.responsavelPadrao,
-      qrCodeUrl: tpl.qrCodeUrl,
-      linkPublico: tpl.linkPublico,
-    },
-  };
-}
-
-// Converte linha do banco → FormTemplate do frontend
-function dbToTemplate(row: any): FormTemplate {
-  const wf = row.workflow ?? {};
-  return {
-    id: row.id,
-    nome: row.titulo,
-    descricao: row.descricao ?? "",
-    tipoVinculado: (row.setor as Exclude<ModuloTipo, "TEMPLATE">) ?? "NAO_CONFORMIDADE",
-    versao: String(row.versao ?? "1"),
-    publico: row.status === "ATIVO",
-    workflowPadrao: wf.workflowPadrao ?? ["REGISTRO", "ANALISE", "TRATATIVA", "VALIDACAO", "CONCLUIDO"],
-    responsavelPadrao: wf.responsavelPadrao ?? row.responsavel ?? "",
-    qrCodeUrl: wf.qrCodeUrl ?? "",
-    linkPublico: wf.linkPublico ?? "",
-    campos: Array.isArray(row.campos) ? row.campos : [],
-    criadoEm: (row.created_at ?? "").slice(0, 10),
-  };
-}
-
-/* ─────────────────────────────────────────────────────────────────
- * FORM INICIAL
- * ───────────────────────────────────────────────────────────────*/
-
-function formInicial(tipo: Exclude<ModuloTipo, "TEMPLATE"> = "NAO_CONFORMIDADE"): Omit<Ocorrencia, "id" | "numero" | "historico"> {
-  return {
-    tipo,
-    status: "REGISTRO",
-    titulo: "",
-    descricao: "",
-    setor: "Qualidade",
-    areaNotificante: "Qualidade",
-    dataOcorrencia: "",
-    dataRegistro: new Date().toISOString().slice(0, 10),
-    localOcorrencia: "",
-    anonimo: false,
-    envolvePaciente: false,
-    identificacaoRestrita: false,
-    nomeNotificador: "",
-    perfilResponsavel: "QUALIDADE",
-    responsavelTratativa: "Ana Silva",
-    prioridade: "MEDIA",
-    gravidade: "BAIXA",
-    danoPaciente: false,
-    classificacaoIncidente: undefined,
-    classificacaoNC: undefined,
-    classificacaoOuvidoria: undefined,
-    classificacaoMelhoria: undefined,
-    pacienteCodigo: "",
-    causaRaiz: "",
-    acaoImediata: "",
-    planoAcao: [],
-    conclusao: "",
-    motivoCancelamento: "",
-    prazoTratativa: "",
-    templateId: "",
-  };
-}
-
-/* ─────────────────────────────────────────────────────────────────
- * PAGE COMPONENT
- * ───────────────────────────────────────────────────────────────*/
+// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export default function OcorrenciasPage() {
-  const [tipoAtivo, setTipoAtivo] = useState<ModuloTipo>("NAO_CONFORMIDADE");
-  const [statusAtivo, setStatusAtivo] = useState<StatusOcorrencia | "DASHBOARD">("REGISTRO");
-  const [viewMode, setViewMode] = useState<ViewMode>("TABLE");
-  const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
-  const [templates, setTemplates] = useState<FormTemplate[]>([]);
-  const [empresaId, setEmpresaId] = useState<string | null>(null);
-  const [nomeUsuario, setNomeUsuario] = useState("Usuário");
+  const [registros, setRegistros] = useState<Registro[]>(MOCK);
+  const [board, setBoard] = useState<BoardTab>("triagem");
+  const [subTab, setSubTab] = useState<SubTab>("todos");
+  const [busca, setBusca] = useState("");
+  const [aviso, setAviso] = useState<{ msg: string; tipo: "ok" | "erro" } | null>(null);
 
-  // Estados de loading e feedback
-  const [carregando, setCarregando] = useState(true);
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [sucesso, setSucesso] = useState<string | null>(null);
+  // modais
+  const [modalNovoAberto, setModalNovoAberto] = useState(false);
+  const [modalAssumirId, setModalAssumirId] = useState<string | null>(null);
+  const [modalRecusarId, setModalRecusarId] = useState<string | null>(null);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
 
-  const [templateForm, setTemplateForm] = useState<{
-    nome: string; descricao: string; tipoVinculado: Exclude<ModuloTipo, "TEMPLATE">;
-    responsavelPadrao: string; publico: boolean; campos: TemplateField[];
-  }>({
-    nome: "", descricao: "", tipoVinculado: "NAO_CONFORMIDADE",
-    responsavelPadrao: "Ana Silva", publico: true,
-    campos: [{ id: genId("field"), label: "Descrição do fato", tipo: "TEXTO_LONGO", obrigatorio: true }],
-  });
+  // form novo registro
+  const [novoForm, setNovoForm] = useState({ tipo: "NI" as TipoRegistro, titulo: "", descricao: "", setor: SETORES[0], anonimo: false });
 
-  const [form, setForm] = useState<Omit<Ocorrencia, "id" | "numero" | "historico">>(formInicial());
+  // form assumir
+  const [assumirForm, setAssumirForm] = useState({ responsavel: USUARIOS[0], prazo: "" });
 
-  /* ── CARREGAR DADOS DO SUPABASE ────────────────────────────── */
+  // form recusar
+  const [recusarJustificativa, setRecusarJustificativa] = useState("");
 
-  const carregarDados = useCallback(async () => {
-    setCarregando(true);
-    setErro(null);
-    try {
-      // 1. Busca sessão e perfil do usuário
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setCarregando(false);
-        return;
-      }
+  // form plano de ação (no detalhe)
+  const [novaAcao, setNovaAcao] = useState({ acao: "", responsavel: USUARIOS[0], prazo: "" });
 
-      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null }>(session, "empresa_id, nome");
-      if (!perfil?.empresa_id) {
-        setCarregando(false);
-        return;
-      }
-      setEmpresaId(perfil.empresa_id);
-      setNomeUsuario(perfil.nome ?? "Usuário");
-
-      // 2. Busca ocorrências
-      const { data: ocs, error: erroOcs } = await supabase
-        .from("ocorrencias")
-        .select("*")
-        .eq("empresa_id", perfil.empresa_id)
-        .order("created_at", { ascending: false });
-
-      if (erroOcs) throw erroOcs;
-      setOcorrencias((ocs ?? []).map(dbToOcorrencia));
-
-      // 3. Busca templates
-      const { data: tpls, error: erroTpls } = await supabase
-        .from("registros_templates")
-        .select("*")
-        .eq("empresa_id", perfil.empresa_id)
-        .order("created_at", { ascending: false });
-
-      if (erroTpls) throw erroTpls;
-      setTemplates((tpls ?? []).map(dbToTemplate));
-
-    } catch (e: any) {
-      setErro("Erro ao carregar dados. Verifique sua conexão.");
-      console.error(e);
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
-
-  useEffect(() => { carregarDados(); }, [carregarDados]);
-
-  /* ── FEEDBACK TEMPORÁRIO ───────────────────────────────────── */
-
-  function mostrarSucesso(msg: string) {
-    setSucesso(msg);
-    setTimeout(() => setSucesso(null), 3000);
+  function notificar(msg: string, tipo: "ok" | "erro" = "ok") {
+    setAviso({ msg, tipo });
+    setTimeout(() => setAviso(null), 3500);
   }
 
-  function mostrarErro(msg: string) {
-    setErro(msg);
-    setTimeout(() => setErro(null), 5000);
-  }
+  // ── Stats ───────────────────────────────────────────────────────────────────
 
-  /* ── SALVAR OCORRÊNCIA ─────────────────────────────────────── */
+  const aguardandoTriagem = registros.filter((r) => r.status === "AGUARDANDO_TRIAGEM").length;
+  const emTratativa = registros.filter((r) => r.status === "EM_TRATATIVA" || r.status === "APROVACAO").length;
+  const concluidos = registros.filter((r) => r.status === "CONCLUIDO").length;
 
-  async function salvarOcorrencia() {
-    if (!form.titulo.trim() || !form.descricao.trim() || !form.setor.trim() || !form.dataOcorrencia) {
-      mostrarErro("Preencha os campos obrigatórios: título, descrição, setor e data.");
-      return;
-    }
-    if (!empresaId) { mostrarErro("Sessão inválida. Faça login novamente."); return; }
+  // ── Actions ─────────────────────────────────────────────────────────────────
 
-    setSalvando(true);
-    try {
-      const numero = novoNumero(ocorrencias.length + 1);
-      const historico: HistoricoItem[] = [{
-        id: genId("h"),
-        data: formatNowPtBr(),
-        autor: form.anonimo ? "Anônimo" : (form.nomeNotificador || nomeUsuario),
-        acao: "Registro criado",
-      }];
-
-      const payload = {
-        empresa_id: empresaId,
-        numero,
-        tipo: form.tipo,
-        status: "REGISTRO",
-        titulo: form.titulo,
-        descricao: form.descricao,
-        setor: form.setor,
-        area_notificante: form.areaNotificante,
-        data_ocorrencia: form.dataOcorrencia || null,
-        data_registro: form.dataRegistro,
-        local_ocorrencia: form.localOcorrencia,
-        anonimo: form.anonimo,
-        envolve_paciente: form.envolvePaciente,
-        identificacao_restrita: form.identificacaoRestrita,
-        nome_notificador: form.anonimo ? null : form.nomeNotificador,
-        perfil_responsavel: form.perfilResponsavel,
-        responsavel_tratativa: form.responsavelTratativa,
-        prioridade: form.prioridade,
-        gravidade: form.gravidade,
-        dano_paciente: form.danoPaciente ?? false,
-        classificacao_evento: form.classificacaoIncidente ?? null,
-        classificacao_nc: form.classificacaoNC ?? form.classificacaoMelhoria ?? null,
-        classificacao_manifestacao: form.classificacaoOuvidoria ?? null,
-        paciente_codigo: form.pacienteCodigo ?? null,
-        causa_raiz: form.causaRaiz ?? null,
-        acao_imediata: form.acaoImediata ?? null,
-        plano_acao: form.planoAcao,
-        conclusao: form.conclusao ?? null,
-        motivo_cancelamento: form.motivoCancelamento ?? null,
-        prazo_tratativa: form.prazoTratativa || null,
-        historico,
-      };
-
-      const { data, error } = await supabase
-        .from("ocorrencias")
-        .insert(payload)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const nova = dbToOcorrencia(data);
-      setOcorrencias((prev) => [nova, ...prev]);
-      setSelectedId(nova.id);
-      setTipoAtivo(nova.tipo);
-      setStatusAtivo("REGISTRO");
-      setForm(formInicial(nova.tipo));
-      mostrarSucesso(`Ocorrência ${numero} registrada com sucesso!`);
-    } catch (e: any) {
-      mostrarErro("Erro ao salvar. Tente novamente.");
-      console.error(e);
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  /* ── MOVER STATUS ──────────────────────────────────────────── */
-
-  async function moverStatus(id: string, nextStatus: StatusOcorrencia) {
-    const item = ocorrencias.find((o) => o.id === id);
-    if (!item) return;
-
-    const novoHistorico: HistoricoItem = {
-      id: genId("h"),
-      data: formatNowPtBr(),
-      autor: nomeUsuario,
-      acao: `Status alterado para ${statusLabel(nextStatus)}`,
+  function criarRegistro() {
+    if (!novoForm.titulo.trim()) { notificar("Informe o título.", "erro"); return; }
+    const seq = registros.filter((r) => r.tipo === novoForm.tipo).length + 1;
+    const codigo = `${novoForm.tipo}-${String(seq).padStart(4, "0")}`;
+    const novo: Registro = {
+      id: `r${Date.now()}`, codigo, tipo: novoForm.tipo,
+      titulo: novoForm.titulo, descricao: novoForm.descricao,
+      setor: novoForm.setor, dataRegistro: new Date().toLocaleDateString("pt-BR"),
+      notificador: novoForm.anonimo ? "Anônimo" : "Usuário atual",
+      anonimo: novoForm.anonimo, status: "AGUARDANDO_TRIAGEM",
+      responsavel: "", prazo: "", ferramentasAnalise: [], planoAcao: [],
+      historico: [{ id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"), autor: "Sistema", acao: `Registro criado. Código ${codigo} gerado automaticamente.` }],
     };
+    setRegistros((prev) => [novo, ...prev]);
+    setModalNovoAberto(false);
+    setNovoForm({ tipo: "NI", titulo: "", descricao: "", setor: SETORES[0], anonimo: false });
+    notificar(`Registro ${codigo} criado e enviado para triagem.`);
+    setBoard("triagem");
+  }
 
-    const historicoAtualizado = [...item.historico, novoHistorico];
+  function assumirRegistro() {
+    if (!assumirForm.responsavel) { notificar("Selecione o responsável pela tratativa.", "erro"); return; }
+    setRegistros((prev) => prev.map((r) => {
+      if (r.id !== modalAssumirId) return r;
+      return {
+        ...r, status: "EM_TRATATIVA" as StatusRegistro,
+        responsavel: assumirForm.responsavel,
+        prazo: assumirForm.prazo,
+        historico: [...r.historico, {
+          id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
+          autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido.",
+          obs: `Responsável pela tratativa: ${assumirForm.responsavel}.${assumirForm.prazo ? ` Prazo: ${assumirForm.prazo}.` : ""}`,
+        }],
+      };
+    }));
+    setModalAssumirId(null);
+    setAssumirForm({ responsavel: USUARIOS[0], prazo: "" });
+    notificar("Registro assumido e enviado para tratativa.");
+  }
 
-    // Atualiza otimisticamente na tela
-    setOcorrencias((prev) =>
-      prev.map((o) => o.id === id ? { ...o, status: nextStatus, historico: historicoAtualizado } : o)
+  function recusarRegistro() {
+    if (!recusarJustificativa.trim()) { notificar("A justificativa é obrigatória para recusar.", "erro"); return; }
+    setRegistros((prev) => prev.map((r) => {
+      if (r.id !== modalRecusarId) return r;
+      return {
+        ...r, status: "CANCELADO" as StatusRegistro,
+        justificativaRecusa: recusarJustificativa,
+        historico: [...r.historico, {
+          id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
+          autor: "Deivid Coimbra", acao: "Triagem: Registro recusado.",
+          obs: recusarJustificativa,
+        }],
+      };
+    }));
+    setModalRecusarId(null);
+    setRecusarJustificativa("");
+    notificar("Registro recusado com justificativa registrada.");
+  }
+
+  function adicionarAcao(registroId: string) {
+    if (!novaAcao.acao.trim()) { notificar("Descreva a ação.", "erro"); return; }
+    setRegistros((prev) => prev.map((r) => {
+      if (r.id !== registroId) return r;
+      return {
+        ...r, planoAcao: [...r.planoAcao, {
+          id: `pa${Date.now()}`, acao: novaAcao.acao,
+          responsavel: novaAcao.responsavel, prazo: novaAcao.prazo, status: "PENDENTE",
+        }],
+      };
+    }));
+    setNovaAcao({ acao: "", responsavel: USUARIOS[0], prazo: "" });
+    notificar("Ação adicionada ao plano.");
+  }
+
+  function avancarWorkflow(registroId: string) {
+    const mapa: Partial<Record<StatusRegistro, StatusRegistro>> = {
+      EM_TRATATIVA: "APROVACAO",
+      APROVACAO: "EFICACIA",
+      EFICACIA: "CONCLUIDO",
+    };
+    setRegistros((prev) => prev.map((r) => {
+      if (r.id !== registroId) return r;
+      const proximo = mapa[r.status];
+      if (!proximo) return r;
+      return {
+        ...r, status: proximo,
+        historico: [...r.historico, {
+          id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
+          autor: "Deivid Coimbra", acao: `Status avançado para: ${STATUS_CONFIG[proximo].label}.`,
+        }],
+      };
+    }));
+  }
+
+  // ── Filters ─────────────────────────────────────────────────────────────────
+
+  const triagem = registros.filter((r) => r.status === "AGUARDANDO_TRIAGEM" && r.titulo.toLowerCase().includes(busca.toLowerCase()));
+
+  function registrosPorTipo(tipos: TipoRegistro[], sub: SubTab) {
+    let list = registros.filter((r) => tipos.includes(r.tipo) && r.status !== "AGUARDANDO_TRIAGEM");
+    if (sub === "aguardando") list = list.filter((r) => r.status === "EM_TRATATIVA");
+    if (sub === "andamento")  list = list.filter((r) => r.status === "APROVACAO" || r.status === "EFICACIA");
+    if (sub === "cancelados") list = list.filter((r) => r.status === "CANCELADO" || r.status === "SUSPENSO");
+    if (sub === "todos")      list = list.filter((r) => !["CANCELADO", "SUSPENSO"].includes(r.status) || true);
+    return list.filter((r) => r.titulo.toLowerCase().includes(busca.toLowerCase()) || r.codigo.toLowerCase().includes(busca.toLowerCase()));
+  }
+
+  const detalhe = detalheId ? registros.find((r) => r.id === detalheId) ?? null : null;
+
+  // ─── RENDER: HEADER + STATS ───────────────────────────────────────────────
+
+  const INPUT_CLS = "w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] focus:bg-white outline-none transition-colors";
+  const SELECT_CLS = "w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] outline-none transition-colors";
+
+  // ─── RENDER: TABELA DE REGISTROS ─────────────────────────────────────────
+
+  function TabelaRegistros({ lista }: { lista: Registro[] }) {
+    if (lista.length === 0) return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+        <ClipboardList className="w-10 h-10 mb-3 opacity-40" />
+        <p className="text-sm font-medium">Nenhum registro encontrado.</p>
+      </div>
     );
-
-    try {
-      const { error } = await supabase
-        .from("ocorrencias")
-        .update({ status: nextStatus, historico: historicoAtualizado })
-        .eq("id", id);
-
-      if (error) throw error;
-      mostrarSucesso(`Status atualizado para "${statusLabel(nextStatus)}"`);
-    } catch (e: any) {
-      // Reverte em caso de erro
-      setOcorrencias((prev) =>
-        prev.map((o) => o.id === id ? { ...o, status: item.status, historico: item.historico } : o)
-      );
-      mostrarErro("Erro ao atualizar status.");
-      console.error(e);
-    }
-  }
-
-  /* ── EXCLUIR OCORRÊNCIA ────────────────────────────────────── */
-
-  async function excluirRegistro(id: string) {
-    if (!confirm("Deseja excluir este registro? Esta ação não pode ser desfeita.")) return;
-
-    // Remove otimisticamente
-    setOcorrencias((prev) => prev.filter((o) => o.id !== id));
-    if (selectedId === id) setSelectedId(null);
-
-    try {
-      const { error } = await supabase.from("ocorrencias").delete().eq("id", id);
-      if (error) throw error;
-      mostrarSucesso("Registro excluído.");
-    } catch (e: any) {
-      // Recarrega em caso de erro
-      carregarDados();
-      mostrarErro("Erro ao excluir. Tente novamente.");
-      console.error(e);
-    }
-  }
-
-  /* ── SALVAR TEMPLATE ───────────────────────────────────────── */
-
-  async function salvarTemplate() {
-    if (!templateForm.nome.trim() || !templateForm.descricao.trim()) {
-      mostrarErro("Preencha nome e descrição do template.");
-      return;
-    }
-    if (!empresaId) return;
-
-    setSalvando(true);
-    try {
-      const novoTpl: FormTemplate = {
-        id: genId("tpl"),
-        nome: templateForm.nome,
-        descricao: templateForm.descricao,
-        tipoVinculado: templateForm.tipoVinculado,
-        versao: "1.0",
-        publico: templateForm.publico,
-        workflowPadrao: ["REGISTRO", "ANALISE", "TRATATIVA", "VALIDACAO", "CONCLUIDO"],
-        responsavelPadrao: templateForm.responsavelPadrao,
-        qrCodeUrl: `QR-${Date.now()}`,
-        linkPublico: `https://docqualis.app/public/form/${Date.now()}`,
-        criadoEm: new Date().toISOString().slice(0, 10),
-        campos: templateForm.campos,
-      };
-
-      const payload = templateToDb(novoTpl, empresaId);
-
-      const { data, error } = await supabase
-        .from("registros_templates")
-        .insert(payload)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setTemplates((prev) => [dbToTemplate(data), ...prev]);
-      setTemplateForm({
-        nome: "", descricao: "", tipoVinculado: "NAO_CONFORMIDADE",
-        responsavelPadrao: "Ana Silva", publico: true,
-        campos: [{ id: genId("field"), label: "Descrição do fato", tipo: "TEXTO_LONGO", obrigatorio: true }],
-      });
-      mostrarSucesso("Template salvo com sucesso!");
-    } catch (e: any) {
-      mostrarErro("Erro ao salvar template.");
-      console.error(e);
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  /* ── PLANO DE AÇÃO ─────────────────────────────────────────── */
-
-  function addPlanoAcao() {
-    setForm((prev) => ({
-      ...prev,
-      planoAcao: [...prev.planoAcao, { id: genId("pa"), descricao: "", responsavel: "Ana Silva", prazo: "", status: "PENDENTE" }],
-    }));
-  }
-
-  function updatePlanoAcao(id: string, field: keyof PlanoAcaoItem, value: string) {
-    setForm((prev) => ({ ...prev, planoAcao: prev.planoAcao.map((item) => item.id === id ? { ...item, [field]: value } : item) }));
-  }
-
-  function removePlanoAcao(id: string) {
-    setForm((prev) => ({ ...prev, planoAcao: prev.planoAcao.filter((item) => item.id !== id) }));
-  }
-
-  /* ── TEMPLATE FIELDS ───────────────────────────────────────── */
-
-  function addTemplateField() {
-    setTemplateForm((prev) => ({
-      ...prev,
-      campos: [...prev.campos, { id: genId("field"), label: "", tipo: "TEXTO", obrigatorio: false }],
-    }));
-  }
-
-  function updateTemplateField(id: string, field: keyof TemplateField, value: any) {
-    setTemplateForm((prev) => ({
-      ...prev,
-      campos: prev.campos.map((item) => item.id === id ? { ...item, [field]: value } : item),
-    }));
-  }
-
-  function removeTemplateField(id: string) {
-    setTemplateForm((prev) => ({ ...prev, campos: prev.campos.filter((item) => item.id !== id) }));
-  }
-
-  function onSelectTipo(tipo: ModuloTipo) {
-    setTipoAtivo(tipo);
-    setQuery("");
-    setSelectedId(null);
-    setStatusAtivo(tipo === "TEMPLATE" ? "DASHBOARD" : "REGISTRO");
-    if (isOcorrenciaTipo(tipo)) setForm(formInicial(tipo));
-  }
-
-  /* ── MEMOS ─────────────────────────────────────────────────── */
-
-  const filtered = useMemo(() => {
-    if (!isOcorrenciaTipo(tipoAtivo)) return [];
-    return ocorrencias.filter((item) => {
-      const byTipo = item.tipo === tipoAtivo;
-      const byStatus = statusAtivo === "DASHBOARD" ? true : item.status === statusAtivo;
-      const byQuery = !query ||
-        item.titulo.toLowerCase().includes(query.toLowerCase()) ||
-        item.numero.toLowerCase().includes(query.toLowerCase()) ||
-        item.setor.toLowerCase().includes(query.toLowerCase()) ||
-        item.responsavelTratativa.toLowerCase().includes(query.toLowerCase());
-      return byTipo && byStatus && byQuery;
-    });
-  }, [ocorrencias, tipoAtivo, statusAtivo, query]);
-
-  const dashboardData = useMemo(() => {
-    const base = isOcorrenciaTipo(tipoAtivo) ? ocorrencias.filter((o) => o.tipo === tipoAtivo) : ocorrencias;
-    const total = base.length;
-    return {
-      total,
-      registro: base.filter((o) => o.status === "REGISTRO").length,
-      analise: base.filter((o) => o.status === "ANALISE").length,
-      tratativa: base.filter((o) => o.status === "TRATATIVA").length,
-      validacao: base.filter((o) => o.status === "VALIDACAO").length,
-      concluido: base.filter((o) => o.status === "CONCLUIDO").length,
-      cancelado: base.filter((o) => o.status === "CANCELADO").length,
-      porSetor: SETORES.map((setor) => ({ setor, total: base.filter((o) => o.setor === setor).length })).filter((i) => i.total > 0),
-      criticos: base.filter((o) => o.prioridade === "CRITICA").length,
-      alta: base.filter((o) => o.prioridade === "ALTA").length,
-      anonimos: base.filter((o) => o.anonimo).length,
-      atrasados: base.filter((o) => getSlaStatus(o) === "Atrasado").length,
-      dentroPrazo: base.filter((o) => getSlaStatus(o) === "Dentro do prazo").length,
-      taxaConclusao: total ? Math.round((base.filter((o) => o.status === "CONCLUIDO").length / total) * 100) : 0,
-    };
-  }, [ocorrencias, tipoAtivo]);
-
-  const selected = useMemo(() => ocorrencias.find((o) => o.id === selectedId) ?? null, [ocorrencias, selectedId]);
-
-  const templateStats = useMemo(() => ({
-    total: templates.length,
-    publicos: templates.filter((t) => t.publico).length,
-    incidentes: templates.filter((t) => t.tipoVinculado === "INCIDENTE").length,
-    ouvidoria: templates.filter((t) => t.tipoVinculado === "OUVIDORIA").length,
-  }), [templates]);
-
-  const tipoCards = [
-    { value: "TEMPLATE" as ModuloTipo, label: "Template de formulário", desc: "Modelos dinâmicos + QR Code + link público" },
-    { value: "NAO_CONFORMIDADE" as ModuloTipo, label: "Não conformidade", desc: "Falhas, desvios, processo, estrutura e documentos" },
-    { value: "INCIDENTE" as ModuloTipo, label: "Notificações de incidente", desc: "Segurança do paciente e incidentes assistenciais" },
-    { value: "MELHORIA" as ModuloTipo, label: "Oportunidades de melhoria", desc: "Melhoria contínua e evolução operacional" },
-    { value: "OUVIDORIA" as ModuloTipo, label: "Elogios, reclamações e manifestação", desc: "Ouvidoria, experiência e percepção do cliente" },
-  ];
-
-  /* ─────────────────────────────────────────────────────────────
-   * RENDER
-   * ───────────────────────────────────────────────────────────*/
-
-  if (carregando) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-slate-500">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-          <p className="text-sm font-medium">Carregando ocorrências...</p>
+      <table className="w-full text-sm text-left border-collapse whitespace-nowrap">
+        <thead className="bg-white text-[10px] font-black uppercase text-slate-400 tracking-widest border-b sticky top-0 shadow-sm z-10">
+          <tr>
+            <th className="px-5 py-3">Código</th>
+            <th className="px-5 py-3">Título</th>
+            <th className="px-5 py-3">Setor</th>
+            <th className="px-5 py-3">Responsável</th>
+            <th className="px-5 py-3">Prazo</th>
+            <th className="px-5 py-3 text-center">Status</th>
+            <th className="px-5 py-3 text-right">Ação</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {lista.map((r) => (
+            <tr key={r.id} className="hover:bg-[#eef2ff]/30 transition-colors group">
+              <td className="px-5 py-3.5">
+                <span className={`font-mono font-black text-xs px-2 py-1 rounded-md ${TIPO_CONFIG[r.tipo].bg} ${TIPO_CONFIG[r.tipo].cor}`}>{r.codigo}</span>
+              </td>
+              <td className="px-5 py-3.5">
+                <p className="font-bold text-slate-800 truncate max-w-[220px]">{r.titulo}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{r.setor}</p>
+              </td>
+              <td className="px-5 py-3.5 text-slate-600 font-medium">{r.setor}</td>
+              <td className="px-5 py-3.5">
+                {r.responsavel
+                  ? <span className="flex items-center gap-1.5 text-slate-700 font-medium"><User className="w-3.5 h-3.5 text-slate-400" />{r.responsavel}</span>
+                  : <span className="text-slate-300 text-xs">—</span>}
+              </td>
+              <td className="px-5 py-3.5">
+                {r.prazo
+                  ? <span className="flex items-center gap-1.5 text-slate-500 text-xs"><Calendar className="w-3 h-3" />{r.prazo}</span>
+                  : <span className="text-slate-300 text-xs">—</span>}
+              </td>
+              <td className="px-5 py-3.5 text-center"><StatusBadge status={r.status} /></td>
+              <td className="px-5 py-3.5 text-right">
+                <button onClick={() => setDetalheId(r.id)} className="p-2 text-slate-400 hover:text-[#2655e8] hover:bg-[#eef2ff] rounded-lg transition-colors">
+                  <Eye className="w-4 h-4" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  // ─── RENDER: BOARD TRIAGEM ────────────────────────────────────────────────
+
+  function BoardTriagem() {
+    return (
+      <div className="flex flex-col h-full animate-in fade-in">
+        <div className="flex items-center justify-between mb-5 shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Triagem de Registros</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Registros aguardando avaliação da Qualidade. Assuma ou recuse com justificativa.</p>
+          </div>
+          <span className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-black rounded-xl">{triagem.length} aguardando</span>
+        </div>
+
+        {triagem.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+            <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-400 opacity-60" />
+            <p className="text-sm font-bold text-slate-600">Fila em dia!</p>
+            <p className="text-xs text-slate-400 mt-1">Nenhum registro aguardando triagem.</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+            {triagem.map((r) => (
+              <div key={r.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div>
+                      <span className={`font-mono font-black text-xs px-2.5 py-1.5 rounded-lg block text-center ${TIPO_CONFIG[r.tipo].bg} ${TIPO_CONFIG[r.tipo].cor}`}>
+                        {r.codigo}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <TipoBadge tipo={r.tipo} />
+                        {r.anonimo && (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full border border-slate-200">Anônimo</span>
+                        )}
+                      </div>
+                      <p className="font-bold text-slate-900 truncate">{r.titulo}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{r.descricao}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                        <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{r.setor}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{r.dataRegistro}</span>
+                        <span className="flex items-center gap-1"><User className="w-3 h-3" />{r.notificador}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => { setModalAssumirId(r.id); setAssumirForm({ responsavel: USUARIOS[0], prazo: "" }); }}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" /> Assumir
+                    </button>
+                    <button
+                      onClick={() => { setModalRecusarId(r.id); setRecusarJustificativa(""); }}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                      <Ban className="w-3.5 h-3.5" /> Recusar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── RENDER: BOARD CATEGORIA ──────────────────────────────────────────────
+
+  function BoardCategoria({ tipos, titulo, descricao }: { tipos: TipoRegistro[]; titulo: string; descricao: string }) {
+    const todos   = registrosPorTipo(tipos, "todos");
+    const aguard  = registrosPorTipo(tipos, "aguardando");
+    const andando = registrosPorTipo(tipos, "andamento");
+    const cancel  = registrosPorTipo(tipos, "cancelados");
+
+    const mapa: Record<SubTab, Registro[]> = { todos, aguardando: aguard, andamento: andando, cancelados: cancel };
+
+    const SUBTABS: { key: SubTab; label: string; count: number }[] = [
+      { key: "todos",      label: "Todos assumidos", count: todos.length },
+      { key: "aguardando", label: "Aguardando tratativa", count: aguard.length },
+      { key: "andamento",  label: "Em andamento",    count: andando.length },
+      { key: "cancelados", label: "Cancelados / Suspensos", count: cancel.length },
+    ];
+
+    return (
+      <div className="flex flex-col h-full animate-in fade-in">
+        <div className="mb-5 shrink-0">
+          <h2 className="text-lg font-bold text-slate-900">{titulo}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{descricao}</p>
+        </div>
+
+        {/* Sub-tabs */}
+        <div className="flex gap-2 mb-4 shrink-0 overflow-x-auto pb-1">
+          {SUBTABS.map((st) => (
+            <button
+              key={st.key}
+              onClick={() => setSubTab(st.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${subTab === st.key ? "bg-[#2655e8] text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:border-[#2655e8] hover:text-[#2655e8]"}`}
+            >
+              {st.label}
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${subTab === st.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                {st.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+          <div className="overflow-y-auto flex-1 custom-scrollbar">
+            <TabelaRegistros lista={mapa[subTab]} />
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#f8fafc] p-6 md:p-8 text-slate-900">
-      <div className="max-w-[1800px] mx-auto space-y-8">
+  // ─── BOARDS CONFIG ────────────────────────────────────────────────────────
 
-        {/* TOAST DE FEEDBACK */}
-        {(sucesso || erro) && (
-          <div className={cn(
-            "fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold transition-all",
-            sucesso ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
-          )}>
-            {sucesso || erro}
-          </div>
-        )}
+  const BOARDS: { key: BoardTab; label: string; icon: React.ReactNode; count?: number; color: string }[] = [
+    { key: "triagem", label: "Triagem de Registros", icon: <ClipboardList className="w-4 h-4" />, count: aguardandoTriagem, color: "border-blue-300 bg-blue-50 text-blue-700" },
+    { key: "NI",      label: "Notif. de Incidente",  icon: <AlertTriangle className="w-4 h-4" />, count: registros.filter((r) => r.tipo === "NI" && r.status !== "AGUARDANDO_TRIAGEM").length, color: "border-orange-300 bg-orange-50 text-orange-700" },
+    { key: "NC",      label: "Não Conformidades",    icon: <FileWarning className="w-4 h-4" />,   count: registros.filter((r) => r.tipo === "NC" && r.status !== "AGUARDANDO_TRIAGEM").length, color: "border-violet-300 bg-violet-50 text-violet-700" },
+    { key: "OUV",     label: "Ouvidoria",            icon: <HeartHandshake className="w-4 h-4" />, count: registros.filter((r) => ["EL", "RC", "MF"].includes(r.tipo) && r.status !== "AGUARDANDO_TRIAGEM").length, color: "border-rose-300 bg-rose-50 text-rose-700" },
+  ];
 
-        {/* HEADER */}
-        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
+  // ─── RENDER DETALHE (slide-over) ─────────────────────────────────────────
+
+  function SlideDetalhe() {
+    if (!detalhe) return null;
+    const stepIdx = statusWorkflowIdx(detalhe.status);
+    const podeAvancar = ["EM_TRATATIVA", "APROVACAO", "EFICACIA"].includes(detalhe.status);
+
+    return (
+      <div className="fixed inset-0 z-40 flex justify-end">
+        <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setDetalheId(null)} />
+        <div className="relative w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100 shrink-0">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 mb-3">
-                <ShieldAlert className="w-3.5 h-3.5" />
-                Gestão de Ocorrências
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`font-mono font-black text-sm px-2.5 py-1 rounded-lg ${TIPO_CONFIG[detalhe.tipo].bg} ${TIPO_CONFIG[detalhe.tipo].cor}`}>{detalhe.codigo}</span>
+                <TipoBadge tipo={detalhe.tipo} />
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-900">
-                Qualidade, Segurança do Paciente e Ouvidoria
-              </h1>
-              <p className="text-sm text-slate-500 font-medium mt-2 max-w-5xl">
-                Central inteligente para registro, análise, tratativa, validação, conclusão e monitoramento de ocorrências, com templates dinâmicos, rastreabilidade, workflow e governança institucional.
-              </p>
+              <h2 className="text-base font-bold text-slate-900 mt-1">{detalhe.titulo}</h2>
+            </div>
+            <button onClick={() => setDetalheId(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {/* Workflow timeline */}
+            <div className="px-6 py-4 border-b border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Workflow</p>
+              <div className="flex items-center gap-1">
+                {WORKFLOW_STEPS.map((step, i) => {
+                  const done = i <= stepIdx;
+                  const current = i === stepIdx;
+                  return (
+                    <React.Fragment key={step.status}>
+                      <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-black border-2 transition-all ${current ? "bg-[#2655e8] text-white border-[#2655e8]" : done ? "bg-[#eef2ff] text-[#2655e8] border-[#c7d2fe]" : "bg-white text-slate-300 border-slate-200"}`}>
+                        {done && !current ? <CheckCheck className="w-3.5 h-3.5" /> : i + 1}
+                      </div>
+                      <div className="flex-1 flex flex-col items-center">
+                        <div className={`h-0.5 w-full ${i < stepIdx ? "bg-[#2655e8]" : "bg-slate-200"}`} />
+                        <p className={`text-[9px] font-bold mt-1 ${current ? "text-[#2655e8]" : done ? "text-slate-500" : "text-slate-300"}`}>{step.label}</p>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 min-w-[320px]">
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total</p>
-                <p className="text-2xl font-black mt-2">{tipoAtivo === "TEMPLATE" ? templateStats.total : dashboardData.total}</p>
-              </div>
-              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-                <p className="text-[10px] uppercase font-black tracking-widest text-amber-700">Tratativa</p>
-                <p className="text-2xl font-black mt-2 text-amber-700">{tipoAtivo === "TEMPLATE" ? templateStats.publicos : dashboardData.tratativa}</p>
-              </div>
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                <p className="text-[10px] uppercase font-black tracking-widest text-emerald-700">Concluídos</p>
-                <p className="text-2xl font-black mt-2 text-emerald-700">{tipoAtivo === "TEMPLATE" ? templateStats.incidentes : dashboardData.concluido}</p>
-              </div>
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
-                <p className="text-[10px] uppercase font-black tracking-widest text-red-700">Críticos</p>
-                <p className="text-2xl font-black mt-2 text-red-700">{tipoAtivo === "TEMPLATE" ? templateStats.ouvidoria : dashboardData.criticos}</p>
-              </div>
+            {/* Info do registro */}
+            <div className="px-6 py-4 border-b border-slate-100 grid grid-cols-2 gap-4">
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Setor</p><p className="text-sm font-bold text-slate-700">{detalhe.setor}</p></div>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Data do Registro</p><p className="text-sm font-bold text-slate-700">{detalhe.dataRegistro}</p></div>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Notificador</p><p className="text-sm font-bold text-slate-700">{detalhe.notificador}</p></div>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Responsável Tratativa</p><p className="text-sm font-bold text-slate-700">{detalhe.responsavel || "—"}</p></div>
+              {detalhe.prazo && <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Prazo</p><p className="text-sm font-bold text-slate-700">{detalhe.prazo}</p></div>}
+              {detalhe.ferramentasAnalise.length > 0 && (
+                <div className="col-span-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ferramentas de Análise</p>
+                  <div className="flex gap-2">
+                    {detalhe.ferramentasAnalise.map((f) => (
+                      <span key={f} className="px-2.5 py-1 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-bold rounded-lg">{f === "ISHIKAWA" ? "Diagrama de Ishikawa" : "5 Porquês"}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="col-span-2"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Descrição</p><p className="text-sm text-slate-600 leading-relaxed">{detalhe.descricao}</p></div>
             </div>
-          </div>
-        </div>
 
-        {/* TOP CARDS */}
-        <div className="bg-white border border-slate-100 rounded-[2rem] p-4 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-            {tipoCards.map((item) => {
-              const count = item.value === "TEMPLATE" ? templates.length : ocorrencias.filter((o) => o.tipo === item.value).length;
-              const active = tipoAtivo === item.value;
-              return (
-                <button key={item.value} onClick={() => onSelectTipo(item.value)}
-                  className={cn("h-32 rounded-2xl border p-5 text-left transition-all", tipoCardClass(item.value, active))}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm font-black">
-                      {tipoIcon(item.value)}<span>{item.label}</span>
-                    </div>
-                    <div className={cn("min-w-8 h-8 px-2 rounded-xl flex items-center justify-center text-xs font-black", active ? "bg-white/15 text-white" : "bg-slate-50 text-slate-700")}>
-                      {count}
-                    </div>
-                  </div>
-                  <p className={cn("text-xs mt-3 font-medium leading-relaxed", active ? "text-white/80" : "text-slate-500")}>{item.desc}</p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* CONTEÚDO PRINCIPAL — igual ao original, sem alterações visuais */}
-        {tipoAtivo === "TEMPLATE" ? (
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-            <div className="xl:col-span-8 space-y-6">
-              <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800">Central de Templates</h2>
-                    <p className="text-xs text-slate-500 font-medium mt-1">Criação, versionamento, QR Code e publicação segura de formulários.</p>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <KpiCard label="Templates" value={templateStats.total} />
-                    <KpiCard label="Públicos" value={templateStats.publicos} />
-                    <KpiCard label="Incidentes" value={templateStats.incidentes} />
-                    <KpiCard label="Ouvidoria" value={templateStats.ouvidoria} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-                  <FeatureCard icon={<LayoutTemplate className="w-5 h-5 text-indigo-600" />} title="Builder de Formulário" text="Estrutura para campos dinâmicos, validação, obrigatoriedade e vinculação por tipo." />
-                  <FeatureCard icon={<QrCode className="w-5 h-5 text-indigo-600" />} title="QR Code e Link Público" text="Cada template pode ser disponibilizado externamente para pacientes, colaboradores e terceiros." />
-                  <FeatureCard icon={<ShieldAlert className="w-5 h-5 text-indigo-600" />} title="Workflow e Governança" text="Defina responsáveis, fluxo padrão e rastreabilidade desde o registro até a conclusão." />
-                </div>
-
-                <div className="space-y-4">
-                  {templates.length === 0 ? (
-                    <div className="border border-dashed border-slate-200 rounded-3xl p-10 text-center text-sm text-slate-400">Nenhum template cadastrado.</div>
-                  ) : templates.map((template) => (
-                    <div key={template.id} className="border border-slate-100 rounded-3xl p-5 bg-white hover:bg-slate-50/70 transition-colors">
-                      <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest">{template.id.slice(0, 8)}</span>
-                            <span className={cn("px-3 py-1 rounded-full text-[11px] font-black border", getTemplateTypeBadgeClass(template.tipoVinculado))}>{tipoLabel(template.tipoVinculado)}</span>
-                            <span className="px-3 py-1 rounded-full text-[11px] font-black border bg-indigo-50 text-indigo-700 border-indigo-200">Versão {template.versao}</span>
-                          </div>
-                          <div>
-                            <h3 className="text-base font-bold text-slate-900">{template.nome}</h3>
-                            <p className="text-sm text-slate-500 mt-1 max-w-3xl">{template.descricao}</p>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <MiniInfo title="Responsável padrão" value={template.responsavelPadrao} />
-                            <MiniInfo title="Link público" value={template.publico ? "Ativo" : "Restrito"} />
-                            <MiniInfo title="Campos" value={String(template.campos.length)} />
-                          </div>
-                          <div>
-                            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Workflow padrão</p>
-                            <div className="flex flex-wrap gap-2">
-                              {template.workflowPadrao.map((status) => (
-                                <span key={status} className={cn("px-3 py-1 rounded-full text-[11px] font-black border", statusClass(status))}>{statusLabel(status)}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="xl:w-[300px] shrink-0 border border-slate-100 rounded-3xl p-5 bg-slate-50">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-sm font-bold text-slate-800">Distribuição</h4>
-                            <QrCode className="w-4 h-4 text-slate-400" />
-                          </div>
-                          <div className="aspect-square rounded-3xl border border-dashed border-slate-200 bg-white flex items-center justify-center text-slate-400 text-xs font-bold">QR CODE</div>
-                          <div className="mt-4 space-y-2">
-                            <button className="w-full h-11 rounded-2xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-all">Gerar novo QR Code</button>
-                            <button onClick={() => { navigator.clipboard.writeText(template.linkPublico); mostrarSucesso("Link copiado!"); }}
-                              className="w-full h-11 rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">Copiar link público</button>
-                          </div>
-                        </div>
+            {/* Plano de ação */}
+            <div className="px-6 py-4 border-b border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Plano de Ação</p>
+              {detalhe.planoAcao.length > 0 ? (
+                <div className="space-y-2 mb-4">
+                  {detalhe.planoAcao.map((pa) => (
+                    <div key={pa.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${pa.status === "CONCLUIDO" ? "bg-emerald-500" : pa.status === "EM_ANDAMENTO" ? "bg-amber-500" : "bg-slate-300"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800">{pa.acao}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{pa.responsavel} · {pa.prazo || "Sem prazo"}</p>
                       </div>
-
-                      <div className="mt-5 border-t border-slate-100 pt-5">
-                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Campos do formulário</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                          {template.campos.map((field) => (
-                            <div key={field.id} className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-bold text-slate-800">{field.label}</p>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{field.tipo}</span>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-2">{field.obrigatorio ? "Campo obrigatório" : "Campo opcional"}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${pa.status === "CONCLUIDO" ? "bg-emerald-50 text-emerald-700" : pa.status === "EM_ANDAMENTO" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
+                        {pa.status === "CONCLUIDO" ? "Concluído" : pa.status === "EM_ANDAMENTO" ? "Em andamento" : "Pendente"}
+                      </span>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
+              ) : <p className="text-xs text-slate-400 mb-4">Nenhuma ação cadastrada.</p>}
 
-            {/* FORMULÁRIO NOVO TEMPLATE */}
-            <div className="xl:col-span-4">
-              <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm sticky top-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800">Novo Template</h2>
-                    <p className="text-xs text-slate-500 font-medium mt-1">Estruture formulários inteligentes por módulo.</p>
+              {["EM_TRATATIVA", "APROVACAO"].includes(detalhe.status) && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Nova Ação</p>
+                  <input value={novaAcao.acao} onChange={(e) => setNovaAcao((f) => ({ ...f, acao: e.target.value }))} className={INPUT_CLS} placeholder="Descreva a ação..." />
+                  <div className="grid grid-cols-2 gap-3">
+                    <select value={novaAcao.responsavel} onChange={(e) => setNovaAcao((f) => ({ ...f, responsavel: e.target.value }))} className={SELECT_CLS}>
+                      {USUARIOS.map((u) => <option key={u}>{u}</option>)}
+                    </select>
+                    <input type="date" value={novaAcao.prazo} onChange={(e) => setNovaAcao((f) => ({ ...f, prazo: e.target.value }))} className={INPUT_CLS} />
                   </div>
-                  <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-indigo-600" />
-                  </div>
+                  <button onClick={() => adicionarAcao(detalhe.id)} className="w-full py-2 bg-[#2655e8] text-white text-xs font-bold rounded-xl hover:bg-[#1e40af] transition-colors">
+                    + Adicionar Ação
+                  </button>
                 </div>
-
-                <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
-                  <SectionTitle title="Identificação do template" />
-                  <div>
-                    <FieldLabel label="Nome do template" />
-                    <input value={templateForm.nome} onChange={(e) => setTemplateForm((p) => ({ ...p, nome: e.target.value }))}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
-                      placeholder="Ex.: Formulário de incidente assistencial" />
-                  </div>
-                  <div>
-                    <FieldLabel label="Descrição" />
-                    <textarea value={templateForm.descricao} onChange={(e) => setTemplateForm((p) => ({ ...p, descricao: e.target.value }))}
-                      className="w-full min-h-[100px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
-                      placeholder="Explique a finalidade do template e sua aplicação." />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <FieldLabel label="Tipo vinculado" />
-                      <select value={templateForm.tipoVinculado} onChange={(e) => setTemplateForm((p) => ({ ...p, tipoVinculado: e.target.value as Exclude<ModuloTipo, "TEMPLATE"> }))}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        <option value="NAO_CONFORMIDADE">Não conformidade</option>
-                        <option value="INCIDENTE">Notificação de incidente</option>
-                        <option value="MELHORIA">Oportunidade de melhoria</option>
-                        <option value="OUVIDORIA">Ouvidoria</option>
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel label="Responsável padrão" />
-                      <select value={templateForm.responsavelPadrao} onChange={(e) => setTemplateForm((p) => ({ ...p, responsavelPadrao: e.target.value }))}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        {USUARIOS.map((u) => <option key={u}>{u}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="pt-1">
-                    <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-                      <input type="checkbox" checked={templateForm.publico} onChange={(e) => setTemplateForm((p) => ({ ...p, publico: e.target.checked }))} className="w-4 h-4" />
-                      Disponibilizar link público e QR Code
-                    </label>
-                  </div>
-
-                  <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-800">Campos do formulário</h4>
-                        <p className="text-xs text-slate-500 font-medium mt-1">Estrutura inicial do template.</p>
-                      </div>
-                      <button onClick={addTemplateField} className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all">Adicionar campo</button>
-                    </div>
-                    <div className="space-y-4">
-                      {templateForm.campos.map((field) => (
-                        <div key={field.id} className="bg-white border border-slate-200 rounded-2xl p-4">
-                          <div className="grid grid-cols-1 gap-3">
-                            <input value={field.label} onChange={(e) => updateTemplateField(field.id, "label", e.target.value)}
-                              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500" placeholder="Rótulo do campo" />
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <select value={field.tipo} onChange={(e) => updateTemplateField(field.id, "tipo", e.target.value as TemplateFieldType)}
-                                className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                                <option value="TEXTO">Texto curto</option>
-                                <option value="TEXTO_LONGO">Texto longo</option>
-                                <option value="SELECAO">Seleção</option>
-                                <option value="DATA">Data</option>
-                                <option value="UPLOAD">Upload</option>
-                                <option value="CHECKLIST">Checklist</option>
-                              </select>
-                              <label className="flex items-center gap-3 text-sm font-medium text-slate-700 h-11 px-4 rounded-2xl border border-slate-200 bg-slate-50">
-                                <input type="checkbox" checked={field.obrigatorio} onChange={(e) => updateTemplateField(field.id, "obrigatorio", e.target.checked)} className="w-4 h-4" />
-                                Obrigatório
-                              </label>
-                              <button onClick={() => removeTemplateField(field.id)} className="h-11 rounded-2xl border border-red-200 bg-red-50 text-red-600 text-sm font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2">
-                                <Trash2 className="w-4 h-4" />Remover
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {templateForm.campos.length === 0 && <div className="text-sm text-slate-400 font-medium">Nenhum campo cadastrado.</div>}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex gap-3">
-                    <button onClick={salvarTemplate} disabled={salvando}
-                      className="flex-1 h-12 rounded-2xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                      {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      {salvando ? "Salvando..." : "Salvar template"}
-                    </button>
-                    <button onClick={() => setTemplateForm({ nome: "", descricao: "", tipoVinculado: "NAO_CONFORMIDADE", responsavelPadrao: "Ana Silva", publico: true, campos: [{ id: genId("field"), label: "Descrição do fato", tipo: "TEXTO_LONGO", obrigatorio: true }] })}
-                      className="h-12 px-4 rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">Limpar</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* MÓDULO DE OCORRÊNCIAS */
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-            <div className="xl:col-span-8 space-y-6">
-
-              {/* STATUS TABS */}
-              <div className="bg-white border border-slate-100 rounded-[2rem] p-4 shadow-sm">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { key: "REGISTRO", label: "Registro", icon: ClipboardList },
-                      { key: "ANALISE", label: "Em análise", icon: Search },
-                      { key: "TRATATIVA", label: "Em tratativa", icon: AlertTriangle },
-                      { key: "VALIDACAO", label: "Validação", icon: CheckCircle2 },
-                      { key: "CONCLUIDO", label: "Concluído", icon: CheckCircle2 },
-                      { key: "CANCELADO", label: "Cancelado", icon: XCircle },
-                      { key: "DASHBOARD", label: "Painel de monitoramento", icon: BarChart3 },
-                    ].map((tab) => (
-                      <button key={tab.key} onClick={() => setStatusAtivo(tab.key as StatusOcorrencia | "DASHBOARD")}
-                        className={cn("px-4 py-3 rounded-2xl border text-sm font-bold flex items-center gap-2 transition-all",
-                          statusAtivo === tab.key ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}>
-                        <tab.icon className="w-4 h-4" />{tab.label}
-                      </button>
-                    ))}
-                  </div>
-                  {statusAtivo !== "DASHBOARD" && (
-                    <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-1">
-                      {(["TABLE", "KANBAN"] as ViewMode[]).map((m) => (
-                        <button key={m} onClick={() => setViewMode(m)}
-                          className={cn("px-3 h-10 rounded-xl text-xs font-black transition-all", viewMode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
-                          {m === "TABLE" ? "Tabela" : "Kanban"}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DASHBOARD */}
-              {statusAtivo === "DASHBOARD" ? (
-                <div className="space-y-6">
-                  <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-                    <div className="mb-6">
-                      <h2 className="text-lg font-bold text-slate-800">Painel de Monitoramento</h2>
-                      <p className="text-xs text-slate-500 font-medium mt-1">Visão executiva do módulo: {tipoLabel(tipoAtivo)}</p>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
-                      <KpiCard label="Total" value={dashboardData.total} />
-                      <KpiCard label="Registro" value={dashboardData.registro} />
-                      <KpiCard label="Análise" value={dashboardData.analise} />
-                      <KpiCard label="Tratativa" value={dashboardData.tratativa} />
-                      <KpiCard label="Validação" value={dashboardData.validacao} />
-                      <KpiCard label="Concluído" value={dashboardData.concluido} />
-                      <KpiCard label="Atrasado" value={dashboardData.atrasados} />
-                      <KpiCard label="Conclusão" value={`${dashboardData.taxaConclusao}%`} />
-                    </div>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Distribuição por Setor</h3>
-                    <div className="space-y-4">
-                      {dashboardData.porSetor.length === 0 ? (
-                        <div className="text-sm text-slate-400">Sem dados para exibir.</div>
-                      ) : dashboardData.porSetor.map((item) => {
-                        const percent = dashboardData.total ? Math.round((item.total / dashboardData.total) * 100) : 0;
-                        return (
-                          <div key={item.setor}>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-bold text-slate-700">{item.setor}</span>
-                              <span className="text-sm font-bold text-slate-500">{item.total} ({percent}%)</span>
-                            </div>
-                            <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
-                              <div className="h-full rounded-full bg-indigo-600" style={{ width: `${percent}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <KpiCard label="Anonimizadas" value={dashboardData.anonimos} />
-                    <KpiCard label="Alta prioridade" value={dashboardData.alta} />
-                    <KpiCard label="Críticas" value={dashboardData.criticos} />
-                    <KpiCard label="Dentro do SLA" value={dashboardData.dentroPrazo} />
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* LISTAGEM */}
-                  <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
-                      <div>
-                        <h2 className="text-lg font-bold text-slate-800">{statusLabel(statusAtivo as StatusOcorrencia)}</h2>
-                        <p className="text-xs text-slate-500 font-medium mt-1">Registros filtrados por módulo, etapa do fluxo e busca inteligente.</p>
-                      </div>
-                      <div className="relative w-full lg:w-[320px]">
-                        <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por número, título, setor ou responsável..."
-                          className="w-full h-11 pl-11 pr-4 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50" />
-                      </div>
-                    </div>
-
-                    {viewMode === "TABLE" ? (
-                      <div className="border border-slate-100 rounded-3xl overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-sm whitespace-nowrap min-w-[1100px]">
-                            <thead className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-400 tracking-widest">
-                              <tr>
-                                <th className="px-6 py-4">Nº ocorrência</th>
-                                <th className="px-6 py-4">Tipo</th>
-                                <th className="px-6 py-4">Título</th>
-                                <th className="px-6 py-4">Setor</th>
-                                <th className="px-6 py-4">Responsável</th>
-                                <th className="px-6 py-4">Prioridade</th>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Data</th>
-                                <th className="px-6 py-4">SLA</th>
-                                <th className="px-6 py-4 text-center">Abrir</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                              {filtered.map((item) => (
-                                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                  <td className="px-6 py-4 font-bold text-slate-700">{item.numero}</td>
-                                  <td className="px-6 py-4">
-                                    <span className="inline-flex items-center gap-2 text-slate-600 font-medium">{tipoIcon(item.tipo)}{tipoLabel(item.tipo)}</span>
-                                  </td>
-                                  <td className="px-6 py-4"><p className="font-bold text-slate-800">{item.titulo}</p></td>
-                                  <td className="px-6 py-4 font-medium text-slate-600">{item.setor}</td>
-                                  <td className="px-6 py-4 font-medium text-slate-600">{item.responsavelTratativa}</td>
-                                  <td className="px-6 py-4">
-                                    <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black", prioridadeClass(item.prioridade))}>{item.prioridade}</span>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <span className={cn("px-3 py-1 rounded-full text-[11px] font-black border", statusClass(item.status))}>{statusLabel(item.status)}</span>
-                                  </td>
-                                  <td className="px-6 py-4 font-medium text-slate-600">{item.dataOcorrencia || "-"}</td>
-                                  <td className="px-6 py-4">
-                                    <span className={cn("px-3 py-1 rounded-full text-[11px] font-black border",
-                                      getSlaStatus(item) === "Atrasado" ? "bg-red-50 text-red-700 border-red-200" :
-                                        getSlaStatus(item) === "Dentro do prazo" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                          "bg-slate-50 text-slate-600 border-slate-200")}>
-                                      {getSlaStatus(item)}
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-center">
-                                    <button onClick={() => setSelectedId(item.id)}
-                                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:text-indigo-700 hover:border-indigo-200 hover:bg-indigo-50 transition-all">
-                                      Abrir <ArrowRight className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {filtered.length === 0 && <div className="p-10 text-center text-sm text-slate-400 font-medium">Nenhum registro encontrado para esse filtro.</div>}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-                        {KANBAN_COLUMNS.map((column) => {
-                          const columnItems = filtered.filter((item) => item.status === column.key);
-                          return (
-                            <div key={column.key} className="border border-slate-100 rounded-3xl bg-slate-50 p-4 min-h-[420px]">
-                              <div className="flex items-center justify-between mb-4">
-                                <div>
-                                  <h3 className="text-sm font-bold text-slate-800">{column.label}</h3>
-                                  <p className="text-[11px] text-slate-400 font-medium mt-1">{columnItems.length} registro(s)</p>
-                                </div>
-                                <span className={cn("px-3 py-1 rounded-full text-[11px] font-black border", statusClass(column.key))}>{columnItems.length}</span>
-                              </div>
-                              <div className="space-y-3">
-                                {columnItems.length === 0 ? (
-                                  <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-xs text-slate-400 text-center bg-white">Sem registros nesta etapa.</div>
-                                ) : columnItems.map((item) => (
-                                  <button key={item.id} onClick={() => setSelectedId(item.id)}
-                                    className="w-full text-left border border-slate-100 rounded-2xl p-4 bg-white hover:border-indigo-200 hover:bg-indigo-50/40 transition-all">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div>
-                                        <p className="text-sm font-bold text-slate-800">{item.titulo}</p>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-1">{item.numero}</p>
-                                      </div>
-                                      <span className={cn("px-2 py-1 rounded-full text-[10px] font-black", prioridadeClass(item.prioridade))}>{item.prioridade}</span>
-                                    </div>
-                                    <div className="mt-3 space-y-2">
-                                      <p className="text-xs text-slate-500">{item.setor}</p>
-                                      <div className="flex items-center justify-between text-[11px]">
-                                        <span className="text-slate-400">{item.responsavelTratativa}</span>
-                                        <span className={cn("font-black", getSlaStatus(item) === "Atrasado" ? "text-red-600" : "text-emerald-600")}>{getSlaStatus(item)}</span>
-                                      </div>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* DETALHE */}
-                  <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Painel do Registro</h3>
-                    {!selected ? (
-                      <div className="text-sm text-slate-400 font-medium">Selecione um registro para visualizar detalhes, auditoria e avançar no workflow.</div>
-                    ) : (
-                      <div className="space-y-6">
-                        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest">{selected.numero}</span>
-                              <span className={cn("px-3 py-1 rounded-full text-[11px] font-black border", statusClass(selected.status))}>{statusLabel(selected.status)}</span>
-                              <span className="px-3 py-1 rounded-full text-[11px] font-black border bg-slate-50 text-slate-600 border-slate-200">{tipoLabel(selected.tipo)}</span>
-                            </div>
-                            <h4 className="text-xl font-bold text-slate-900">{selected.titulo}</h4>
-                            <p className="text-sm text-slate-500 mt-2 max-w-4xl">{selected.descricao}</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {selected.status !== "ANALISE" && selected.status !== "CANCELADO" && (
-                              <button onClick={() => moverStatus(selected.id, "ANALISE")} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 transition-all">Enviar para análise</button>
-                            )}
-                            {selected.status !== "TRATATIVA" && selected.status !== "CANCELADO" && (
-                              <button onClick={() => moverStatus(selected.id, "TRATATIVA")} className="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition-all">Enviar para tratativa</button>
-                            )}
-                            {selected.status !== "VALIDACAO" && selected.status !== "CANCELADO" && (
-                              <button onClick={() => moverStatus(selected.id, "VALIDACAO")} className="px-4 py-2 rounded-xl bg-cyan-600 text-white text-sm font-bold hover:bg-cyan-700 transition-all">Enviar para validação</button>
-                            )}
-                            {selected.status !== "CONCLUIDO" && selected.status !== "CANCELADO" && (
-                              <button onClick={() => moverStatus(selected.id, "CONCLUIDO")} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all">Concluir</button>
-                            )}
-                            {selected.status !== "CANCELADO" && (
-                              <button onClick={() => moverStatus(selected.id, "CANCELADO")} className="px-4 py-2 rounded-xl bg-slate-700 text-white text-sm font-bold hover:bg-slate-800 transition-all">Cancelar</button>
-                            )}
-                            <button onClick={() => excluirRegistro(selected.id)} className="px-4 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-bold hover:bg-red-100 transition-all">Excluir</button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <InfoCard label="Setor" value={selected.setor} />
-                          <InfoCard label="Área notificante" value={selected.areaNotificante} />
-                          <InfoCard label="Responsável" value={selected.responsavelTratativa} />
-                          <InfoCard label="Data ocorrência" value={selected.dataOcorrencia} />
-                          <InfoCard label="Local" value={selected.localOcorrencia || "-"} />
-                          <InfoCard label="Prioridade" value={selected.prioridade} />
-                          <InfoCard label="SLA" value={getSlaStatus(selected)} />
-                          <InfoCard label="Gravidade" value={selected.gravidade || "-"} />
-                          <InfoCard label="Notificador" value={selected.anonimo ? "Anônimo" : selected.nomeNotificador || "Não informado"} />
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <TextBlock title="Ação imediata" text={selected.acaoImediata || "-"} />
-                          <TextBlock title="Causa raiz" text={selected.causaRaiz || "-"} />
-                          <TextBlock title="Conclusão" text={selected.conclusao || "-"} />
-                          <TextBlock title="Motivo de cancelamento" text={selected.motivoCancelamento || "-"} />
-                        </div>
-
-                        <div>
-                          <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">Plano de ação</h5>
-                          {selected.planoAcao.length === 0 ? (
-                            <div className="text-sm text-slate-400">Sem plano de ação cadastrado.</div>
-                          ) : (
-                            <div className="space-y-3">
-                              {selected.planoAcao.map((pa) => (
-                                <div key={pa.id} className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
-                                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                                    <div>
-                                      <p className="font-bold text-slate-800">{pa.descricao}</p>
-                                      <p className="text-xs text-slate-500 mt-1">Responsável: {pa.responsavel} • Prazo: {pa.prazo || "-"}</p>
-                                    </div>
-                                    <span className="px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-black text-slate-600">{pa.status}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">Histórico / Audit Trail</h5>
-                          <div className="space-y-3">
-                            {selected.historico.map((h) => (
-                              <div key={h.id} className="border-l-4 border-indigo-200 pl-4 py-1">
-                                <p className="text-sm font-bold text-slate-700">{h.acao}</p>
-                                <p className="text-xs text-slate-500 mt-1">{h.data} • {h.autor}</p>
-                                {h.observacao && <p className="text-xs text-slate-500 mt-1">{h.observacao}</p>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </>
               )}
             </div>
 
-            {/* FORMULÁRIO NOVO REGISTRO */}
-            <div className="xl:col-span-4">
-              <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm sticky top-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800">Novo Registro</h2>
-                    <p className="text-xs text-slate-500 font-medium mt-1">Cadastro estruturado com workflow, classificação e rastreabilidade.</p>
-                  </div>
-                  <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-indigo-600" />
-                  </div>
-                </div>
-
-                <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
-                  <SectionTitle title="Identificação" />
-
-                  <div>
-                    <FieldLabel label="Tipo de ocorrência" />
-                    <select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as Exclude<ModuloTipo, "TEMPLATE"> })}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                      <option value="NAO_CONFORMIDADE">Não conformidade</option>
-                      <option value="INCIDENTE">Notificação de incidente</option>
-                      <option value="MELHORIA">Oportunidade de melhoria</option>
-                      <option value="OUVIDORIA">Ouvidoria</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <FieldLabel label="Título" />
-                    <input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
-                      placeholder="Título objetivo da ocorrência" />
-                  </div>
-
-                  <div>
-                    <FieldLabel label="Descrição" />
-                    <textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-                      className="w-full min-h-[110px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
-                      placeholder="Descreva o fato com objetividade, rastreabilidade e clareza." />
-                  </div>
-
-                  <SectionTitle title="Classificação e encaminhamento" />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Histórico */}
+            <div className="px-6 py-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Histórico</p>
+              <div className="space-y-3">
+                {detalhe.historico.map((h) => (
+                  <div key={h.id} className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#2655e8] mt-1.5 shrink-0" />
                     <div>
-                      <FieldLabel label="Setor" />
-                      <select value={form.setor} onChange={(e) => setForm({ ...form, setor: e.target.value })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        {SETORES.map((s) => <option key={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel label="Área notificante" />
-                      <select value={form.areaNotificante} onChange={(e) => setForm({ ...form, areaNotificante: e.target.value })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        {SETORES.map((s) => <option key={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel label="Data da ocorrência" />
-                      <input type="date" value={form.dataOcorrencia} onChange={(e) => setForm({ ...form, dataOcorrencia: e.target.value })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500" />
-                    </div>
-                    <div>
-                      <FieldLabel label="Prazo de tratativa" />
-                      <input type="date" value={form.prazoTratativa || ""} onChange={(e) => setForm({ ...form, prazoTratativa: e.target.value })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500" />
+                      <p className="text-xs font-bold text-slate-700">{h.acao}</p>
+                      {h.obs && <p className="text-xs text-slate-500 mt-0.5 italic">"{h.obs}"</p>}
+                      <p className="text-[10px] text-slate-400 mt-1">{h.data} · {h.autor}</p>
                     </div>
                   </div>
-
-                  <div>
-                    <FieldLabel label="Local da ocorrência" />
-                    <input value={form.localOcorrencia} onChange={(e) => setForm({ ...form, localOcorrencia: e.target.value })}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
-                      placeholder="Ex.: Leito, recepção, corredor, farmácia..." />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <FieldLabel label="Responsável pela tratativa" />
-                      <select value={form.responsavelTratativa} onChange={(e) => setForm({ ...form, responsavelTratativa: e.target.value })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        {USUARIOS.map((u) => <option key={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel label="Prioridade" />
-                      <select value={form.prioridade} onChange={(e) => setForm({ ...form, prioridade: e.target.value as Ocorrencia["prioridade"] })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        <option value="BAIXA">Baixa</option>
-                        <option value="MEDIA">Média</option>
-                        <option value="ALTA">Alta</option>
-                        <option value="CRITICA">Crítica</option>
-                      </select>
-                    </div>
-                    <div>
-                      <FieldLabel label="Gravidade" />
-                      <select value={form.gravidade} onChange={(e) => setForm({ ...form, gravidade: e.target.value as Gravidade })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        <option value="BAIXA">Baixa</option>
-                        <option value="MODERADA">Moderada</option>
-                        <option value="ALTA">Alta</option>
-                        <option value="GRAVE">Grave</option>
-                        <option value="SENTINELA">Sentinela</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {form.tipo === "INCIDENTE" && (
-                    <>
-                      <div>
-                        <FieldLabel label="Classificação do incidente" />
-                        <select value={form.classificacaoIncidente || ""} onChange={(e) => setForm({ ...form, classificacaoIncidente: e.target.value as IncidenteClassificacao })}
-                          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                          <option value="">Selecione</option>
-                          <option value="QUEDA">Queda</option>
-                          <option value="MEDICACAO">Medicação</option>
-                          <option value="IDENTIFICACAO">Identificação</option>
-                          <option value="LESAO_PRESSAO">Lesão por pressão</option>
-                          <option value="INFECCAO">Infecção</option>
-                          <option value="PROCEDIMENTO">Procedimento</option>
-                          <option value="OUTRO">Outro</option>
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <FieldLabel label="Código do paciente" />
-                          <input value={form.pacienteCodigo || ""} onChange={(e) => setForm({ ...form, pacienteCodigo: e.target.value })}
-                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500" placeholder="Identificação restrita" />
-                        </div>
-                        <div className="flex items-end">
-                          <label className="flex items-center gap-3 text-sm font-medium text-slate-700 h-11">
-                            <input type="checkbox" checked={!!form.danoPaciente} onChange={(e) => setForm({ ...form, danoPaciente: e.target.checked })} className="w-4 h-4" />
-                            Houve dano ao paciente
-                          </label>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {form.tipo === "NAO_CONFORMIDADE" && (
-                    <div>
-                      <FieldLabel label="Classificação da não conformidade" />
-                      <select value={form.classificacaoNC || ""} onChange={(e) => setForm({ ...form, classificacaoNC: e.target.value as NaoConformidadeClassificacao })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        <option value="">Selecione</option>
-                        <option value="PROCESSO">Processo</option>
-                        <option value="DOCUMENTO">Documento</option>
-                        <option value="TREINAMENTO">Treinamento</option>
-                        <option value="ESTRUTURA">Estrutura</option>
-                        <option value="EQUIPAMENTO">Equipamento</option>
-                        <option value="FORNECEDOR">Fornecedor</option>
-                        <option value="OUTRO">Outro</option>
-                      </select>
-                    </div>
-                  )}
-
-                  {form.tipo === "MELHORIA" && (
-                    <div>
-                      <FieldLabel label="Classificação da melhoria" />
-                      <select value={form.classificacaoMelhoria || ""} onChange={(e) => setForm({ ...form, classificacaoMelhoria: e.target.value as MelhoriaClassificacao })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        <option value="">Selecione</option>
-                        <option value="PROCESSO">Processo</option>
-                        <option value="SEGURANCA">Segurança</option>
-                        <option value="EXPERIENCIA">Experiência</option>
-                        <option value="EFICIENCIA">Eficiência</option>
-                        <option value="CUSTO">Custo</option>
-                        <option value="INOVACAO">Inovação</option>
-                        <option value="OUTRO">Outro</option>
-                      </select>
-                    </div>
-                  )}
-
-                  {form.tipo === "OUVIDORIA" && (
-                    <div>
-                      <FieldLabel label="Classificação da manifestação" />
-                      <select value={form.classificacaoOuvidoria || ""} onChange={(e) => setForm({ ...form, classificacaoOuvidoria: e.target.value as ClassificacaoOuvidoria })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                        <option value="">Selecione</option>
-                        <option value="ELOGIO">Elogio</option>
-                        <option value="RECLAMACAO">Reclamação</option>
-                        <option value="MANIFESTACAO">Manifestação</option>
-                        <option value="SUGESTAO">Sugestão</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <SectionTitle title="Privacidade e análise" />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                    <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-                      <input type="checkbox" checked={form.anonimo} onChange={(e) => setForm({ ...form, anonimo: e.target.checked })} className="w-4 h-4" />
-                      Registro anônimo
-                    </label>
-                    <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-                      <input type="checkbox" checked={form.identificacaoRestrita} onChange={(e) => setForm({ ...form, identificacaoRestrita: e.target.checked })} className="w-4 h-4" />
-                      Dados sensíveis restritos
-                    </label>
-                  </div>
-
-                  {!form.anonimo && (
-                    <div>
-                      <FieldLabel label="Nome do notificador" />
-                      <input value={form.nomeNotificador || ""} onChange={(e) => setForm({ ...form, nomeNotificador: e.target.value })}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
-                        placeholder="Nome do profissional/notificador" />
-                    </div>
-                  )}
-
-                  <div>
-                    <FieldLabel label="Ação imediata" />
-                    <textarea value={form.acaoImediata || ""} onChange={(e) => setForm({ ...form, acaoImediata: e.target.value })}
-                      className="w-full min-h-[90px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
-                      placeholder="Ações adotadas no momento do registro." />
-                  </div>
-
-                  <div>
-                    <FieldLabel label="Causa raiz / análise preliminar" />
-                    <textarea value={form.causaRaiz || ""} onChange={(e) => setForm({ ...form, causaRaiz: e.target.value })}
-                      className="w-full min-h-[90px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500 resize-none"
-                      placeholder="Análise preliminar da causa raiz." />
-                  </div>
-
-                  {/* PLANO DE AÇÃO */}
-                  <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-800">Plano de ação</h4>
-                        <p className="text-xs text-slate-500 font-medium mt-1">Registre ações corretivas, preventivas ou de melhoria.</p>
-                      </div>
-                      <button onClick={addPlanoAcao} className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all">Adicionar</button>
-                    </div>
-                    <div className="space-y-4">
-                      {form.planoAcao.map((pa) => (
-                        <div key={pa.id} className="bg-white border border-slate-200 rounded-2xl p-4">
-                          <div className="grid grid-cols-1 gap-3">
-                            <input value={pa.descricao} onChange={(e) => updatePlanoAcao(pa.id, "descricao", e.target.value)}
-                              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500"
-                              placeholder="Descrição da ação" />
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <select value={pa.responsavel} onChange={(e) => updatePlanoAcao(pa.id, "responsavel", e.target.value)}
-                                className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                                {USUARIOS.map((u) => <option key={u}>{u}</option>)}
-                              </select>
-                              <input type="date" value={pa.prazo} onChange={(e) => updatePlanoAcao(pa.id, "prazo", e.target.value)}
-                                className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500" />
-                              <div className="flex gap-2">
-                                <select value={pa.status} onChange={(e) => updatePlanoAcao(pa.id, "status", e.target.value as PlanoAcaoStatus)}
-                                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:bg-white focus:border-indigo-500">
-                                  <option value="PENDENTE">Pendente</option>
-                                  <option value="EM_ANDAMENTO">Em andamento</option>
-                                  <option value="CONCLUIDO">Concluído</option>
-                                </select>
-                                <button onClick={() => removePlanoAcao(pa.id)} className="w-11 h-11 shrink-0 rounded-2xl border border-red-200 bg-red-50 text-red-600 flex items-center justify-center">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {form.planoAcao.length === 0 && <div className="text-sm text-slate-400 font-medium">Nenhuma ação cadastrada.</div>}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex gap-3">
-                    <button onClick={salvarOcorrencia} disabled={salvando}
-                      className="flex-1 h-12 rounded-2xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                      {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      {salvando ? "Salvando..." : "Salvar registro"}
-                    </button>
-                    <button onClick={() => setForm(formInicial(form.tipo))}
-                      className="h-12 px-4 rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">Limpar</button>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
-        )}
 
-        {/* RODAPÉ */}
-        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <RodapeCard icon={<ShieldAlert className="w-5 h-5 text-indigo-600" />} title="Governança" text="Fluxo estruturado com rastreabilidade, status, responsáveis e histórico completo." />
-            <RodapeCard icon={<User className="w-5 h-5 text-indigo-600" />} title="LGPD" text="Suporte a anonimização, dados restritos e controle mais seguro de identificação." />
-            <RodapeCard icon={<QrCode className="w-5 h-5 text-indigo-600" />} title="QR Code" text="Templates podem ser publicados externamente para coleta rápida e padronizada." />
-            <RodapeCard icon={<BarChart3 className="w-5 h-5 text-indigo-600" />} title="Indicadores" text="Base pronta para SLA, dashboards, reincidência, tendência e performance da tratativa." />
-          </div>
+          {/* Footer com ações do workflow */}
+          {podeAvancar && (
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 shrink-0 flex justify-between items-center">
+              <p className="text-xs text-slate-500">Avançar para o próximo estágio do workflow:</p>
+              <button
+                onClick={() => { avancarWorkflow(detalhe.id); setDetalheId(null); notificar("Registro avançado no workflow."); }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#2655e8] text-white text-sm font-bold rounded-xl hover:bg-[#1e40af] transition-colors shadow-sm"
+              >
+                Avançar <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
-
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-/* ─────────────────────────────────────────────────────────────────
- * SUB-COMPONENTES (idênticos ao original)
- * ───────────────────────────────────────────────────────────────*/
+  // ─── RENDER PRINCIPAL ─────────────────────────────────────────────────────
 
-function KpiCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{label}</p>
-      <p className="text-2xl font-black text-slate-900 mt-2">{value}</p>
-    </div>
-  );
-}
+    <div className="flex flex-col h-full bg-slate-50/50">
 
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{label}</p>
-      <p className="text-sm font-bold text-slate-800 mt-2">{value || "-"}</p>
-    </div>
-  );
-}
+      {/* Toast */}
+      {aviso && (
+        <div className={`fixed right-6 top-6 z-50 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold shadow-lg ${aviso.tipo === "ok" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+          {aviso.tipo === "ok" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          {aviso.msg}
+        </div>
+      )}
 
-function TextBlock({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
-      <h5 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-2">{title}</h5>
-      <p className="text-sm text-slate-700 leading-relaxed">{text}</p>
-    </div>
-  );
-}
+      {/* Header */}
+      <div className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shrink-0">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">Ocorrências & Eventos</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Gestão de incidentes, não conformidades e ouvidoria com workflow integrado.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar registros..." className="pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#2655e8] w-56 shadow-sm" />
+          </div>
+          <button onClick={() => setModalNovoAberto(true)} className="flex items-center gap-2 px-4 py-2.5 bg-[#2655e8] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#1e40af] transition-all">
+            <Plus className="w-4 h-4" /> Novo Registro
+          </button>
+          <Link href="/ocorrencias/configuracoes" className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:border-[#2655e8] hover:text-[#2655e8] transition-all">
+            <Settings className="w-4 h-4" /> Configurações
+          </Link>
+        </div>
+      </div>
 
-function FieldLabel({ label }: { label: string }) {
-  return <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">{label}</label>;
-}
+      {/* Stats */}
+      <div className="px-8 py-4 grid grid-cols-4 gap-4 shrink-0">
+        {[
+          { label: "Total de Registros", value: registros.length, icon: <ClipboardList className="w-5 h-5" />, cor: "text-slate-600", bg: "bg-slate-100" },
+          { label: "Aguardando Triagem", value: aguardandoTriagem, icon: <Clock className="w-5 h-5" />, cor: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Em Tratativa / Aprovação", value: emTratativa, icon: <AlertCircle className="w-5 h-5" />, cor: "text-amber-600", bg: "bg-amber-50" },
+          { label: "Concluídos", value: concluidos, icon: <CheckCircle2 className="w-5 h-5" />, cor: "text-emerald-600", bg: "bg-emerald-50" },
+        ].map((s) => (
+          <div key={s.label} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 flex items-center gap-4 shadow-sm">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg} ${s.cor}`}>{s.icon}</div>
+            <div>
+              <p className="text-2xl font-black text-slate-900">{s.value}</p>
+              <p className="text-xs text-slate-500 font-medium">{s.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
 
-function SectionTitle({ title }: { title: string }) {
-  return <div className="pt-1"><h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">{title}</h3></div>;
-}
+      {/* Board selector */}
+      <div className="px-8 flex gap-3 shrink-0 pb-2">
+        {BOARDS.map((b) => (
+          <button
+            key={b.key}
+            onClick={() => { setBoard(b.key); setSubTab("todos"); }}
+            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl text-sm font-bold border-2 transition-all ${board === b.key ? b.color + " shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"}`}
+          >
+            {b.icon} {b.label}
+            {b.count !== undefined && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${board === b.key ? "bg-white/40" : "bg-slate-100 text-slate-500"}`}>{b.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
 
-function RodapeCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
-      <div className="mb-3">{icon}</div>
-      <h4 className="text-sm font-bold text-slate-800">{title}</h4>
-      <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">{text}</p>
-    </div>
-  );
-}
+      {/* Board content */}
+      <div className="flex-1 px-8 pb-8 overflow-hidden flex flex-col min-h-0 pt-2">
+        {board === "triagem" && <BoardTriagem />}
+        {board === "NI"  && <BoardCategoria tipos={["NI"]} titulo="Notificações de Incidente" descricao="Registros de incidentes e eventos sentinela após triagem." />}
+        {board === "NC"  && <BoardCategoria tipos={["NC"]} titulo="Não Conformidades" descricao="Desvios de processo, documento, treinamento e outros." />}
+        {board === "OUV" && <BoardCategoria tipos={["EL", "RC", "MF"]} titulo="Ouvidoria — Elogios, Reclamações e Manifestações" descricao="Registros de ouvidoria com classificação por tipo." />}
+      </div>
 
-function FeatureCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    <div className="bg-slate-50 border border-slate-100 rounded-3xl p-5">
-      <div className="mb-3">{icon}</div>
-      <h4 className="text-sm font-bold text-slate-800">{title}</h4>
-      <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">{text}</p>
-    </div>
-  );
-}
+      {/* ── Modal: Novo Registro ──────────────────────────────────────────── */}
+      {modalNovoAberto && (
+        <ModalOverlay onFechar={() => setModalNovoAberto(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h3 className="text-base font-black text-slate-900">Novo Registro</h3>
+              <button onClick={() => setModalNovoAberto(false)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tipo de Registro *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(Object.keys(TIPO_CONFIG) as TipoRegistro[]).map((t) => {
+                    const cfg = TIPO_CONFIG[t];
+                    return (
+                      <button key={t} onClick={() => setNovoForm((f) => ({ ...f, tipo: t }))}
+                        className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border-2 text-xs font-bold transition-all ${novoForm.tipo === t ? `${cfg.bg} ${cfg.border} ${cfg.cor}` : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                        <span className={novoForm.tipo === t ? cfg.cor : "text-slate-400"}>{cfg.icon}</span>
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Título *</label>
+                <input value={novoForm.titulo} onChange={(e) => setNovoForm((f) => ({ ...f, titulo: e.target.value }))} className={INPUT_CLS} placeholder="Descreva brevemente o ocorrido..." />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Detalhes</label>
+                <textarea value={novoForm.descricao} onChange={(e) => setNovoForm((f) => ({ ...f, descricao: e.target.value }))} rows={3} className={INPUT_CLS + " resize-none"} placeholder="Informações adicionais relevantes..." />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Setor</label>
+                <select value={novoForm.setor} onChange={(e) => setNovoForm((f) => ({ ...f, setor: e.target.value }))} className={SELECT_CLS}>
+                  {SETORES.map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={novoForm.anonimo} onChange={(e) => setNovoForm((f) => ({ ...f, anonimo: e.target.checked }))} className="w-4 h-4 accent-[#2655e8]" />
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Registro Anônimo</p>
+                  <p className="text-xs text-slate-400">Sua identidade não será revelada.</p>
+                </div>
+              </label>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
+              <button onClick={() => setModalNovoAberto(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+              <button onClick={criarRegistro} className="flex items-center gap-2 px-5 py-2 bg-[#2655e8] text-white text-sm font-bold rounded-xl hover:bg-[#1e40af] shadow-sm">
+                <ChevronRight className="w-4 h-4" /> Enviar para Triagem
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
 
-function MiniInfo({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-      <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{title}</p>
-      <p className="text-sm font-bold text-slate-800 mt-2">{value}</p>
+      {/* ── Modal: Assumir ────────────────────────────────────────────────── */}
+      {modalAssumirId && (() => {
+        const reg = registros.find((r) => r.id === modalAssumirId);
+        return reg ? (
+          <ModalOverlay onFechar={() => setModalAssumirId(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Assumir Registro</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{reg.codigo} · {reg.titulo}</p>
+                </div>
+                <button onClick={() => setModalAssumirId(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Responsável pela Tratativa *</label>
+                  <select value={assumirForm.responsavel} onChange={(e) => setAssumirForm((f) => ({ ...f, responsavel: e.target.value }))} className={SELECT_CLS}>
+                    {USUARIOS.map((u) => <option key={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Prazo para Tratativa</label>
+                  <input type="date" value={assumirForm.prazo} onChange={(e) => setAssumirForm((f) => ({ ...f, prazo: e.target.value }))} className={INPUT_CLS} />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
+                <button onClick={() => setModalAssumirId(null)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                <button onClick={assumirRegistro} className="flex items-center gap-2 px-5 py-2 bg-emerald-500 text-white text-sm font-bold rounded-xl hover:bg-emerald-600 shadow-sm">
+                  <CheckCheck className="w-4 h-4" /> Confirmar Assumir
+                </button>
+              </div>
+            </div>
+          </ModalOverlay>
+        ) : null;
+      })()}
+
+      {/* ── Modal: Recusar ────────────────────────────────────────────────── */}
+      {modalRecusarId && (() => {
+        const reg = registros.find((r) => r.id === modalRecusarId);
+        return reg ? (
+          <ModalOverlay onFechar={() => setModalRecusarId(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Recusar Registro</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{reg.codigo} · {reg.titulo}</p>
+                </div>
+                <button onClick={() => setModalRecusarId(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="px-6 py-5">
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl mb-4 text-xs text-red-700 font-medium">
+                  A justificativa é obrigatória para recusar um registro e ficará registrada no histórico.
+                </div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Justificativa *</label>
+                <textarea value={recusarJustificativa} onChange={(e) => setRecusarJustificativa(e.target.value)} rows={4} className={INPUT_CLS + " resize-none"} placeholder="Descreva o motivo da recusa..." />
+              </div>
+              <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
+                <button onClick={() => setModalRecusarId(null)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                <button onClick={recusarRegistro} className="flex items-center gap-2 px-5 py-2 bg-red-500 text-white text-sm font-bold rounded-xl hover:bg-red-600 shadow-sm">
+                  <Ban className="w-4 h-4" /> Confirmar Recusa
+                </button>
+              </div>
+            </div>
+          </ModalOverlay>
+        ) : null;
+      })()}
+
+      {/* ── Slide-over: Detalhe do Registro ──────────────────────────────── */}
+      <SlideDetalhe />
     </div>
   );
 }

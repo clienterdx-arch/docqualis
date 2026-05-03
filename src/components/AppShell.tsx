@@ -8,7 +8,7 @@ import { carregarPerfilUsuario } from "@/lib/perfil";
 import {
   FileText, Workflow, LineChart, Bell, Search, Settings,
   ChevronDown, Sparkles, ClipboardSignature, ShieldAlert,
-  AlertTriangle, Target, Building2, LogOut
+  AlertTriangle, Target, Building2, LogOut, FolderOpen,
 } from "lucide-react";
 
 // =========================================================================
@@ -213,7 +213,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (pathname === "/login") return <>{children}</>;
 
-  const isSettingsActive = pathname.startsWith("/configuracoes");
   const iniciais = perfil ? getIniciais(perfil.nome) : "...";
 
   return (
@@ -265,21 +264,32 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
 
-        {/* Configurações */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
-          <Link
-            href="/configuracoes"
-            aria-current={isSettingsActive ? "page" : undefined}
-            className={[
-              "flex items-center gap-3 px-3 py-2.5 w-full rounded-xl transition-all text-sm font-medium",
-              isSettingsActive
-                ? "bg-[#eef2ff] text-[#2655e8] font-bold shadow-sm border border-[#e0e7ff]"
-                : "text-slate-600 hover:bg-white hover:shadow-sm hover:text-slate-900 border border-transparent",
-            ].join(" ")}
-          >
-            <Settings className={["w-5 h-5", isSettingsActive ? "text-[#2655e8]" : "text-slate-400"].join(" ")} />
-            Configurações da Empresa
-          </Link>
+        {/* Cadastros + Configurações */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0 space-y-1">
+          {(
+            [
+              { href: "/cadastros", label: "Cadastros", Icon: FolderOpen },
+              { href: "/configuracoes", label: "Configurações da Empresa", Icon: Settings },
+            ] as const
+          ).map(({ href, label, Icon }) => {
+            const active = pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={[
+                  "flex items-center gap-3 px-3 py-2.5 w-full rounded-xl transition-all text-sm font-medium",
+                  active
+                    ? "bg-[#eef2ff] text-[#2655e8] font-bold shadow-sm border border-[#e0e7ff]"
+                    : "text-slate-600 hover:bg-white hover:shadow-sm hover:text-slate-900 border border-transparent",
+                ].join(" ")}
+              >
+                <Icon className={["w-5 h-5", active ? "text-[#2655e8]" : "text-slate-400"].join(" ")} />
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </aside>
 
