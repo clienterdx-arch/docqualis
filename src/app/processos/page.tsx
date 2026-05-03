@@ -814,6 +814,10 @@ export default function ProcessosPage() {
     useState<SipocCatalogFilter>("TODOS");
   const [sipocProfile, setSipocProfile] =
     useState<SipocProfile>(DEFAULT_SIPOC_PROFILE);
+  const [sipocDiretoria, setSipocDiretoria] = useState("");
+  const [sipocNumero, setSipocNumero] = useState("");
+  const [sipocDbDiretorias, setSipocDbDiretorias] = useState<{id: string; nome: string; sigla?: string}[]>([]);
+  const [sipocDbSetores, setSipocDbSetores] = useState<{id: string; nome: string; sigla?: string; diretoria_id?: string}[]>([]);
   const [sipocIndicators, setSipocIndicators] = useState<SipocIndicator[]>(
     DEFAULT_SIPOC_INDICATORS
   );
@@ -897,6 +901,23 @@ export default function ProcessosPage() {
   }, []);
 
   useEffect(() => {
+    async function carregarConfigsSipoc() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session) return;
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null }>(session, "empresa_id");
+      if (!perfil?.empresa_id) return;
+      const [resDir, resSet] = await Promise.all([
+        supabase.from("config_diretorias").select("id, nome, sigla").eq("empresa_id", perfil.empresa_id).order("nome"),
+        supabase.from("config_setores").select("id, nome, sigla, diretoria_id").eq("empresa_id", perfil.empresa_id).order("nome"),
+      ]);
+      setSipocDbDiretorias(resDir.data ?? []);
+      setSipocDbSetores(resSet.data ?? []);
+    }
+    void carregarConfigsSipoc();
+  }, []);
+
+  useEffect(() => {
     if (!selectedSipocId) return;
 
     setSipocCatalog((current) =>
@@ -976,6 +997,16 @@ export default function ProcessosPage() {
   );
 
   const sipocForaSla = sipocRows.length - sipocDentroSla;
+
+  const sipocDiretoriaObj = sipocDbDiretorias.find((d) => d.nome === sipocDiretoria);
+  const sipocSetoresFiltrados = sipocDiretoriaObj
+    ? sipocDbSetores.filter((s) => s.diretoria_id === sipocDiretoriaObj.id)
+    : sipocDbSetores;
+  const sipocSiglaSetor = sipocDbSetores.find((s) => s.nome === sipocProfile.setor)?.sigla ?? "XXX";
+  const sipocPrefixoCodigo = sipocProfile.setor ? `SIP.${sipocSiglaSetor}` : "SIP.XXX";
+  const sipocCodigoFinal = sipocNumero
+    ? `${sipocPrefixoCodigo}.${String(sipocNumero).padStart(3, "0")}`
+    : sipocPrefixoCodigo;
 
   const sipocLinkedIndicatorIds = useMemo(
     () => new Set(sipocStages.flatMap((stage) => stage.indicatorIds)),
@@ -2182,243 +2213,151 @@ export default function ProcessosPage() {
           }
         />
 
-        <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
-          {[
-            { key: "identificacao", title: "1. Identificação", text: "Setor, nome, código e governança" },
-            { key: "quadro", title: "2. Quadro SIPOC", text: "SIPOC clássico com riscos por etapa" },
-            { key: "indicadores", title: "3. Indicadores", text: "Estrutura, processo, resultado e estratégico" },
-            { key: "interacoes", title: "4. Interações", text: "Fornecedores, entregas e acordos SLA" },
-          ].map((step) => (
-            <button
-              key={step.key}
-              onClick={() => setSipocWizardStep(step.key as SipocWizardStep)}
-              className={cn(
-                "rounded-2xl border p-4 text-left shadow-sm transition",
-                sipocWizardStep === step.key
-                  ? "border-[#2655e8] bg-blue-50 text-[#2655e8]"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-200"
-              )}
-            >
-              <p className="text-xs font-black uppercase tracking-widest">{step.title}</p>
-              <p className="mt-1 text-[11px] font-semibold leading-relaxed">{step.text}</p>
-            </button>
-          ))}
-        </div>
+        {/* Tab navigation */}
+        <div className="mb-6 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="flex border-b border-slate-100 bg-slate-50 overflow-x-auto">
+            {[
+              { key: "identificacao", step: "1", title: "Identificação" },
+              { key: "quadro",        step: "2", title: "Quadro SIPOC" },
+              { key: "indicadores",   step: "3", title: "Indicadores" },
+              { key: "interacoes",    step: "4", title: "Interações" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setSipocWizardStep(tab.key as SipocWizardStep)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-3 p-5 transition-all border-b-2 font-bold text-sm outline-none",
+                  sipocWizardStep === tab.key
+                    ? "bg-white border-blue-600 text-blue-700"
+                    : "border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                )}
+              >
+                <span className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-colors",
+                  sipocWizardStep === tab.key ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "bg-slate-200 text-slate-500"
+                )}>{tab.step}</span>
+                <span className="hidden md:inline">{tab.title}</span>
+              </button>
+            ))}
+          </div>
 
-        {sipocWizardStep === "identificacao" && (
-        <Panel
-          title="Documento controlado SIPOC"
-          subtitle="Identificação, classificação obrigatória e workflow de revisão do processo."
-        >
-          <div className="grid gap-5 p-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Nome do processo
-                </span>
-                <TableInput
-                  value={sipocProfile.nome}
-                  onChange={(value) => updateSipocProfile("nome", value)}
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Código do documento
-                </span>
-                <TableInput
-                  value={sipocProfile.codigo}
-                  onChange={(value) => updateSipocProfile("codigo", value)}
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Setor
-                </span>
-                <TableInput
+          {/* ETAPA 1: IDENTIFICAÇÃO */}
+          {sipocWizardStep === "identificacao" && (
+          <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Diretoria */}
+              <div className="w-full">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Diretoria</label>
+                <select
+                  value={sipocDiretoria}
+                  onChange={(e) => { setSipocDiretoria(e.target.value); updateSipocProfile("setor", ""); }}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
+                >
+                  <option value="">Selecione uma opção...</option>
+                  {sipocDbDiretorias.map((d) => <option key={d.id} value={d.nome}>{d.nome}</option>)}
+                </select>
+              </div>
+              {/* Setor */}
+              <div className="w-full">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">
+                  Setor / Unidade <span className="text-red-500">*</span>
+                </label>
+                <select
                   value={sipocProfile.setor}
-                  onChange={(value) => updateSipocProfile("setor", value)}
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Classificação
-                </span>
-                <select
-                  value={sipocProfile.classificacao}
-                  onChange={(event) =>
-                    updateSipocProfile(
-                      "classificacao",
-                      event.target.value as SipocClassification
-                    )
-                  }
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10"
-                >
-                  {Object.entries(SIPOC_CLASSIFICATION_META).map(
-                    ([value, meta]) => (
-                      <option key={value} value={value}>
-                        {meta.label}
-                      </option>
-                    )
-                  )}
-                </select>
-                <p className="text-xs font-medium text-slate-500">
-                  {classification.description}
-                </p>
-              </label>
-              <label className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Status do workflow
-                </span>
-                <select
-                  value={sipocProfile.status}
-                  onChange={(event) =>
-                    updateSipocProfile(
-                      "status",
-                      event.target.value as SipocWorkflowStatus
-                    )
-                  }
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10"
-                >
-                  {Object.entries(SIPOC_WORKFLOW_META).map(([value, meta]) => (
-                    <option key={value} value={value}>
-                      {meta.label}
-                    </option>
-                  ))}
-                </select>
-                <span
+                  onChange={(e) => updateSipocProfile("setor", e.target.value)}
+                  disabled={!sipocDiretoria && sipocDbSetores.length > 0}
                   className={cn(
-                    "inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest",
-                    workflow.tone
+                    "w-full px-4 py-2.5 border rounded-lg text-sm font-bold outline-none transition-all shadow-sm",
+                    !sipocDiretoria && sipocDbSetores.length > 0
+                      ? "bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed"
+                      : "bg-white border-slate-200 text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   )}
                 >
-                  {workflow.label}
-                </span>
-              </label>
-              <label className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Dono do processo
-                </span>
-                <TableInput
-                  value={sipocProfile.dono}
-                  onChange={(value) => updateSipocProfile("dono", value)}
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Versão
-                  </span>
-                  <TableInput
-                    value={sipocProfile.versao}
-                    onChange={(value) => updateSipocProfile("versao", value)}
-                  />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Emissão
-                  </span>
-                  <TableInput
-                    value={sipocProfile.emissao}
-                    onChange={(value) => updateSipocProfile("emissao", value)}
-                  />
-                </label>
+                  <option value="">{!sipocDiretoria && sipocDbSetores.length > 0 ? "Selecione uma Diretoria" : "Selecione o Setor..."}</option>
+                  {sipocSetoresFiltrados.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+                </select>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-[#2655e8]">
-                  <History className="h-5 w-5" />
+            {/* Código */}
+            <div className="p-6 bg-slate-50 border border-slate-100 rounded-xl grid grid-cols-1 md:grid-cols-12 gap-4 items-end shadow-inner">
+              <div className="col-span-1 md:col-span-3">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Código Base (Auto)</label>
+                <div className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-mono font-bold text-slate-500">{sipocPrefixoCodigo}</div>
+              </div>
+              <div className="col-span-1 md:col-span-3">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-1">Número <span className="text-red-500 text-sm leading-none">*</span></label>
+                <input
+                  type="number"
+                  value={sipocNumero}
+                  onChange={(e) => setSipocNumero(e.target.value)}
+                  placeholder="001"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+              </div>
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-1">Versão <span className="text-red-500 text-sm leading-none">*</span></label>
+                <input
+                  type="number"
+                  value={sipocProfile.versao}
+                  onChange={(e) => updateSipocProfile("versao", e.target.value)}
+                  placeholder="1"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+              </div>
+              <div className="col-span-1 md:col-span-4">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Código Oficial</label>
+                <div className="w-full px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg flex items-center shadow-sm">
+                  <span className="text-sm font-mono font-bold text-blue-900 tracking-wider">{sipocCodigoFinal}</span>
                 </div>
-                <div>
-                  <p className="text-sm font-black text-slate-950">
-                    Workflow documental
-                  </p>
-                  <p className="text-xs font-medium text-slate-500">
-                    Controle de versão, aprovação e obsolescência.
-                  </p>
-                </div>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                {workflowSteps.map((step, index) => {
-                  const activeIndex = workflowSteps.indexOf(sipocProfile.status);
-                  const done = index <= activeIndex;
-                  const meta = SIPOC_WORKFLOW_META[step];
-
-                  return (
-                    <div key={step} className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          "flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black",
-                          done
-                            ? "border-[#2655e8] bg-[#2655e8] text-white"
-                            : "border-slate-200 bg-white text-slate-400"
-                        )}
-                      >
-                        {index + 1}
-                      </div>
-                      <span
-                        className={cn(
-                          "text-xs font-bold",
-                          done ? "text-slate-900" : "text-slate-400"
-                        )}
-                      >
-                        {meta.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5 rounded-xl border border-white bg-white p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Aprovação
-                </p>
-                <p className="mt-2 text-sm font-bold text-slate-900">
-                  {sipocProfile.aprovador}
-                </p>
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  Última revisão registrada em {sipocProfile.emissao}.
-                </p>
-              </div>
+            {/* Título */}
+            <div className="w-full">
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                Título do Processo <span className="text-red-500 text-sm leading-none">*</span>
+              </label>
+              <input
+                type="text"
+                value={sipocProfile.nome}
+                onChange={(e) => updateSipocProfile("nome", e.target.value)}
+                placeholder="Ex: Admissão e Acolhimento de Pacientes"
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+              />
             </div>
           </div>
-        </Panel>
-        )}
+          )}
 
-        {sipocWizardStep === "identificacao" && (
-        <div className="my-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            title="Performance"
-            value={`${sipocPerformanceAverage}%`}
-            subtitle="Média dos indicadores vinculados"
-            icon={<Activity className="h-4 w-4" />}
-            tone={sipocPerformanceAverage >= 90 ? "emerald" : "amber"}
-          />
-          <MetricCard
-            title="Riscos vinculados"
-            value={sipocLinkedRiskIds.size}
-            subtitle={`${sipocHighRiskCount} risco(s) alto/crítico`}
-            icon={<CircleAlert className="h-4 w-4" />}
-            tone={sipocHighRiskCount ? "red" : "emerald"}
-          />
-          <MetricCard
-            title="Indicadores"
-            value={sipocLinkedIndicatorIds.size}
-            subtitle="Relacionados às etapas"
-            icon={<BarChart3 className="h-4 w-4" />}
-            tone="blue"
-          />
-          <MetricCard
-            title="SLA conforme"
-            value={`${slaPercent}%`}
-            subtitle={`${sipocForaSla} interação(ões) fora do SLA`}
-            icon={<TimerReset className="h-4 w-4" />}
-            tone={sipocForaSla ? "amber" : "emerald"}
-          />
+          {/* Footer do wizard */}
+          <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex gap-3 w-full md:w-auto">
+              <button
+                onClick={() => setSipocWorkspace("catalogo")}
+                className="px-5 py-2.5 bg-white border border-slate-300 text-slate-600 font-bold rounded-lg text-sm shadow-sm hover:bg-slate-100 transition-all"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() => updateSipocProfile("status", "RASCUNHO")}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg text-sm shadow-sm hover:bg-slate-100 transition-all"
+              >
+                Salvar como Rascunho
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                const steps: SipocWizardStep[] = ["identificacao", "quadro", "indicadores", "interacoes"];
+                const idx = steps.indexOf(sipocWizardStep);
+                if (idx < steps.length - 1) setSipocWizardStep(steps[idx + 1]);
+              }}
+              disabled={sipocWizardStep === "interacoes"}
+              className="w-full md:w-auto px-6 py-2.5 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-900 shadow-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Próxima Etapa
+            </button>
+          </div>
         </div>
-        )}
 
         {sipocWizardStep !== "identificacao" && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -3087,100 +3026,6 @@ export default function ProcessosPage() {
           </Panel>
         )}
 
-        {sipocWizardStep === "identificacao" && (
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <Panel
-            title="Integrações do processo"
-            subtitle="O SIPOC passa a conversar com os módulos-chave do SGQ."
-          >
-            <div className="grid gap-3 p-6 md:grid-cols-2">
-              {[
-                {
-                  label: "BPM Studio",
-                  text: "Fluxo completo, conectores e modelagem BPMN.",
-                  icon: <Workflow className="h-4 w-4" />,
-                },
-                {
-                  label: "Documentos",
-                  text: "POP, protocolos e documentos controlados relacionados.",
-                  icon: <FileCheck className="h-4 w-4" />,
-                },
-                {
-                  label: "Indicadores",
-                  text: "Performance operacional e estratégica vinculada.",
-                  icon: <BarChart3 className="h-4 w-4" />,
-                },
-                {
-                  label: "Riscos",
-                  text: "Riscos por etapa, controles e planos de ação.",
-                  icon: <ShieldCheck className="h-4 w-4" />,
-                },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-xl border border-slate-200 bg-white p-4"
-                >
-                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-[#2655e8]">
-                    {item.icon}
-                  </div>
-                  <p className="text-sm font-black text-slate-950">
-                    {item.label}
-                  </p>
-                  <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
-                    {item.text}
-                  </p>
-                  <div className="mt-3 inline-flex items-center gap-1 text-xs font-black text-[#2655e8]">
-                    <Link2 className="h-3.5 w-3.5" />
-                    Vinculado ao processo
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Panel>
-
-          <Panel
-            title="Histórico e comentários"
-            subtitle="Rastreabilidade executiva para revisão e auditoria."
-          >
-            <div className="space-y-3 p-6">
-              {[
-                "Criação do SIPOC em modo rascunho",
-                "Classificação obrigatória definida",
-                "Indicadores e riscos vinculados às etapas",
-                "Aguardando revisão formal do dono do processo",
-              ].map((item, index) => (
-                <div
-                  key={item}
-                  className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"
-                >
-                  <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-xs font-black text-[#2655e8]">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{item}</p>
-                    <p className="mt-1 text-xs font-medium text-slate-500">
-                      Sistema • {sipocProfile.emissao}
-                    </p>
-                  </div>
-                </div>
-              ))}
-
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <div className="mb-2 flex items-center gap-2 text-[#2655e8]">
-                  <MessageSquare className="h-4 w-4" />
-                  <p className="text-xs font-black uppercase tracking-widest">
-                    Comentários por etapa
-                  </p>
-                </div>
-                <p className="text-sm font-semibold leading-relaxed text-slate-700">
-                  Os comentários informados no bloco Process são preservados na
-                  rastreabilidade do SIPOC e entram na exportação institucional.
-                </p>
-              </div>
-            </div>
-          </Panel>
-        </div>
-        )}
       </>
     );
   }
