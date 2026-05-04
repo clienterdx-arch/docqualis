@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle, CheckCircle2, Clock, FileWarning, HeartHandshake,
@@ -12,8 +12,10 @@ import {
 
 import {
   Registro, TipoRegistro, StatusRegistro, PlanoAcaoItem,
-  TIPO_CONFIG, STATUS_CONFIG, SETORES, USUARIOS, MOCK_REGISTROS,
+  TIPO_CONFIG, STATUS_CONFIG, SETORES, USUARIOS,
 } from "@/lib/ocorrencias";
+import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
 
@@ -63,6 +65,115 @@ function statusWorkflowIdx(status: StatusRegistro) {
 
 type BoardTab = "triagem" | "NI" | "NC" | "OUV";
 type SubTab = "todos" | "aguardando" | "andamento" | "cancelados";
+type PerfilOcorrencias = { empresa_id?: string | null; nome?: string | null };
+type DbRow = Record<string, unknown>;
+
+function isObject(value: unknown): value is DbRow {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function textValue(row: DbRow, key: string, fallback = "") {
+  const value = row[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function arrayValue<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeStatusRegistro(value: string): StatusRegistro {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  const allowed: StatusRegistro[] = [
+    "AGUARDANDO_TRIAGEM",
+    "EM_TRATATIVA",
+    "APROVACAO",
+    "EFICACIA",
+    "CONCLUIDO",
+    "CANCELADO",
+    "SUSPENSO",
+  ];
+  return allowed.includes(normalized as StatusRegistro)
+    ? (normalized as StatusRegistro)
+    : "AGUARDANDO_TRIAGEM";
+}
+
+function normalizeTipoRegistro(value: string): TipoRegistro {
+  const normalized = value.toUpperCase();
+  return normalized === "NC" || normalized === "EL" || normalized === "RC" || normalized === "MF"
+    ? normalized
+    : "NI";
+}
+
+function buildEmptyRegistro(): Registro {
+  return {
+    id: "",
+    codigo: "",
+    tipo: "NI",
+    status: "AGUARDANDO_TRIAGEM",
+    prioridade: "MEDIA",
+    dataRegistro: "",
+    origem: "FORMULARIO",
+    dataOcorrencia: "",
+    periodo: "DIURNO",
+    anonimo: false,
+    notificadorNome: "",
+    notificadorCargo: "",
+    notificadorSetor: "",
+    notificadorEmail: "",
+    setorOcorrencia: "",
+    descricao: "",
+    envolvePaciente: false,
+    pacienteNome: "",
+    pacienteAtendimento: "",
+    pacienteConsequencias: "",
+    acaoImediata: "",
+    dataClassificacao: "",
+    classificacaoNQSP: "",
+    gravidade: "LEVE",
+    classificacaoDesfecho: "",
+    categoriaNotiVisa: "",
+    numeroNotivisa: "",
+    linkNotivisa: "",
+    quebraAcordo: "",
+    trativaSugerida: "",
+    tipoAcao: "",
+    unidadeResponsavel: "",
+    responsavelTratativa: "",
+    prazoTratativa: "",
+    ferramentasAnalise: [],
+    planoAcao: [],
+    historico: [],
+  };
+}
+
+function mapRegistroDb(row: DbRow): Registro {
+  const dados = isObject(row.dados) ? row.dados : {};
+  return {
+    ...buildEmptyRegistro(),
+    ...dados,
+    id: textValue(row, "id", textValue(dados, "id")),
+    codigo: textValue(row, "numero", textValue(dados, "codigo")),
+    tipo: normalizeTipoRegistro(textValue(dados, "tipo")),
+    status: normalizeStatusRegistro(textValue(row, "status", textValue(dados, "status"))),
+    dataRegistro: textValue(row, "data_preenchimento", textValue(dados, "dataRegistro")),
+    historico: arrayValue<Registro["historico"][number]>(row.historico).length
+      ? arrayValue<Registro["historico"][number]>(row.historico)
+      : arrayValue<Registro["historico"][number]>(dados.historico),
+    planoAcao: arrayValue<PlanoAcaoItem>(dados.planoAcao),
+  } as Registro;
+}
+
+function registroDadosPayload(registro: Registro) {
+  return {
+    ...registro,
+    id: undefined,
+    codigo: registro.codigo,
+  };
+}
 
 // ─── MODAL OVERLAY ────────────────────────────────────────────────────────────
 
@@ -77,7 +188,10 @@ function ModalOverlay({ children }: { children: React.ReactNode }) {
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export default function OcorrenciasPage() {
-  const [registros, setRegistros] = useState<Registro[]>(MOCK_REGISTROS);
+  const [registros, setRegistros] = useState<Registro[]>([]);
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [usuarioNome, setUsuarioNome] = useState("Usuário");
+  const [isLoading, setIsLoading] = useState(true);
   const [board, setBoard] = useState<BoardTab>("triagem");
   const [subTab, setSubTab] = useState<SubTab>("todos");
   const [busca, setBusca] = useState("");
@@ -115,6 +229,65 @@ export default function OcorrenciasPage() {
     setTimeout(() => setAviso(null), 3500);
   }
 
+  async function carregarRegistros(empresaAtualId: string) {
+    setIsLoading(true);
+
+    const { data, error } = await supabase
+      .from("registros_preenchidos")
+      .select("*")
+      .eq("empresa_id", empresaAtualId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setRegistros([]);
+      notificar("Não foi possível carregar ocorrências reais do banco.", "erro");
+    } else {
+      setRegistros((data ?? []).map((row) => mapRegistroDb(row as DbRow)));
+    }
+
+    setIsLoading(false);
+  }
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function init() {
+      setIsLoading(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      if (!ativo) return;
+      if (!sessionData.session) {
+        setRegistros([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const perfil = await carregarPerfilUsuario<PerfilOcorrencias>(
+        sessionData.session,
+        "empresa_id, nome"
+      );
+
+      if (!ativo) return;
+      if (!perfil?.empresa_id) {
+        setRegistros([]);
+        setIsLoading(false);
+        notificar("Não foi possível identificar a empresa do usuário.", "erro");
+        return;
+      }
+
+      setEmpresaId(perfil.empresa_id);
+      setUsuarioNome(perfil.nome ?? "Usuário");
+      await carregarRegistros(perfil.empresa_id);
+    }
+
+    void init();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
   // ── Stats ───────────────────────────────────────────────────────────────────
 
   const aguardandoTriagem = registros.filter((r) => r.status === "AGUARDANDO_TRIAGEM").length;
@@ -123,8 +296,32 @@ export default function OcorrenciasPage() {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
-  function criarRegistro() {
+  async function salvarRegistro(registro: Registro) {
+    if (!empresaId) return false;
+
+    const { error } = await supabase
+      .from("registros_preenchidos")
+      .update({
+        status: registro.status,
+        dados: registroDadosPayload(registro),
+        snapshot: registroDadosPayload(registro),
+        historico: registro.historico,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", registro.id);
+
+    if (error) {
+      notificar("Não foi possível salvar a ocorrência no banco.", "erro");
+      return false;
+    }
+
+    return true;
+  }
+
+  async function criarRegistro() {
     if (!novoForm.descricao.trim()) { notificar("Descreva o ocorrido.", "erro"); return; }
+    if (!empresaId) { notificar("Não foi possível identificar a empresa do usuário.", "erro"); return; }
     const seq = registros.filter((r) => r.tipo === novoForm.tipo).length + 1;
     const codigo = `${novoForm.tipo}-${String(seq).padStart(4, "0")}`;
     const hoje = new Date().toLocaleDateString("pt-BR");
@@ -154,18 +351,58 @@ export default function OcorrenciasPage() {
       quebraAcordo: "", trativaSugerida: "", tipoAcao: "", unidadeResponsavel: "",
       responsavelTratativa: "", prazoTratativa: "",
       ferramentasAnalise: [], planoAcao: [],
-      historico: [{ id: `h${Date.now()}`, data: agora, autor: "Sistema", acao: `Registro criado. Código ${codigo} gerado automaticamente.` }],
+      historico: [{ id: `h${Date.now()}`, data: agora, autor: usuarioNome, acao: `Registro criado. Código ${codigo} gerado automaticamente.` }],
     };
 
-    setRegistros((prev) => [novo, ...prev]);
+    const { data, error } = await supabase
+      .from("registros_preenchidos")
+      .insert({
+        empresa_id: empresaId,
+        numero: codigo,
+        preenchido_por: usuarioNome,
+        status: novo.status,
+        dados: registroDadosPayload(novo),
+        snapshot: registroDadosPayload(novo),
+        historico: novo.historico,
+        risk_score: 0,
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      notificar("Não foi possível criar a ocorrência no banco.", "erro");
+      return;
+    }
+
+    const registroCriado = mapRegistroDb(data as DbRow);
+    setRegistros((prev) => [registroCriado, ...prev]);
     setModalNovoAberto(false);
     setNovoForm({ tipo: "NI", descricao: "", setorOcorrencia: SETORES[0], dataOcorrencia: "", periodo: "DIURNO", anonimo: false, notificadorNome: "", notificadorCargo: "" });
     notificar(`Registro ${codigo} criado e enviado para triagem.`);
     setBoard("triagem");
   }
 
-  function assumirRegistro() {
+  async function assumirRegistro() {
     if (!assumirForm.responsavel) { notificar("Selecione o responsável.", "erro"); return; }
+    const atual = registros.find((r) => r.id === modalAssumirId);
+    if (!atual) return;
+    const atualizado: Registro = {
+      ...atual,
+      status: "EM_TRATATIVA" as StatusRegistro,
+      responsavelTratativa: assumirForm.responsavel,
+      prazoTratativa: assumirForm.prazo,
+      historico: [...atual.historico, {
+        id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
+        autor: usuarioNome, acao: "Triagem realizada. Registro assumido.",
+        obs: `Responsável: ${assumirForm.responsavel}.${assumirForm.prazo ? ` Prazo: ${assumirForm.prazo}.` : ""}`,
+      }],
+    };
+    if (!(await salvarRegistro(atualizado))) return;
+    setRegistros((prev) => prev.map((r) => r.id === atualizado.id ? atualizado : r));
+    setModalAssumirId(null);
+    setAssumirForm({ responsavel: USUARIOS[0], prazo: "" });
+    notificar("Registro assumido e enviado para tratativa.");
+    return;
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== modalAssumirId) return r;
       return {
@@ -175,7 +412,7 @@ export default function OcorrenciasPage() {
         prazoTratativa: assumirForm.prazo,
         historico: [...r.historico, {
           id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
-          autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido.",
+          autor: usuarioNome, acao: "Triagem realizada. Registro assumido.",
           obs: `Responsável: ${assumirForm.responsavel}.${assumirForm.prazo ? ` Prazo: ${assumirForm.prazo}.` : ""}`,
         }],
       };
@@ -185,8 +422,26 @@ export default function OcorrenciasPage() {
     notificar("Registro assumido e enviado para tratativa.");
   }
 
-  function recusarRegistro() {
+  async function recusarRegistro() {
     if (!recusarJustificativa.trim()) { notificar("A justificativa é obrigatória.", "erro"); return; }
+    const atual = registros.find((r) => r.id === modalRecusarId);
+    if (!atual) return;
+    const atualizado: Registro = {
+      ...atual,
+      status: "CANCELADO" as StatusRegistro,
+      justificativaRecusa: recusarJustificativa,
+      historico: [...atual.historico, {
+        id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
+        autor: usuarioNome, acao: "Triagem: Registro recusado.",
+        obs: recusarJustificativa,
+      }],
+    };
+    if (!(await salvarRegistro(atualizado))) return;
+    setRegistros((prev) => prev.map((r) => r.id === atualizado.id ? atualizado : r));
+    setModalRecusarId(null);
+    setRecusarJustificativa("");
+    notificar("Registro recusado com justificativa.");
+    return;
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== modalRecusarId) return r;
       return {
@@ -195,7 +450,7 @@ export default function OcorrenciasPage() {
         justificativaRecusa: recusarJustificativa,
         historico: [...r.historico, {
           id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
-          autor: "Deivid Coimbra", acao: "Triagem: Registro recusado.",
+          autor: usuarioNome, acao: "Triagem: Registro recusado.",
           obs: recusarJustificativa,
         }],
       };
@@ -205,8 +460,23 @@ export default function OcorrenciasPage() {
     notificar("Registro recusado com justificativa.");
   }
 
-  function adicionarAcao(registroId: string) {
+  async function adicionarAcao(registroId: string) {
     if (!novaAcao.acao.trim()) { notificar("Descreva a ação.", "erro"); return; }
+    const atual = registros.find((r) => r.id === registroId);
+    if (!atual) return;
+    const item: PlanoAcaoItem = {
+      id: `pa${Date.now()}`,
+      acao: novaAcao.acao,
+      responsavel: novaAcao.responsavel,
+      prazo: novaAcao.prazo,
+      status: "PENDENTE",
+    };
+    const atualizado: Registro = { ...atual, planoAcao: [...atual.planoAcao, item] };
+    if (!(await salvarRegistro(atualizado))) return;
+    setRegistros((prev) => prev.map((r) => r.id === atualizado.id ? atualizado : r));
+    setNovaAcao({ acao: "", responsavel: USUARIOS[0], prazo: "" });
+    notificar("Ação adicionada ao plano.");
+    return;
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== registroId) return r;
       const item: PlanoAcaoItem = {
@@ -219,12 +489,26 @@ export default function OcorrenciasPage() {
     notificar("Ação adicionada ao plano.");
   }
 
-  function avancarWorkflow(registroId: string) {
+  async function avancarWorkflow(registroId: string) {
     const mapa: Partial<Record<StatusRegistro, StatusRegistro>> = {
       EM_TRATATIVA: "APROVACAO",
       APROVACAO: "EFICACIA",
       EFICACIA: "CONCLUIDO",
     };
+    const atual = registros.find((r) => r.id === registroId);
+    const proximoAtual = atual ? mapa[atual.status] : null;
+    if (!atual || !proximoAtual) return;
+    const atualizado: Registro = {
+      ...atual,
+      status: proximoAtual,
+      historico: [...atual.historico, {
+        id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
+        autor: usuarioNome, acao: `Status avançado para: ${STATUS_CONFIG[proximoAtual].label}.`,
+      }],
+    };
+    if (!(await salvarRegistro(atualizado))) return;
+    setRegistros((prev) => prev.map((r) => r.id === atualizado.id ? atualizado : r));
+    return;
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== registroId) return r;
       const proximo = mapa[r.status];
@@ -233,7 +517,7 @@ export default function OcorrenciasPage() {
         ...r, status: proximo,
         historico: [...r.historico, {
           id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
-          autor: "Deivid Coimbra", acao: `Status avançado para: ${STATUS_CONFIG[proximo].label}.`,
+          autor: usuarioNome, acao: `Status avançado para: ${STATUS_CONFIG[proximo].label}.`,
         }],
       };
     }));

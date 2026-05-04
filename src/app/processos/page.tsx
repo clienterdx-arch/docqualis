@@ -799,15 +799,11 @@ export default function ProcessosPage() {
     "updatedAt"
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [sipocRows, setSipocRows] = useState<SipocRow[]>(DEFAULT_SIPOC_ROWS);
+  const [sipocRows, setSipocRows] = useState<SipocRow[]>([]);
   const [sipocWorkspace, setSipocWorkspace] =
     useState<SipocWorkspace>("catalogo");
-  const [selectedSipocId, setSelectedSipocId] = useState<string | null>(
-    DEFAULT_SIPOC_CATALOG[0]?.id ?? null
-  );
-  const [sipocCatalog, setSipocCatalog] = useState<SipocCatalogItem[]>(
-    DEFAULT_SIPOC_CATALOG
-  );
+  const [selectedSipocId, setSelectedSipocId] = useState<string | null>(null);
+  const [sipocCatalog, setSipocCatalog] = useState<SipocCatalogItem[]>([]);
   const [sipocWizardStep, setSipocWizardStep] =
     useState<SipocWizardStep>("identificacao");
   const [sipocCatalogFilter, setSipocCatalogFilter] =
@@ -818,18 +814,16 @@ export default function ProcessosPage() {
   const [sipocNumero, setSipocNumero] = useState("");
   const [sipocDbDiretorias, setSipocDbDiretorias] = useState<{id: string; nome: string; sigla?: string}[]>([]);
   const [sipocDbSetores, setSipocDbSetores] = useState<{id: string; nome: string; sigla?: string; diretoria_id?: string}[]>([]);
-  const [sipocIndicators, setSipocIndicators] = useState<SipocIndicator[]>(
-    DEFAULT_SIPOC_INDICATORS
-  );
+  const [sipocIndicators, setSipocIndicators] = useState<SipocIndicator[]>([]);
   const [sipocRisks, setSipocRisks] =
-    useState<SipocRisk[]>(DEFAULT_SIPOC_RISKS);
+    useState<SipocRisk[]>([]);
   const [sipocStages, setSipocStages] =
-    useState<SipocStage[]>(DEFAULT_SIPOC_STAGES);
+    useState<SipocStage[]>([]);
   const [draggedSipocStageId, setDraggedSipocStageId] = useState<string | null>(
     null
   );
-  const [raciRows, setRaciRows] = useState<RaciRow[]>(DEFAULT_RACI_ROWS);
-  const [vsmRows, setVsmRows] = useState<VsmRow[]>(DEFAULT_VSM_ROWS);
+  const [raciRows, setRaciRows] = useState<RaciRow[]>([]);
+  const [vsmRows, setVsmRows] = useState<VsmRow[]>([]);
 
   async function loadItems() {
     setIsLoading(true);
