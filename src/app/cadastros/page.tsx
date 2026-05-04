@@ -12,23 +12,11 @@ import type {
 } from "@/types/cadastros";
 import { MODULOS_SISTEMA } from "@/types/cadastros";
 
-// ─── DADOS MOCK ───────────────────────────────────────────────────────────────
+// ─── DADOS INICIAIS ──────────────────────────────────────────────────────────
 
-const MOCK_DIRETORIAS: Diretoria[] = [
-  { id: "DIR-001", empresa_id: "", codigo: "EXE", nome: "Diretoria Executiva", descricao: "Alta direção da instituição", responsavel: "Roberto Silva", qtd_setores: 2, status: "ativo", created_at: "" },
-  { id: "DIR-002", empresa_id: "", codigo: "ASS", nome: "Diretoria Assistencial", descricao: "Gestão das áreas de cuidado ao paciente", responsavel: "Dra. Patricia Reis", qtd_setores: 8, status: "ativo", created_at: "" },
-  { id: "DIR-003", empresa_id: "", codigo: "ADM", nome: "Diretoria Administrativa", descricao: "Gestão administrativa e financeira", responsavel: "Carlos Mendes", qtd_setores: 5, status: "ativo", created_at: "" },
-  { id: "DIR-004", empresa_id: "", codigo: "QUA", nome: "Qualidade e Segurança", descricao: "Controle de qualidade e gestão de riscos", responsavel: "Deivid Coimbra", qtd_setores: 2, status: "ativo", created_at: "" },
-];
+const EMPTY_DIRETORIAS: Diretoria[] = [];
 
-const MOCK_SETORES: Setor[] = [
-  { id: "SET-001", empresa_id: "", diretoria_id: "DIR-002", diretoria_nome: "Diretoria Assistencial", codigo: "UTI", nome: "UTI Adulto", descricao: "Unidade de Terapia Intensiva Adulto", responsavel: "Enf. Marina Costa", status: "ativo", created_at: "" },
-  { id: "SET-002", empresa_id: "", diretoria_id: "DIR-002", diretoria_nome: "Diretoria Assistencial", codigo: "CME", nome: "Centro de Material Esterilizado", descricao: "Processamento e esterilização de materiais", responsavel: "Téc. José Almeida", status: "ativo", created_at: "" },
-  { id: "SET-003", empresa_id: "", diretoria_id: "DIR-003", diretoria_nome: "Diretoria Administrativa", codigo: "FAR", nome: "Farmácia Hospitalar", descricao: "Dispensação e controle de medicamentos", responsavel: "Farm. Ana Lima", status: "ativo", created_at: "" },
-  { id: "SET-004", empresa_id: "", diretoria_id: "DIR-004", diretoria_nome: "Qualidade e Segurança", codigo: "GQS", nome: "Gestão da Qualidade", descricao: "Coordenação do sistema de gestão da qualidade", responsavel: "Deivid Coimbra", status: "ativo", created_at: "" },
-  { id: "SET-005", empresa_id: "", diretoria_id: "DIR-002", diretoria_nome: "Diretoria Assistencial", codigo: "NHO", nome: "Núcleo de Higienização", descricao: "Limpeza e desinfecção de ambientes hospitalares", responsavel: "Marcos Ferreira", status: "ativo", created_at: "" },
-  { id: "SET-006", empresa_id: "", diretoria_id: "DIR-003", diretoria_nome: "Diretoria Administrativa", codigo: "TI", nome: "Tecnologia da Informação", descricao: "Infraestrutura e sistemas de informação", responsavel: "Lucas Santos", status: "ativo", created_at: "" },
-];
+const EMPTY_SETORES: Setor[] = [];
 
 const PERFIS_ACESSO = [
   "Administrador Global",
@@ -66,13 +54,7 @@ function permissoesPadrao(perfil: string): Record<ModuloSistema, NivelPermissao>
   return base;
 }
 
-const MOCK_USUARIOS: UsuarioCadastro[] = [
-  { id: "USR-001", empresa_id: "", nome: "Deivid Coimbra", email: "deivid@docqualis.com", cargo: "Analista da Qualidade", setor: "Gestão da Qualidade", setor_id: "SET-004", diretoria: "Qualidade e Segurança", diretoria_id: "DIR-004", perfil: "Administrador Global", status: "ativo", permissoes: permissoesPadrao("Administrador Global"), ultimo_login: "Agora mesmo", created_at: "" },
-  { id: "USR-002", empresa_id: "", nome: "Patricia Reis", email: "patricia@docqualis.com", cargo: "Médica da Qualidade", setor: "Gestão da Qualidade", setor_id: "SET-004", diretoria: "Qualidade e Segurança", diretoria_id: "DIR-004", perfil: "Aprovador Final", status: "ativo", permissoes: permissoesPadrao("Aprovador Final"), ultimo_login: "Hoje, 08:30", created_at: "" },
-  { id: "USR-003", empresa_id: "", nome: "Tyago Alves", email: "tyago@docqualis.com", cargo: "Gerente Assistencial", setor: "UTI Adulto", setor_id: "SET-001", diretoria: "Diretoria Assistencial", diretoria_id: "DIR-002", perfil: "Gestor de Módulo", status: "ativo", permissoes: permissoesPadrao("Gestor de Módulo"), ultimo_login: "Ontem, 14:15", created_at: "" },
-  { id: "USR-004", empresa_id: "", nome: "Roberto Silva", email: "roberto@docqualis.com", cargo: "Diretor Executivo", setor: "Diretoria Executiva", setor_id: "DIR-001", diretoria: "Diretoria Executiva", diretoria_id: "DIR-001", perfil: "Revisor", status: "ativo", permissoes: permissoesPadrao("Revisor"), ultimo_login: "15/04/2026", created_at: "" },
-  { id: "USR-005", empresa_id: "", nome: "Ana Beatriz Santos", email: "ana.b@docqualis.com", cargo: "Técnica de Enfermagem", setor: "UTI Adulto", setor_id: "SET-001", diretoria: "Diretoria Assistencial", diretoria_id: "DIR-002", perfil: "Operacional", status: "bloqueado", permissoes: permissoesPadrao("Operacional"), ultimo_login: "01/04/2026", created_at: "" },
-];
+const EMPTY_USUARIOS: UsuarioCadastro[] = [];
 
 const PALETA_CORES = [
   "#2655e8", "#059669", "#7c3aed", "#d97706", "#dc2626",
@@ -80,14 +62,7 @@ const PALETA_CORES = [
   "#1d4ed8", "#b45309", "#be123c", "#0f766e", "#6d28d9",
 ];
 
-const MOCK_CATEGORIAS: CategoriaDocumento[] = [
-  { id: "CAT-001", empresa_id: "", nome: "Procedimento Operacional Padrão", sigla: "POP", descricao: "Documentos que descrevem passo a passo de atividades operacionais", cor: "#2655e8", status: "ativo", created_at: "" },
-  { id: "CAT-002", empresa_id: "", nome: "Instrução de Trabalho", sigla: "IT", descricao: "Orientações específicas para tarefas técnicas", cor: "#059669", status: "ativo", created_at: "" },
-  { id: "CAT-003", empresa_id: "", nome: "Política", sigla: "POL", descricao: "Diretrizes e princípios organizacionais", cor: "#7c3aed", status: "ativo", created_at: "" },
-  { id: "CAT-004", empresa_id: "", nome: "Formulário", sigla: "FOR", descricao: "Modelos para registro de informações", cor: "#d97706", status: "ativo", created_at: "" },
-  { id: "CAT-005", empresa_id: "", nome: "Manual", sigla: "MAN", descricao: "Documentos de referência geral do sistema", cor: "#dc2626", status: "ativo", created_at: "" },
-  { id: "CAT-006", empresa_id: "", nome: "Protocolo Clínico", sigla: "PCL", descricao: "Diretrizes para condutas assistenciais", cor: "#0891b2", status: "ativo", created_at: "" },
-];
+const EMPTY_CATEGORIAS: CategoriaDocumento[] = [];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -215,17 +190,17 @@ export default function CadastrosPage() {
   const [aviso, setAviso] = useState<string | null>(null);
 
   // ── Diretorias state
-  const [diretorias, setDiretorias] = useState<Diretoria[]>(MOCK_DIRETORIAS);
+  const [diretorias, setDiretorias] = useState<Diretoria[]>(EMPTY_DIRETORIAS);
   const [modalDir, setModalDir] = useState(false);
   const [formDir, setFormDir] = useState<Partial<Diretoria>>({});
 
   // ── Setores state
-  const [setores, setSetores] = useState<Setor[]>(MOCK_SETORES);
+  const [setores, setSetores] = useState<Setor[]>(EMPTY_SETORES);
   const [modalSet, setModalSet] = useState(false);
   const [formSet, setFormSet] = useState<Partial<Setor>>({});
 
   // ── Usuários state
-  const [usuarios, setUsuarios] = useState<UsuarioCadastro[]>(MOCK_USUARIOS);
+  const [usuarios, setUsuarios] = useState<UsuarioCadastro[]>(EMPTY_USUARIOS);
   const [modalUsr, setModalUsr] = useState(false);
   const [formUsr, setFormUsr] = useState<Partial<UsuarioCadastro>>({});
   const [modalPerm, setModalPerm] = useState(false);
@@ -233,7 +208,7 @@ export default function CadastrosPage() {
   const [permEdit, setPermEdit] = useState<Record<ModuloSistema, NivelPermissao>>({} as Record<ModuloSistema, NivelPermissao>);
 
   // ── Categorias state
-  const [categorias, setCategorias] = useState<CategoriaDocumento[]>(MOCK_CATEGORIAS);
+  const [categorias, setCategorias] = useState<CategoriaDocumento[]>(EMPTY_CATEGORIAS);
   const [modalCat, setModalCat] = useState(false);
   const [formCat, setFormCat] = useState<Partial<CategoriaDocumento>>({});
 
@@ -698,7 +673,7 @@ export default function CadastrosPage() {
             </Campo>
             <div className="col-span-2">
               <Campo label="Nome *">
-                <input value={formSet.nome ?? ""} onChange={(e) => setFormSet((f) => ({ ...f, nome: e.target.value }))} className={INPUT_CLS} placeholder="UTI Adulto" />
+                <input value={formSet.nome ?? ""} onChange={(e) => setFormSet((f) => ({ ...f, nome: e.target.value }))} className={INPUT_CLS} placeholder="Nome do setor" />
               </Campo>
             </div>
           </div>
@@ -743,7 +718,7 @@ export default function CadastrosPage() {
               <input type="email" value={formUsr.email ?? ""} onChange={(e) => setFormUsr((f) => ({ ...f, email: e.target.value }))} className={INPUT_CLS} placeholder="email@empresa.com" />
             </Campo>
             <Campo label="Cargo">
-              <input value={formUsr.cargo ?? ""} onChange={(e) => setFormUsr((f) => ({ ...f, cargo: e.target.value }))} className={INPUT_CLS} placeholder="Ex: Analista da Qualidade" />
+              <input value={formUsr.cargo ?? ""} onChange={(e) => setFormUsr((f) => ({ ...f, cargo: e.target.value }))} className={INPUT_CLS} placeholder="Cargo do colaborador" />
             </Campo>
           </div>
           <div className="grid grid-cols-2 gap-4">

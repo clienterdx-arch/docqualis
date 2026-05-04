@@ -1,5 +1,5 @@
 // Tipos e metadados compartilhados do módulo de Ocorrências.
-// Registros reais devem vir do Supabase por empresa_id. Não usar seed/mock em tela.
+// Registros reais devem vir do Supabase por empresa_id. Não usar dados de exemplo em tela.
 
 export type TipoRegistro = "NI" | "NC" | "EL" | "RC" | "MF";
 
@@ -95,5 +95,3 @@ export const USUARIOS = [
   "Responsável da Qualidade",
   "Gestor responsável",
 ];
-
-export const MOCK_REGISTROS: Registro[] = [];

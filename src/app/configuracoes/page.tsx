@@ -10,30 +10,15 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { salvarPinAssinatura } from "@/lib/assinatura";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
-// ─── MOCKS E DADOS GLOBAIS ───────────────────────────────────────────────────
+// ─── DADOS INICIAIS E CONFIGURAÇÕES GLOBAIS ─────────────────────────────────
 
-const MOCK_USERS = [
-  { id: "USR-001", name: "Deivid Coimbra", email: "deivid@docqualis.com", role: "Administrador Global", department: "Gestão da Qualidade", status: "Ativo", lastLogin: "Agora mesmo" },
-  { id: "USR-002", name: "Patricia Reis", email: "patricia@docqualis.com", role: "Médica da Qualidade", department: "Gestão da Qualidade", status: "Ativo", lastLogin: "Hoje, 08:30" },
-  { id: "USR-003", name: "Tyago Alves", email: "tyago@docqualis.com", role: "Aprovador Final", department: "Assistencial", status: "Ativo", lastLogin: "Ontem, 14:15" },
-  { id: "USR-004", name: "Roberto Silva", email: "roberto@docqualis.com", role: "Revisor", department: "Diretoria", status: "Ativo", lastLogin: "15/04/2026" },
-  { id: "USR-005", name: "Ana Beatriz", email: "ana.b@docqualis.com", role: "Operacional", department: "Assistencial", status: "Bloqueado", lastLogin: "01/04/2026" },
-];
+const EMPTY_USERS: Array<{ id: string; name: string; email: string; role: string; department: string; status: string; lastLogin: string }> = [];
 
-const MOCK_DEPTS = [
-  { id: "DEP-01", code: "DIR", name: "Diretoria", manager: "Roberto Silva", headcount: 4, status: "Ativo" },
-  { id: "DEP-02", code: "QUA", name: "Gestão da Qualidade", manager: "Deivid Coimbra", headcount: 12, status: "Ativo" },
-  { id: "DEP-03", code: "AST", name: "Assistencial", manager: "Tyago Alves", headcount: 45, status: "Ativo" },
-  { id: "DEP-04", code: "TI", name: "Tecnologia da Informação", manager: "Pendente", headcount: 8, status: "Ativo" },
-];
+const EMPTY_DEPTS: Array<{ id: string; code: string; name: string; manager: string; headcount: number; status: string }> = [];
 
-const MOCK_LOGS = [
-  { id: "LOG-9928", timestamp: "17/04/2026 14:32:05", user: "Deivid Coimbra", action: "Acesso concedido", module: "Autenticação", ip: "189.12.43.110" },
-  { id: "LOG-9927", timestamp: "17/04/2026 14:15:22", user: "Patricia Reis", action: "Alteração de Documento (POP-001)", module: "Gestão de Documentos", ip: "192.168.1.45" },
-  { id: "LOG-9926", timestamp: "16/04/2026 11:05:10", user: "Tyago Alves", action: "Aprovação de Registro (PIN Validado)", module: "Gestão de Registros", ip: "192.168.1.112" },
-  { id: "LOG-9924", timestamp: "15/04/2026 18:22:14", user: "Sistema", action: "Bloqueio por tentativas falhas (5x) - Ana Beatriz", module: "Segurança", ip: "177.43.22.10" },
-];
+const EMPTY_LOGS: Array<{ id: string; timestamp: string; user: string; action: string; module: string; ip: string }> = [];
 
 const MODULES_MATRIX = [
   "Gestão de Documentos",
@@ -67,6 +52,13 @@ export default function ConfiguracoesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRole, setActiveRole] = useState("Administrador Global");
   const [notice, setNotice] = useState<string | null>(null);
+  const [perfilUsuario, setPerfilUsuario] = useState({
+    nome: "Usuário",
+    email: "",
+    cargo: "",
+    setor: "",
+    perfilAcesso: "Perfil não informado",
+  });
   const [pinAssinaturaConfigurado, setPinAssinaturaConfigurado] = useState(false);
   const [senhaAtualAssinatura, setSenhaAtualAssinatura] = useState("");
   const [novoPinAssinatura, setNovoPinAssinatura] = useState("");
@@ -79,12 +71,28 @@ export default function ConfiguracoesPage() {
   }
 
   useEffect(() => {
-    async function carregarAssinatura() {
-      const { data } = await supabase.auth.getUser();
-      setPinAssinaturaConfigurado(Boolean(data.user?.user_metadata?.assinatura_pin_hash));
+    async function carregarConta() {
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      setPinAssinaturaConfigurado(Boolean(session?.user.user_metadata?.assinatura_pin_hash));
+
+      const perfil = await carregarPerfilUsuario<{
+        nome?: string | null;
+        cargo?: string | null;
+        setor?: string | null;
+        perfil_acesso?: string | null;
+      }>(session, "nome, cargo, setor, perfil_acesso");
+
+      setPerfilUsuario({
+        nome: perfil?.nome ?? session?.user.user_metadata?.name ?? session?.user.email?.split("@")[0] ?? "Usuário",
+        email: session?.user.email ?? "",
+        cargo: perfil?.cargo ?? "",
+        setor: perfil?.setor ?? "",
+        perfilAcesso: perfil?.perfil_acesso ?? "Perfil não informado",
+      });
     }
 
-    carregarAssinatura();
+    carregarConta();
   }, []);
 
   async function handleSalvarPinAssinatura() {
@@ -126,11 +134,11 @@ export default function ConfiguracoesPage() {
       <h2 className="text-xl font-bold text-slate-800 mb-6">Meu Perfil Público</h2>
       <div className="flex items-center gap-6 mb-8 border-b border-slate-100 pb-8">
         <div className="w-24 h-24 bg-[#2655e8] rounded-full flex items-center justify-center text-3xl font-bold text-white shadow-md">
-          DC
+          {getInitials(perfilUsuario.nome) || "US"}
         </div>
         <div>
-          <h3 className="font-bold text-lg text-slate-900">Deivid Coimbra</h3>
-          <p className="text-sm text-slate-500 mb-3">Administrador Global • Gestão da Qualidade</p>
+          <h3 className="font-bold text-lg text-slate-900">{perfilUsuario.nome}</h3>
+          <p className="text-sm text-slate-500 mb-3">{perfilUsuario.perfilAcesso} • {perfilUsuario.setor || "Setor não informado"}</p>
           <button onClick={() => notify("Upload de foto preparado para integração com armazenamento.")} className="px-4 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl transition-colors">
             Alterar Foto
           </button>
@@ -140,19 +148,19 @@ export default function ConfiguracoesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nome Completo</label>
-          <input type="text" defaultValue="Deivid Coimbra" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] outline-none transition-colors" />
+          <input type="text" value={perfilUsuario.nome} readOnly className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-600 cursor-not-allowed" />
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">E-mail (Login)</label>
-          <input type="email" defaultValue="deivid@docqualis.com" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] outline-none transition-colors" />
+          <input type="email" value={perfilUsuario.email} readOnly className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-600 cursor-not-allowed" />
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Telefone / WhatsApp</label>
-          <input type="text" defaultValue="+55 27 99943-0226" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] outline-none transition-colors" />
+          <input type="text" placeholder="Informe o telefone" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] outline-none transition-colors" />
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cargo Específico</label>
-          <input type="text" defaultValue="Analista da Qualidade" readOnly className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed" />
+          <input type="text" value={perfilUsuario.cargo} placeholder="Cargo não informado" readOnly className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed" />
         </div>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 mb-8">
@@ -202,7 +210,7 @@ export default function ConfiguracoesPage() {
   );
 
   const renderUsersTab = () => {
-    const filtered = MOCK_USERS.filter(
+    const filtered = EMPTY_USERS.filter(
       (u) =>
         u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -438,7 +446,7 @@ export default function ConfiguracoesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {MOCK_DEPTS.map((dept) => (
+                {EMPTY_DEPTS.map((dept) => (
                   <tr key={dept.id} className="hover:bg-[#eef2ff]/30 transition-colors group">
                     <td className="px-6 py-4 font-mono font-bold text-[#2655e8] text-xs">{dept.code}</td>
                     <td className="px-6 py-4 font-bold text-slate-800">{dept.name}</td>
@@ -605,7 +613,7 @@ export default function ConfiguracoesPage() {
                 </label>
                 <input
                   type="text"
-                  defaultValue="DocQualis Enterprise"
+                  placeholder="Nome da instituição"
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-[#2655e8]"
                 />
               </div>
@@ -685,7 +693,7 @@ export default function ConfiguracoesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {MOCK_LOGS.map((log) => (
+                {EMPTY_LOGS.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 font-mono font-bold text-[#2655e8]">{log.timestamp}</td>
                     <td className="px-6 py-4 font-bold text-slate-700">{log.user}</td>

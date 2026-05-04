@@ -57,43 +57,7 @@ const STATUS_CONFIG: Record<StatusCliente, { label: string; cls: string; icon: R
   cancelado: { label: "Cancelado", cls: "bg-slate-100 text-slate-500 border-slate-200",      icon: <XCircle className="w-3 h-3" /> },
 };
 
-const MOCK_CLIENTES: ClienteAdmin[] = [
-  {
-    id: "c1", nome: "Hospital São Lucas", cnpj: "12.345.678/0001-00",
-    plano: "anual", status: "ativo", criadoEm: "15/01/2026",
-    qtdUsuarios: 28, qtdDocumentos: 142,
-    adminNome: "Dra. Patricia Souza", adminEmail: "patricia@saolucas.com.br",
-    modulosAtivos: ["Gestão de Documentos", "Ocorrências & Eventos", "Gestão de Riscos", "Gestão de Indicadores"],
-  },
-  {
-    id: "c2", nome: "Clínica Bem-Estar", cnpj: "98.765.432/0001-11",
-    plano: "trial", status: "trial", trialEndsAt: "11/05/2026", criadoEm: "11/04/2026",
-    qtdUsuarios: 3, qtdDocumentos: 8,
-    adminNome: "Dr. Carlos Melo", adminEmail: "carlos@clinicabemestar.com",
-    modulosAtivos: ["Gestão de Documentos"],
-  },
-  {
-    id: "c3", nome: "Hospital Regional Norte", cnpj: "55.123.456/0001-33",
-    plano: "enterprise", status: "ativo", criadoEm: "03/04/2025",
-    qtdUsuarios: 74, qtdDocumentos: 389,
-    adminNome: "Roberto Andrade", adminEmail: "roberto@hrnorte.org.br",
-    modulosAtivos: ["Gestão de Documentos", "Gestão de Processos", "Gestão de Riscos", "Ocorrências & Eventos", "Gestão de Registros", "Gestão de Indicadores", "Planej. Estratégico"],
-  },
-  {
-    id: "c4", nome: "Santa Casa de Misericórdia", cnpj: "22.987.654/0001-55",
-    plano: "mensal", status: "suspenso", criadoEm: "10/09/2025",
-    qtdUsuarios: 15, qtdDocumentos: 67,
-    adminNome: "Irmã Maria José", adminEmail: "admin@santacasa.org",
-    modulosAtivos: ["Gestão de Documentos", "Ocorrências & Eventos"],
-  },
-  {
-    id: "c5", nome: "UPA Centro", cnpj: "33.111.222/0001-77",
-    plano: "mensal", status: "ativo", criadoEm: "20/02/2026",
-    qtdUsuarios: 11, qtdDocumentos: 34,
-    adminNome: "Enf. Fernanda Lima", adminEmail: "fernanda@upacentro.gov.br",
-    modulosAtivos: ["Gestão de Documentos", "Ocorrências & Eventos", "Gestão de Indicadores"],
-  },
-];
+const EMPTY_CLIENTES: ClienteAdmin[] = [];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -122,7 +86,7 @@ function getIniciais(nome: string) {
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export default function AdminClientesPage() {
-  const [clientes, setClientes] = useState<ClienteAdmin[]>(MOCK_CLIENTES);
+  const [clientes, setClientes] = useState<ClienteAdmin[]>(EMPTY_CLIENTES);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<StatusCliente | "todos">("todos");
   const [aviso, setAviso] = useState<{ msg: string; tipo: "ok" | "erro" | "info" } | null>(null);
@@ -135,7 +99,7 @@ export default function AdminClientesPage() {
 
   const [form, setForm] = useState<NovoClienteForm>({
     nome: "", cnpj: "", plano: "trial",
-    adminNome: "", adminEmail: "", adminCargo: "Analista da Qualidade",
+    adminNome: "", adminEmail: "", adminCargo: "",
   });
 
   function notificar(msg: string, tipo: "ok" | "erro" | "info" = "ok") {
@@ -176,7 +140,7 @@ export default function AdminClientesPage() {
         return;
       }
 
-      // Adiciona ao mock local para visualização imediata
+      // Adiciona ao estado local para visualização imediata
       const hoje = new Date().toLocaleDateString("pt-BR");
       const trial = new Date();
       trial.setDate(trial.getDate() + 30);
@@ -198,7 +162,7 @@ export default function AdminClientesPage() {
 
       setClientes((prev) => [novo, ...prev]);
       setModalNovoAberto(false);
-      setForm({ nome: "", cnpj: "", plano: "trial", adminNome: "", adminEmail: "", adminCargo: "Analista da Qualidade" });
+      setForm({ nome: "", cnpj: "", plano: "trial", adminNome: "", adminEmail: "", adminCargo: "" });
       notificar(`Empresa "${form.nome}" criada. Convite enviado para ${form.adminEmail}.`);
 
     } catch {
@@ -484,7 +448,7 @@ export default function AdminClientesPage() {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nome da Empresa *</label>
-                    <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} className={INPUT_CLS} placeholder="Hospital São Lucas" />
+                    <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} className={INPUT_CLS} placeholder="Nome da empresa" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">CNPJ</label>
@@ -521,7 +485,7 @@ export default function AdminClientesPage() {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nome Completo *</label>
-                    <input value={form.adminNome} onChange={(e) => setForm((f) => ({ ...f, adminNome: e.target.value }))} className={INPUT_CLS} placeholder="Dra. Patricia Souza" />
+                    <input value={form.adminNome} onChange={(e) => setForm((f) => ({ ...f, adminNome: e.target.value }))} className={INPUT_CLS} placeholder="Nome do administrador" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">E-mail *</label>
@@ -529,7 +493,7 @@ export default function AdminClientesPage() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Cargo</label>
-                    <input value={form.adminCargo} onChange={(e) => setForm((f) => ({ ...f, adminCargo: e.target.value }))} className={INPUT_CLS} placeholder="Analista da Qualidade" />
+                    <input value={form.adminCargo} onChange={(e) => setForm((f) => ({ ...f, adminCargo: e.target.value }))} className={INPUT_CLS} placeholder="Cargo do administrador" />
                   </div>
                 </div>
               </div>

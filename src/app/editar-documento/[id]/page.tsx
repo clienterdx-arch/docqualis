@@ -9,10 +9,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-const mockUsuarios = [
-  { nome: "Dr. Roberto Silva", setor: "Diretoria Médica", funcao: "Diretor Médico" },
-  { nome: "Enf. Amanda Costa", setor: "Enfermagem", funcao: "Coordenadora" },
-];
+const emptyUsuarios: Array<{ nome: string; setor: string; funcao: string }> = [];
 
 export default function EditarDocumentoPage() {
   const router = useRouter();
@@ -296,13 +293,13 @@ export default function EditarDocumentoPage() {
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4"><Users className="w-4 h-4 text-blue-500"/> Selecione Revisores</h3>
                 <div className="flex flex-col md:flex-row gap-3 items-end mb-4">
                   <div className="flex-1">
-                    <SelectField label="Membro da Equipe" value={verificadorAtual} onChange={setVerificadorAtual} options={mockUsuarios.map(u => u.nome)} />
+                    <SelectField label="Membro da Equipe" value={verificadorAtual} onChange={setVerificadorAtual} options={emptyUsuarios.map(u => u.nome)} />
                   </div>
                   <div className="w-full md:w-48">
                     <InputField label="Prazo" type="date" value={prazoVerificadorAtual} onChange={setPrazoVerificadorAtual} />
                   </div>
                   <button onClick={() => {
-                    const u = mockUsuarios.find(x => x.nome === verificadorAtual);
+                    const u = emptyUsuarios.find(x => x.nome === verificadorAtual);
                     if(u && prazoVerificadorAtual) {
                       if(!verificadoresSelecionados.find(v => v.nome === u.nome)) setVerificadoresSelecionados([...verificadoresSelecionados, {...u, prazo: prazoVerificadorAtual}]);
                     }
