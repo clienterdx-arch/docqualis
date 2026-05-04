@@ -8,7 +8,7 @@ import { carregarPerfilUsuario } from "@/lib/perfil";
 import {
   FileText, Workflow, LineChart, Bell, Search, Settings,
   ChevronDown, Sparkles, ClipboardSignature, ShieldAlert,
-  AlertTriangle, Target, Building2, LogOut, FolderOpen,
+  AlertTriangle, Target, Building2, LogOut, FolderOpen, Crown,
 } from "lucide-react";
 
 // =========================================================================
@@ -264,8 +264,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
 
-        {/* Cadastros + Configurações */}
+        {/* Cadastros + Configurações + Admin */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0 space-y-1">
+          {/* Link Admin — visível apenas para SUPER_ADMIN */}
+          {perfil?.perfil_acesso === "SUPER_ADMIN" && (
+            <Link
+              href="/admin/clientes"
+              aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+              className={[
+                "flex items-center gap-3 px-3 py-2.5 w-full rounded-xl transition-all text-sm font-medium mb-1",
+                pathname.startsWith("/admin")
+                  ? "bg-[#2655e8] text-white font-bold shadow-sm"
+                  : "text-[#2655e8] bg-[#eef2ff] hover:bg-[#e0e7ff] border border-[#c7d2fe]",
+              ].join(" ")}
+            >
+              <Crown className="w-5 h-5" /> Admin DocQualis
+            </Link>
+          )}
           {(
             [
               { href: "/cadastros", label: "Cadastros", Icon: FolderOpen },
