@@ -5,80 +5,17 @@ import Link from "next/link";
 import {
   AlertTriangle, CheckCircle2, Clock, FileWarning, HeartHandshake,
   Plus, Search, Settings, X, ChevronRight, MessageSquare,
-  User, Calendar, Building2, ShieldCheck, ClipboardList,
-  MoreVertical, Eye, Ban, CheckCheck, QrCode, Loader2,
-  ArrowRight, AlertCircle, XCircle, FileText, Sparkles,
+  User, Calendar, Building2, ClipboardList,
+  Eye, Ban, CheckCheck,
+  ArrowRight, AlertCircle, FileText,
 } from "lucide-react";
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
-
-type TipoRegistro = "NI" | "NC" | "EL" | "RC" | "MF";
-
-type StatusRegistro =
-  | "AGUARDANDO_TRIAGEM"
-  | "EM_TRATATIVA"
-  | "APROVACAO"
-  | "EFICACIA"
-  | "CONCLUIDO"
-  | "CANCELADO"
-  | "SUSPENSO";
-
-type PlanoAcaoItem = {
-  id: string;
-  acao: string;
-  responsavel: string;
-  prazo: string;
-  status: "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO";
-};
-
-type HistoricoItem = {
-  id: string;
-  data: string;
-  autor: string;
-  acao: string;
-  obs?: string;
-};
-
-type Registro = {
-  id: string;
-  codigo: string;
-  tipo: TipoRegistro;
-  titulo: string;
-  descricao: string;
-  setor: string;
-  dataRegistro: string;
-  notificador: string;
-  anonimo: boolean;
-  status: StatusRegistro;
-  responsavel: string;
-  prazo: string;
-  justificativaRecusa?: string;
-  responsavelTratativa?: string;
-  ferramentasAnalise: ("ISHIKAWA" | "5PORQUES")[];
-  planoAcao: PlanoAcaoItem[];
-  historico: HistoricoItem[];
-  avaliadorEficacia?: string;
-};
+import {
+  Registro, TipoRegistro, StatusRegistro, PlanoAcaoItem,
+  TIPO_CONFIG, STATUS_CONFIG, SETORES, USUARIOS, MOCK_REGISTROS,
+} from "@/lib/ocorrencias";
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
-
-const TIPO_CONFIG: Record<TipoRegistro, { label: string; cor: string; bg: string; border: string; icon: React.ReactNode }> = {
-  NI: { label: "Notif. de Incidente", cor: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-  NC: { label: "Não Conformidade",    cor: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", icon: <FileWarning className="w-3.5 h-3.5" /> },
-  EL: { label: "Elogio",             cor: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <HeartHandshake className="w-3.5 h-3.5" /> },
-  RC: { label: "Reclamação",         cor: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <MessageSquare className="w-3.5 h-3.5" /> },
-  MF: { label: "Manifestação",       cor: "text-sky-700",     bg: "bg-sky-50",     border: "border-sky-200",     icon: <FileText className="w-3.5 h-3.5" /> },
-};
-
-const STATUS_CONFIG: Record<StatusRegistro, { label: string; cls: string }> = {
-  AGUARDANDO_TRIAGEM: { label: "Aguardando Triagem", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  EM_TRATATIVA:       { label: "Em Tratativa",       cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  APROVACAO:          { label: "Em Aprovação",       cls: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-  EFICACIA:           { label: "Aval. Eficácia",     cls: "bg-purple-50 text-purple-700 border-purple-200" },
-  CONCLUIDO:          { label: "Concluído",          cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  CANCELADO:          { label: "Cancelado",          cls: "bg-slate-100 text-slate-500 border-slate-200" },
-  SUSPENSO:           { label: "Suspenso",           cls: "bg-yellow-50 text-yellow-700 border-yellow-200" },
-};
 
 const WORKFLOW_STEPS: { status: StatusRegistro; label: string }[] = [
   { status: "AGUARDANDO_TRIAGEM", label: "Triagem" },
@@ -88,130 +25,23 @@ const WORKFLOW_STEPS: { status: StatusRegistro; label: string }[] = [
   { status: "CONCLUIDO",          label: "Concluído" },
 ];
 
-const SETORES = ["UTI Adulto", "CME", "Farmácia", "Gestão da Qualidade", "Internação", "Centro Cirúrgico", "Pronto Atendimento", "Recepção", "SADT", "Nutrição"];
-const USUARIOS = ["Enf. Marina Costa", "Dr. Carlos Lima", "Farm. Ana Pereira", "Deivid Coimbra", "Tyago Alves", "Patricia Reis"];
-
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
-
-const MOCK: Registro[] = [
-  {
-    id: "r1", codigo: "NI-0001", tipo: "NI", titulo: "Queda de paciente na UTI",
-    descricao: "Paciente encontrado no chão às 03h45. Grade da cama estava baixa.", setor: "UTI Adulto",
-    dataRegistro: "03/05/2026", notificador: "Téc. Enfermagem (anônimo)", anonimo: true,
-    status: "AGUARDANDO_TRIAGEM", responsavel: "", prazo: "",
-    ferramentasAnalise: [], planoAcao: [],
-    historico: [{ id: "h1", data: "03/05/2026 08:12", autor: "Sistema", acao: "Registro criado. Código NI-0001 gerado automaticamente." }],
-  },
-  {
-    id: "r2", codigo: "NC-0001", tipo: "NC", titulo: "Documentação incompleta no prontuário",
-    descricao: "Auditoria identificou 12 prontuários sem evolução médica no dia anterior.", setor: "Internação",
-    dataRegistro: "02/05/2026", notificador: "Auditoria Interna", anonimo: false,
-    status: "AGUARDANDO_TRIAGEM", responsavel: "", prazo: "",
-    ferramentasAnalise: [], planoAcao: [],
-    historico: [{ id: "h1", data: "02/05/2026 14:30", autor: "Sistema", acao: "Registro criado. Código NC-0001 gerado automaticamente." }],
-  },
-  {
-    id: "r3", codigo: "RC-0001", tipo: "RC", titulo: "Tempo de espera excessivo no PA",
-    descricao: "Paciente aguardou mais de 4 horas sem atendimento médico.", setor: "Pronto Atendimento",
-    dataRegistro: "01/05/2026", notificador: "Paciente (anônimo)", anonimo: true,
-    status: "AGUARDANDO_TRIAGEM", responsavel: "", prazo: "",
-    ferramentasAnalise: [], planoAcao: [],
-    historico: [{ id: "h1", data: "01/05/2026 16:00", autor: "Sistema", acao: "Registro criado. Código RC-0001 gerado automaticamente." }],
-  },
-  {
-    id: "r4", codigo: "NI-0002", tipo: "NI", titulo: "Medicamento errado administrado",
-    descricao: "Paciente recebeu dose de heparina diferente da prescrita.", setor: "Farmácia",
-    dataRegistro: "28/04/2026", notificador: "Enf. Marina Costa", anonimo: false,
-    status: "EM_TRATATIVA", responsavel: "Farm. Ana Pereira", prazo: "10/05/2026",
-    ferramentasAnalise: ["ISHIKAWA", "5PORQUES"],
-    planoAcao: [
-      { id: "pa1", acao: "Revisar protocolo de dupla checagem de medicamentos", responsavel: "Deivid Coimbra", prazo: "07/05/2026", status: "EM_ANDAMENTO" },
-      { id: "pa2", acao: "Treinamento da equipe de farmácia", responsavel: "Farm. Ana Pereira", prazo: "12/05/2026", status: "PENDENTE" },
-    ],
-    historico: [
-      { id: "h1", data: "28/04/2026 09:00", autor: "Sistema", acao: "Registro criado." },
-      { id: "h2", data: "29/04/2026 10:15", autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido.", obs: "Incidente grave. Responsável designado: Farm. Ana Pereira." },
-    ],
-  },
-  {
-    id: "r5", codigo: "NC-0002", tipo: "NC", titulo: "Equipamento sem calibração no SADT",
-    descricao: "Autoclave do SADT com calibração vencida há 3 meses.", setor: "SADT",
-    dataRegistro: "25/04/2026", notificador: "Engenharia Clínica", anonimo: false,
-    status: "APROVACAO", responsavel: "Tyago Alves", prazo: "08/05/2026",
-    ferramentasAnalise: ["5PORQUES"],
-    planoAcao: [
-      { id: "pa1", acao: "Enviar equipamento para calibração externa", responsavel: "Engenharia", prazo: "05/05/2026", status: "CONCLUIDO" },
-      { id: "pa2", acao: "Implantar controle semestral de calibração", responsavel: "Tyago Alves", prazo: "08/05/2026", status: "EM_ANDAMENTO" },
-    ],
-    historico: [
-      { id: "h1", data: "25/04/2026 11:00", autor: "Sistema", acao: "Registro criado." },
-      { id: "h2", data: "26/04/2026 08:30", autor: "Patricia Reis", acao: "Triagem realizada. Registro assumido." },
-      { id: "h3", data: "30/04/2026 16:00", autor: "Tyago Alves", acao: "Tratativa concluída. Encaminhado para aprovação." },
-    ],
-  },
-  {
-    id: "r6", codigo: "EL-0001", tipo: "EL", titulo: "Excelente atendimento na recepção",
-    descricao: "Paciente elogiou atenção e agilidade da equipe de recepção durante admissão.", setor: "Recepção",
-    dataRegistro: "30/04/2026", notificador: "Paciente (anônimo)", anonimo: true,
-    status: "EM_TRATATIVA", responsavel: "Deivid Coimbra", prazo: "",
-    ferramentasAnalise: [],
-    planoAcao: [{ id: "pa1", acao: "Compartilhar elogio com a equipe em reunião mensal", responsavel: "Deivid Coimbra", prazo: "10/05/2026", status: "PENDENTE" }],
-    historico: [
-      { id: "h1", data: "30/04/2026 14:00", autor: "Sistema", acao: "Registro criado." },
-      { id: "h2", data: "01/05/2026 09:00", autor: "Deivid Coimbra", acao: "Registro assumido e encaminhado." },
-    ],
-  },
-  {
-    id: "r7", codigo: "NI-0003", tipo: "NI", titulo: "Falha na identificação de paciente",
-    descricao: "Paciente sem pulseira de identificação levado ao centro cirúrgico.", setor: "Centro Cirúrgico",
-    dataRegistro: "20/04/2026", notificador: "Dr. Carlos Lima", anonimo: false,
-    status: "CONCLUIDO", responsavel: "Deivid Coimbra", prazo: "30/04/2026",
-    ferramentasAnalise: ["ISHIKAWA"],
-    planoAcao: [
-      { id: "pa1", acao: "Checklist pré-cirúrgico atualizado com verificação de pulseira", responsavel: "Deivid Coimbra", prazo: "25/04/2026", status: "CONCLUIDO" },
-    ],
-    historico: [
-      { id: "h1", data: "20/04/2026", autor: "Sistema", acao: "Registro criado." },
-      { id: "h2", data: "21/04/2026", autor: "Patricia Reis", acao: "Triagem assumida." },
-      { id: "h3", data: "26/04/2026", autor: "Deivid Coimbra", acao: "Tratativa concluída." },
-      { id: "h4", data: "28/04/2026", autor: "Patricia Reis", acao: "Aprovação realizada." },
-      { id: "h5", data: "30/04/2026", autor: "Deivid Coimbra", acao: "Eficácia avaliada positivamente. Registro concluído." },
-    ],
-  },
-  {
-    id: "r8", codigo: "NC-0003", tipo: "NC", titulo: "Processo de esterilização não seguido",
-    descricao: "Instrumental cirúrgico processado sem seguir o POP CME-001.", setor: "CME",
-    dataRegistro: "15/04/2026", notificador: "Qualidade", anonimo: false,
-    status: "CANCELADO", responsavel: "José Almeida", prazo: "20/04/2026",
-    ferramentasAnalise: [], planoAcao: [],
-    justificativaRecusa: "Verificado que não houve desvio; notificação foi erro de interpretação do POP.",
-    historico: [
-      { id: "h1", data: "15/04/2026", autor: "Sistema", acao: "Registro criado." },
-      { id: "h2", data: "16/04/2026", autor: "Deivid Coimbra", acao: "Registro cancelado após verificação in loco.", obs: "Não houve desvio real." },
-    ],
-  },
-  {
-    id: "r9", codigo: "MF-0001", tipo: "MF", titulo: "Sugestão de nova rota de acesso para cadeirantes",
-    descricao: "Familiar de paciente sugere instalação de rampa de acesso no bloco B.", setor: "Recepção",
-    dataRegistro: "29/04/2026", notificador: "Familiar (anônimo)", anonimo: true,
-    status: "EM_TRATATIVA", responsavel: "Deivid Coimbra", prazo: "20/05/2026",
-    ferramentasAnalise: [], planoAcao: [
-      { id: "pa1", acao: "Levantar custo de instalação da rampa", responsavel: "Manutenção", prazo: "15/05/2026", status: "PENDENTE" },
-    ],
-    historico: [
-      { id: "h1", data: "29/04/2026", autor: "Sistema", acao: "Registro criado." },
-      { id: "h2", data: "30/04/2026", autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido." },
-    ],
-  },
-];
-
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+function notificadorDisplay(r: Registro): string {
+  if (r.anonimo) return "Anônimo";
+  return r.notificadorNome || "—";
+}
+
+function resumoDescricao(descricao: string, max = 80): string {
+  if (!descricao) return "Sem descrição";
+  return descricao.length > max ? descricao.slice(0, max) + "…" : descricao;
+}
 
 function TipoBadge({ tipo }: { tipo: TipoRegistro }) {
   const cfg = TIPO_CONFIG[tipo];
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${cfg.bg} ${cfg.border} ${cfg.cor}`}>
-      {cfg.icon} {cfg.label}
+      {cfg.label}
     </span>
   );
 }
@@ -229,14 +59,14 @@ function statusWorkflowIdx(status: StatusRegistro) {
   return WORKFLOW_STEPS.findIndex((s) => s.status === status);
 }
 
-// ─── TIPO SELETOR ─────────────────────────────────────────────────────────────
+// ─── TIPOS DE ABA ─────────────────────────────────────────────────────────────
 
 type BoardTab = "triagem" | "NI" | "NC" | "OUV";
 type SubTab = "todos" | "aguardando" | "andamento" | "cancelados";
 
-// ─── MODAIS ───────────────────────────────────────────────────────────────────
+// ─── MODAL OVERLAY ────────────────────────────────────────────────────────────
 
-function ModalOverlay({ children, onFechar }: { children: React.ReactNode; onFechar: () => void }) {
+function ModalOverlay({ children }: { children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
       <div className="relative">{children}</div>
@@ -247,7 +77,7 @@ function ModalOverlay({ children, onFechar }: { children: React.ReactNode; onFec
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export default function OcorrenciasPage() {
-  const [registros, setRegistros] = useState<Registro[]>(MOCK);
+  const [registros, setRegistros] = useState<Registro[]>(MOCK_REGISTROS);
   const [board, setBoard] = useState<BoardTab>("triagem");
   const [subTab, setSubTab] = useState<SubTab>("todos");
   const [busca, setBusca] = useState("");
@@ -260,7 +90,16 @@ export default function OcorrenciasPage() {
   const [detalheId, setDetalheId] = useState<string | null>(null);
 
   // form novo registro
-  const [novoForm, setNovoForm] = useState({ tipo: "NI" as TipoRegistro, titulo: "", descricao: "", setor: SETORES[0], anonimo: false });
+  const [novoForm, setNovoForm] = useState({
+    tipo: "NI" as TipoRegistro,
+    descricao: "",
+    setorOcorrencia: SETORES[0],
+    dataOcorrencia: "",
+    periodo: "DIURNO" as "DIURNO" | "VESPERTINO" | "NOTURNO",
+    anonimo: false,
+    notificadorNome: "",
+    notificadorCargo: "",
+  });
 
   // form assumir
   const [assumirForm, setAssumirForm] = useState({ responsavel: USUARIOS[0], prazo: "" });
@@ -268,7 +107,7 @@ export default function OcorrenciasPage() {
   // form recusar
   const [recusarJustificativa, setRecusarJustificativa] = useState("");
 
-  // form plano de ação (no detalhe)
+  // form nova ação (no detalhe)
   const [novaAcao, setNovaAcao] = useState({ acao: "", responsavel: USUARIOS[0], prazo: "" });
 
   function notificar(msg: string, tipo: "ok" | "erro" = "ok") {
@@ -285,37 +124,59 @@ export default function OcorrenciasPage() {
   // ── Actions ─────────────────────────────────────────────────────────────────
 
   function criarRegistro() {
-    if (!novoForm.titulo.trim()) { notificar("Informe o título.", "erro"); return; }
+    if (!novoForm.descricao.trim()) { notificar("Descreva o ocorrido.", "erro"); return; }
     const seq = registros.filter((r) => r.tipo === novoForm.tipo).length + 1;
     const codigo = `${novoForm.tipo}-${String(seq).padStart(4, "0")}`;
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const agora = new Date().toLocaleString("pt-BR");
+
     const novo: Registro = {
-      id: `r${Date.now()}`, codigo, tipo: novoForm.tipo,
-      titulo: novoForm.titulo, descricao: novoForm.descricao,
-      setor: novoForm.setor, dataRegistro: new Date().toLocaleDateString("pt-BR"),
-      notificador: novoForm.anonimo ? "Anônimo" : "Usuário atual",
-      anonimo: novoForm.anonimo, status: "AGUARDANDO_TRIAGEM",
-      responsavel: "", prazo: "", ferramentasAnalise: [], planoAcao: [],
-      historico: [{ id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"), autor: "Sistema", acao: `Registro criado. Código ${codigo} gerado automaticamente.` }],
+      id: `r${Date.now()}`,
+      codigo,
+      tipo: novoForm.tipo,
+      status: "AGUARDANDO_TRIAGEM",
+      prioridade: "MEDIA",
+      dataRegistro: hoje,
+      origem: "FORMULARIO",
+      dataOcorrencia: novoForm.dataOcorrencia || hoje,
+      periodo: novoForm.periodo,
+      anonimo: novoForm.anonimo,
+      notificadorNome: novoForm.anonimo ? "" : novoForm.notificadorNome,
+      notificadorCargo: novoForm.anonimo ? "" : novoForm.notificadorCargo,
+      notificadorSetor: "",
+      notificadorEmail: "",
+      setorOcorrencia: novoForm.setorOcorrencia,
+      descricao: novoForm.descricao,
+      envolvePaciente: false,
+      pacienteNome: "", pacienteAtendimento: "", pacienteConsequencias: "", acaoImediata: "",
+      dataClassificacao: "", classificacaoNQSP: "", gravidade: "LEVE",
+      classificacaoDesfecho: "", categoriaNotiVisa: "", numeroNotivisa: "", linkNotivisa: "",
+      quebraAcordo: "", trativaSugerida: "", tipoAcao: "", unidadeResponsavel: "",
+      responsavelTratativa: "", prazoTratativa: "",
+      ferramentasAnalise: [], planoAcao: [],
+      historico: [{ id: `h${Date.now()}`, data: agora, autor: "Sistema", acao: `Registro criado. Código ${codigo} gerado automaticamente.` }],
     };
+
     setRegistros((prev) => [novo, ...prev]);
     setModalNovoAberto(false);
-    setNovoForm({ tipo: "NI", titulo: "", descricao: "", setor: SETORES[0], anonimo: false });
+    setNovoForm({ tipo: "NI", descricao: "", setorOcorrencia: SETORES[0], dataOcorrencia: "", periodo: "DIURNO", anonimo: false, notificadorNome: "", notificadorCargo: "" });
     notificar(`Registro ${codigo} criado e enviado para triagem.`);
     setBoard("triagem");
   }
 
   function assumirRegistro() {
-    if (!assumirForm.responsavel) { notificar("Selecione o responsável pela tratativa.", "erro"); return; }
+    if (!assumirForm.responsavel) { notificar("Selecione o responsável.", "erro"); return; }
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== modalAssumirId) return r;
       return {
-        ...r, status: "EM_TRATATIVA" as StatusRegistro,
-        responsavel: assumirForm.responsavel,
-        prazo: assumirForm.prazo,
+        ...r,
+        status: "EM_TRATATIVA" as StatusRegistro,
+        responsavelTratativa: assumirForm.responsavel,
+        prazoTratativa: assumirForm.prazo,
         historico: [...r.historico, {
           id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
           autor: "Deivid Coimbra", acao: "Triagem realizada. Registro assumido.",
-          obs: `Responsável pela tratativa: ${assumirForm.responsavel}.${assumirForm.prazo ? ` Prazo: ${assumirForm.prazo}.` : ""}`,
+          obs: `Responsável: ${assumirForm.responsavel}.${assumirForm.prazo ? ` Prazo: ${assumirForm.prazo}.` : ""}`,
         }],
       };
     }));
@@ -325,11 +186,12 @@ export default function OcorrenciasPage() {
   }
 
   function recusarRegistro() {
-    if (!recusarJustificativa.trim()) { notificar("A justificativa é obrigatória para recusar.", "erro"); return; }
+    if (!recusarJustificativa.trim()) { notificar("A justificativa é obrigatória.", "erro"); return; }
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== modalRecusarId) return r;
       return {
-        ...r, status: "CANCELADO" as StatusRegistro,
+        ...r,
+        status: "CANCELADO" as StatusRegistro,
         justificativaRecusa: recusarJustificativa,
         historico: [...r.historico, {
           id: `h${Date.now()}`, data: new Date().toLocaleString("pt-BR"),
@@ -340,19 +202,18 @@ export default function OcorrenciasPage() {
     }));
     setModalRecusarId(null);
     setRecusarJustificativa("");
-    notificar("Registro recusado com justificativa registrada.");
+    notificar("Registro recusado com justificativa.");
   }
 
   function adicionarAcao(registroId: string) {
     if (!novaAcao.acao.trim()) { notificar("Descreva a ação.", "erro"); return; }
     setRegistros((prev) => prev.map((r) => {
       if (r.id !== registroId) return r;
-      return {
-        ...r, planoAcao: [...r.planoAcao, {
-          id: `pa${Date.now()}`, acao: novaAcao.acao,
-          responsavel: novaAcao.responsavel, prazo: novaAcao.prazo, status: "PENDENTE",
-        }],
+      const item: PlanoAcaoItem = {
+        id: `pa${Date.now()}`, acao: novaAcao.acao,
+        responsavel: novaAcao.responsavel, prazo: novaAcao.prazo, status: "PENDENTE",
       };
+      return { ...r, planoAcao: [...r.planoAcao, item] };
     }));
     setNovaAcao({ acao: "", responsavel: USUARIOS[0], prazo: "" });
     notificar("Ação adicionada ao plano.");
@@ -378,22 +239,27 @@ export default function OcorrenciasPage() {
     }));
   }
 
-  // ── Filters ─────────────────────────────────────────────────────────────────
+  // ── Filtros ──────────────────────────────────────────────────────────────────
 
-  const triagem = registros.filter((r) => r.status === "AGUARDANDO_TRIAGEM" && r.titulo.toLowerCase().includes(busca.toLowerCase()));
+  const buscaLC = busca.toLowerCase();
+  const matchBusca = (r: Registro) =>
+    r.descricao.toLowerCase().includes(buscaLC) ||
+    r.codigo.toLowerCase().includes(buscaLC) ||
+    r.setorOcorrencia.toLowerCase().includes(buscaLC);
+
+  const triagem = registros.filter((r) => r.status === "AGUARDANDO_TRIAGEM" && matchBusca(r));
 
   function registrosPorTipo(tipos: TipoRegistro[], sub: SubTab) {
     let list = registros.filter((r) => tipos.includes(r.tipo) && r.status !== "AGUARDANDO_TRIAGEM");
     if (sub === "aguardando") list = list.filter((r) => r.status === "EM_TRATATIVA");
     if (sub === "andamento")  list = list.filter((r) => r.status === "APROVACAO" || r.status === "EFICACIA");
     if (sub === "cancelados") list = list.filter((r) => r.status === "CANCELADO" || r.status === "SUSPENSO");
-    if (sub === "todos")      list = list.filter((r) => !["CANCELADO", "SUSPENSO"].includes(r.status) || true);
-    return list.filter((r) => r.titulo.toLowerCase().includes(busca.toLowerCase()) || r.codigo.toLowerCase().includes(busca.toLowerCase()));
+    return list.filter(matchBusca);
   }
 
   const detalhe = detalheId ? registros.find((r) => r.id === detalheId) ?? null : null;
 
-  // ─── RENDER: HEADER + STATS ───────────────────────────────────────────────
+  // ── Classes compartilhadas ───────────────────────────────────────────────────
 
   const INPUT_CLS = "w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] focus:bg-white outline-none transition-colors";
   const SELECT_CLS = "w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-[#2655e8] outline-none transition-colors";
@@ -412,7 +278,7 @@ export default function OcorrenciasPage() {
         <thead className="bg-white text-[10px] font-black uppercase text-slate-400 tracking-widest border-b sticky top-0 shadow-sm z-10">
           <tr>
             <th className="px-5 py-3">Código</th>
-            <th className="px-5 py-3">Título</th>
+            <th className="px-5 py-3">Descrição</th>
             <th className="px-5 py-3">Setor</th>
             <th className="px-5 py-3">Responsável</th>
             <th className="px-5 py-3">Prazo</th>
@@ -427,18 +293,21 @@ export default function OcorrenciasPage() {
                 <span className={`font-mono font-black text-xs px-2 py-1 rounded-md ${TIPO_CONFIG[r.tipo].bg} ${TIPO_CONFIG[r.tipo].cor}`}>{r.codigo}</span>
               </td>
               <td className="px-5 py-3.5">
-                <p className="font-bold text-slate-800 truncate max-w-[220px]">{r.titulo}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{r.setor}</p>
+                <p className="font-bold text-slate-800 truncate max-w-[240px]">{resumoDescricao(r.descricao, 70)}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <TipoBadge tipo={r.tipo} />
+                  {r.envolvePaciente && <span className="text-[9px] font-black text-rose-500 uppercase tracking-wider">Paciente</span>}
+                </div>
               </td>
-              <td className="px-5 py-3.5 text-slate-600 font-medium">{r.setor}</td>
+              <td className="px-5 py-3.5 text-slate-600 font-medium">{r.setorOcorrencia}</td>
               <td className="px-5 py-3.5">
-                {r.responsavel
-                  ? <span className="flex items-center gap-1.5 text-slate-700 font-medium"><User className="w-3.5 h-3.5 text-slate-400" />{r.responsavel}</span>
+                {r.responsavelTratativa
+                  ? <span className="flex items-center gap-1.5 text-slate-700 font-medium"><User className="w-3.5 h-3.5 text-slate-400" />{r.responsavelTratativa}</span>
                   : <span className="text-slate-300 text-xs">—</span>}
               </td>
               <td className="px-5 py-3.5">
-                {r.prazo
-                  ? <span className="flex items-center gap-1.5 text-slate-500 text-xs"><Calendar className="w-3 h-3" />{r.prazo}</span>
+                {r.prazoTratativa
+                  ? <span className="flex items-center gap-1.5 text-slate-500 text-xs"><Calendar className="w-3 h-3" />{r.prazoTratativa}</span>
                   : <span className="text-slate-300 text-xs">—</span>}
               </td>
               <td className="px-5 py-3.5 text-center"><StatusBadge status={r.status} /></td>
@@ -479,7 +348,7 @@ export default function OcorrenciasPage() {
               <div key={r.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1 min-w-0">
-                    <div>
+                    <div className="shrink-0">
                       <span className={`font-mono font-black text-xs px-2.5 py-1.5 rounded-lg block text-center ${TIPO_CONFIG[r.tipo].bg} ${TIPO_CONFIG[r.tipo].cor}`}>
                         {r.codigo}
                       </span>
@@ -490,13 +359,15 @@ export default function OcorrenciasPage() {
                         {r.anonimo && (
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full border border-slate-200">Anônimo</span>
                         )}
+                        {r.envolvePaciente && (
+                          <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full border border-rose-200">Envolve Paciente</span>
+                        )}
                       </div>
-                      <p className="font-bold text-slate-900 truncate">{r.titulo}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{r.descricao}</p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-                        <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{r.setor}</span>
-                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{r.dataRegistro}</span>
-                        <span className="flex items-center gap-1"><User className="w-3 h-3" />{r.notificador}</span>
+                      <p className="font-bold text-slate-900 line-clamp-2 text-sm">{r.descricao}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 flex-wrap">
+                        <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{r.setorOcorrencia}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{r.dataOcorrencia} · {r.periodo.charAt(0) + r.periodo.slice(1).toLowerCase()}</span>
+                        <span className="flex items-center gap-1"><User className="w-3 h-3" />{notificadorDisplay(r)}</span>
                       </div>
                     </div>
                   </div>
@@ -534,9 +405,9 @@ export default function OcorrenciasPage() {
     const mapa: Record<SubTab, Registro[]> = { todos, aguardando: aguard, andamento: andando, cancelados: cancel };
 
     const SUBTABS: { key: SubTab; label: string; count: number }[] = [
-      { key: "todos",      label: "Todos assumidos", count: todos.length },
-      { key: "aguardando", label: "Aguardando tratativa", count: aguard.length },
-      { key: "andamento",  label: "Em andamento",    count: andando.length },
+      { key: "todos",      label: "Todos assumidos",       count: todos.length },
+      { key: "aguardando", label: "Aguardando tratativa",  count: aguard.length },
+      { key: "andamento",  label: "Em andamento",          count: andando.length },
       { key: "cancelados", label: "Cancelados / Suspensos", count: cancel.length },
     ];
 
@@ -547,7 +418,6 @@ export default function OcorrenciasPage() {
           <p className="text-sm text-slate-500 mt-0.5">{descricao}</p>
         </div>
 
-        {/* Sub-tabs */}
         <div className="flex gap-2 mb-4 shrink-0 overflow-x-auto pb-1">
           {SUBTABS.map((st) => (
             <button
@@ -592,21 +462,26 @@ export default function OcorrenciasPage() {
       <div className="fixed inset-0 z-40 flex justify-end">
         <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setDetalheId(null)} />
         <div className="relative w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+
           {/* Header */}
           <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100 shrink-0">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className={`font-mono font-black text-sm px-2.5 py-1 rounded-lg ${TIPO_CONFIG[detalhe.tipo].bg} ${TIPO_CONFIG[detalhe.tipo].cor}`}>{detalhe.codigo}</span>
                 <TipoBadge tipo={detalhe.tipo} />
+                {detalhe.envolvePaciente && (
+                  <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-bold rounded-full border border-rose-200">Envolve Paciente</span>
+                )}
               </div>
-              <h2 className="text-base font-bold text-slate-900 mt-1">{detalhe.titulo}</h2>
+              <p className="text-sm text-slate-600 mt-1 line-clamp-2">{detalhe.descricao}</p>
             </div>
-            <button onClick={() => setDetalheId(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg">
+            <button onClick={() => setDetalheId(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg shrink-0 ml-4">
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
+
             {/* Workflow timeline */}
             <div className="px-6 py-4 border-b border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Workflow</p>
@@ -619,34 +494,70 @@ export default function OcorrenciasPage() {
                       <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-black border-2 transition-all ${current ? "bg-[#2655e8] text-white border-[#2655e8]" : done ? "bg-[#eef2ff] text-[#2655e8] border-[#c7d2fe]" : "bg-white text-slate-300 border-slate-200"}`}>
                         {done && !current ? <CheckCheck className="w-3.5 h-3.5" /> : i + 1}
                       </div>
-                      <div className="flex-1 flex flex-col items-center">
-                        <div className={`h-0.5 w-full ${i < stepIdx ? "bg-[#2655e8]" : "bg-slate-200"}`} />
-                        <p className={`text-[9px] font-bold mt-1 ${current ? "text-[#2655e8]" : done ? "text-slate-500" : "text-slate-300"}`}>{step.label}</p>
-                      </div>
+                      {i < WORKFLOW_STEPS.length - 1 && (
+                        <div className="flex-1 flex flex-col items-center">
+                          <div className={`h-0.5 w-full ${i < stepIdx ? "bg-[#2655e8]" : "bg-slate-200"}`} />
+                          <p className={`text-[9px] font-bold mt-1 ${current ? "text-[#2655e8]" : done ? "text-slate-500" : "text-slate-300"}`}>{step.label}</p>
+                        </div>
+                      )}
                     </React.Fragment>
                   );
                 })}
               </div>
             </div>
 
-            {/* Info do registro */}
-            <div className="px-6 py-4 border-b border-slate-100 grid grid-cols-2 gap-4">
-              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Setor</p><p className="text-sm font-bold text-slate-700">{detalhe.setor}</p></div>
-              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Data do Registro</p><p className="text-sm font-bold text-slate-700">{detalhe.dataRegistro}</p></div>
-              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Notificador</p><p className="text-sm font-bold text-slate-700">{detalhe.notificador}</p></div>
-              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Responsável Tratativa</p><p className="text-sm font-bold text-slate-700">{detalhe.responsavel || "—"}</p></div>
-              {detalhe.prazo && <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Prazo</p><p className="text-sm font-bold text-slate-700">{detalhe.prazo}</p></div>}
+            {/* Informações do registro */}
+            <div className="px-6 py-4 border-b border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Informações</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Setor</p><p className="text-sm font-bold text-slate-700">{detalhe.setorOcorrencia}</p></div>
+                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Data do Registro</p><p className="text-sm font-bold text-slate-700">{detalhe.dataRegistro}</p></div>
+                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Data da Ocorrência</p><p className="text-sm font-bold text-slate-700">{detalhe.dataOcorrencia}</p></div>
+                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Período</p><p className="text-sm font-bold text-slate-700">{detalhe.periodo.charAt(0) + detalhe.periodo.slice(1).toLowerCase()}</p></div>
+                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Notificador</p><p className="text-sm font-bold text-slate-700">{notificadorDisplay(detalhe)}</p></div>
+                <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Responsável Tratativa</p><p className="text-sm font-bold text-slate-700">{detalhe.responsavelTratativa || "—"}</p></div>
+                {detalhe.prazoTratativa && (
+                  <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Prazo</p><p className="text-sm font-bold text-slate-700">{detalhe.prazoTratativa}</p></div>
+                )}
+                {detalhe.gravidade !== "LEVE" && (
+                  <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gravidade</p>
+                    <span className={`text-xs font-black px-2.5 py-1 rounded-full ${detalhe.gravidade === "GRAVE" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>{detalhe.gravidade}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Dados do paciente (se houver) */}
+              {detalhe.envolvePaciente && detalhe.pacienteNome && (
+                <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                  <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-2">Dados do Paciente</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-slate-500">Nome: </span><span className="font-bold text-slate-700">{detalhe.pacienteNome}</span></div>
+                    {detalhe.pacienteAtendimento && <div><span className="text-slate-500">Atendimento: </span><span className="font-bold text-slate-700">{detalhe.pacienteAtendimento}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Ferramentas de análise */}
               {detalhe.ferramentasAnalise.length > 0 && (
-                <div className="col-span-2">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ferramentas de Análise</p>
+                <div className="mt-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Ferramentas de Análise</p>
                   <div className="flex gap-2">
                     {detalhe.ferramentasAnalise.map((f) => (
-                      <span key={f} className="px-2.5 py-1 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-bold rounded-lg">{f === "ISHIKAWA" ? "Diagrama de Ishikawa" : "5 Porquês"}</span>
+                      <span key={f} className="px-2.5 py-1 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-bold rounded-lg">
+                        {f === "ISHIKAWA" ? "Diagrama de Ishikawa" : "5 Porquês"}
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
-              <div className="col-span-2"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Descrição</p><p className="text-sm text-slate-600 leading-relaxed">{detalhe.descricao}</p></div>
+
+              {/* Justificativa de recusa */}
+              {detalhe.justificativaRecusa && (
+                <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Justificativa de Recusa</p>
+                  <p className="text-xs text-slate-600 italic">{detalhe.justificativaRecusa}</p>
+                </div>
+              )}
             </div>
 
             {/* Plano de ação */}
@@ -661,7 +572,7 @@ export default function OcorrenciasPage() {
                         <p className="text-sm font-bold text-slate-800">{pa.acao}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{pa.responsavel} · {pa.prazo || "Sem prazo"}</p>
                       </div>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${pa.status === "CONCLUIDO" ? "bg-emerald-50 text-emerald-700" : pa.status === "EM_ANDAMENTO" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${pa.status === "CONCLUIDO" ? "bg-emerald-50 text-emerald-700" : pa.status === "EM_ANDAMENTO" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
                         {pa.status === "CONCLUIDO" ? "Concluído" : pa.status === "EM_ANDAMENTO" ? "Em andamento" : "Pendente"}
                       </span>
                     </div>
@@ -672,7 +583,7 @@ export default function OcorrenciasPage() {
               {["EM_TRATATIVA", "APROVACAO"].includes(detalhe.status) && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                   <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Nova Ação</p>
-                  <input value={novaAcao.acao} onChange={(e) => setNovaAcao((f) => ({ ...f, acao: e.target.value }))} className={INPUT_CLS} placeholder="Descreva a ação..." />
+                  <input value={novaAcao.acao} onChange={(e) => setNovaAcao((f) => ({ ...f, acao: e.target.value }))} className={INPUT_CLS} placeholder="Descreva a ação corretiva..." />
                   <div className="grid grid-cols-2 gap-3">
                     <select value={novaAcao.responsavel} onChange={(e) => setNovaAcao((f) => ({ ...f, responsavel: e.target.value }))} className={SELECT_CLS}>
                       {USUARIOS.map((u) => <option key={u}>{u}</option>)}
@@ -757,10 +668,10 @@ export default function OcorrenciasPage() {
       {/* Stats */}
       <div className="px-8 py-4 grid grid-cols-4 gap-4 shrink-0">
         {[
-          { label: "Total de Registros", value: registros.length, icon: <ClipboardList className="w-5 h-5" />, cor: "text-slate-600", bg: "bg-slate-100" },
-          { label: "Aguardando Triagem", value: aguardandoTriagem, icon: <Clock className="w-5 h-5" />, cor: "text-blue-600", bg: "bg-blue-50" },
-          { label: "Em Tratativa / Aprovação", value: emTratativa, icon: <AlertCircle className="w-5 h-5" />, cor: "text-amber-600", bg: "bg-amber-50" },
-          { label: "Concluídos", value: concluidos, icon: <CheckCircle2 className="w-5 h-5" />, cor: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Total de Registros",       value: registros.length,   icon: <ClipboardList className="w-5 h-5" />, cor: "text-slate-600",  bg: "bg-slate-100" },
+          { label: "Aguardando Triagem",        value: aguardandoTriagem,  icon: <Clock className="w-5 h-5" />,        cor: "text-blue-600",   bg: "bg-blue-50" },
+          { label: "Em Tratativa / Aprovação",  value: emTratativa,        icon: <AlertCircle className="w-5 h-5" />, cor: "text-amber-600",  bg: "bg-amber-50" },
+          { label: "Concluídos",                value: concluidos,         icon: <CheckCircle2 className="w-5 h-5" />, cor: "text-emerald-600", bg: "bg-emerald-50" },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 flex items-center gap-4 shadow-sm">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg} ${s.cor}`}>{s.icon}</div>
@@ -798,7 +709,7 @@ export default function OcorrenciasPage() {
 
       {/* ── Modal: Novo Registro ──────────────────────────────────────────── */}
       {modalNovoAberto && (
-        <ModalOverlay onFechar={() => setModalNovoAberto(false)}>
+        <ModalOverlay>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h3 className="text-base font-black text-slate-900">Novo Registro</h3>
@@ -806,7 +717,9 @@ export default function OcorrenciasPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+
+              {/* Tipo */}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tipo de Registro *</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -814,35 +727,69 @@ export default function OcorrenciasPage() {
                     const cfg = TIPO_CONFIG[t];
                     return (
                       <button key={t} onClick={() => setNovoForm((f) => ({ ...f, tipo: t }))}
-                        className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border-2 text-xs font-bold transition-all ${novoForm.tipo === t ? `${cfg.bg} ${cfg.border} ${cfg.cor}` : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
-                        <span className={novoForm.tipo === t ? cfg.cor : "text-slate-400"}>{cfg.icon}</span>
+                        className={`flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${novoForm.tipo === t ? `${cfg.bg} ${cfg.border} ${cfg.cor}` : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
                         {cfg.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Descrição */}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Título *</label>
-                <input value={novoForm.titulo} onChange={(e) => setNovoForm((f) => ({ ...f, titulo: e.target.value }))} className={INPUT_CLS} placeholder="Descreva brevemente o ocorrido..." />
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Descrição do ocorrido *</label>
+                <textarea value={novoForm.descricao} onChange={(e) => setNovoForm((f) => ({ ...f, descricao: e.target.value }))} rows={3} className={INPUT_CLS + " resize-none"} placeholder="Descreva o que aconteceu com o máximo de detalhes..." />
               </div>
+
+              {/* Setor e Data */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Setor</label>
+                  <select value={novoForm.setorOcorrencia} onChange={(e) => setNovoForm((f) => ({ ...f, setorOcorrencia: e.target.value }))} className={SELECT_CLS}>
+                    {SETORES.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Data da Ocorrência</label>
+                  <input type="date" value={novoForm.dataOcorrencia} onChange={(e) => setNovoForm((f) => ({ ...f, dataOcorrencia: e.target.value }))} className={INPUT_CLS} />
+                </div>
+              </div>
+
+              {/* Período */}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Detalhes</label>
-                <textarea value={novoForm.descricao} onChange={(e) => setNovoForm((f) => ({ ...f, descricao: e.target.value }))} rows={3} className={INPUT_CLS + " resize-none"} placeholder="Informações adicionais relevantes..." />
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Período</label>
+                <div className="flex gap-2">
+                  {(["DIURNO", "VESPERTINO", "NOTURNO"] as const).map((p) => (
+                    <button key={p} onClick={() => setNovoForm((f) => ({ ...f, periodo: p }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${novoForm.periodo === p ? "bg-[#2655e8] text-white border-[#2655e8]" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                      {p.charAt(0) + p.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Setor</label>
-                <select value={novoForm.setor} onChange={(e) => setNovoForm((f) => ({ ...f, setor: e.target.value }))} className={SELECT_CLS}>
-                  {SETORES.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer">
+
+              {/* Anônimo */}
+              <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-xl">
                 <input type="checkbox" checked={novoForm.anonimo} onChange={(e) => setNovoForm((f) => ({ ...f, anonimo: e.target.checked }))} className="w-4 h-4 accent-[#2655e8]" />
                 <div>
                   <p className="text-sm font-bold text-slate-700">Registro Anônimo</p>
-                  <p className="text-xs text-slate-400">Sua identidade não será revelada.</p>
+                  <p className="text-xs text-slate-400">Sua identidade não será revelada a terceiros.</p>
                 </div>
               </label>
+
+              {/* Notificador (só se não anônimo) */}
+              {!novoForm.anonimo && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nome do Notificador</label>
+                    <input value={novoForm.notificadorNome} onChange={(e) => setNovoForm((f) => ({ ...f, notificadorNome: e.target.value }))} className={INPUT_CLS} placeholder="Nome completo..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Cargo</label>
+                    <input value={novoForm.notificadorCargo} onChange={(e) => setNovoForm((f) => ({ ...f, notificadorCargo: e.target.value }))} className={INPUT_CLS} placeholder="Ex: Enfermeiro..." />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
               <button onClick={() => setModalNovoAberto(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
@@ -858,12 +805,12 @@ export default function OcorrenciasPage() {
       {modalAssumirId && (() => {
         const reg = registros.find((r) => r.id === modalAssumirId);
         return reg ? (
-          <ModalOverlay onFechar={() => setModalAssumirId(null)}>
+          <ModalOverlay>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
                 <div>
                   <h3 className="text-base font-black text-slate-900">Assumir Registro</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{reg.codigo} · {reg.titulo}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{reg.codigo} · {resumoDescricao(reg.descricao, 50)}</p>
                 </div>
                 <button onClick={() => setModalAssumirId(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button>
               </div>
@@ -894,12 +841,12 @@ export default function OcorrenciasPage() {
       {modalRecusarId && (() => {
         const reg = registros.find((r) => r.id === modalRecusarId);
         return reg ? (
-          <ModalOverlay onFechar={() => setModalRecusarId(null)}>
+          <ModalOverlay>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
                 <div>
                   <h3 className="text-base font-black text-slate-900">Recusar Registro</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{reg.codigo} · {reg.titulo}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{reg.codigo} · {resumoDescricao(reg.descricao, 50)}</p>
                 </div>
                 <button onClick={() => setModalRecusarId(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button>
               </div>
@@ -921,7 +868,7 @@ export default function OcorrenciasPage() {
         ) : null;
       })()}
 
-      {/* ── Slide-over: Detalhe do Registro ──────────────────────────────── */}
+      {/* ── Slide-over: Detalhe ───────────────────────────────────────────── */}
       <SlideDetalhe />
     </div>
   );
