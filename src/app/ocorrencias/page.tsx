@@ -236,7 +236,6 @@ export default function OcorrenciasPage() {
       .from("registros_preenchidos")
       .select("*")
       .eq("empresa_id", empresaAtualId)
-      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (error) {
