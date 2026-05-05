@@ -4,565 +4,710 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Send, AlertCircle, CheckCircle2,
-  Users, Plus, Trash2, FileText, Megaphone, Loader2, Save,
-  LayoutGrid, MessageSquare, Hash, CalendarClock, List,
-  CheckSquare, Camera, PenTool, AlignLeft, GitBranch, UserCheck,
+  ArrowLeft, Plus, Send, Save, Trash2, Copy,
+  ChevronDown, AlertCircle, CheckCircle2, Loader2,
+  Eye, GitBranch, Settings, ClipboardList, UserCheck,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { carregarPerfilUsuario } from "@/lib/perfil";
 
 /* ─── Types ──────────────────────────────────────────────── */
-type FieldType = "texto" | "texto_longo" | "numero" | "data" | "selecao" | "multipla_escolha" | "foto" | "assinatura";
+type FieldType =
+  | "texto" | "paragrafo" | "multipla_escolha"
+  | "caixas" | "dropdown" | "data" | "numero"
+  | "arquivo" | "assinatura";
 
-interface FormField {
-  id: string;
-  type: FieldType;
-  label: string;
-  required: boolean;
-  options?: string[];
-  etapa: number;
-}
+type ActiveTab = "perguntas" | "configuracoes";
 
-interface EtapaTemplate {
+interface Option { id: string; label: string; }
+
+interface FormItem {
+  kind: "field" | "section";
   id: string;
-  numero: number;
-  nome: string;
+  // field
+  type?: FieldType;
+  question?: string;
+  required?: boolean;
+  options?: Option[];
+  // section
+  sectionName?: string;
+  sectionDesc?: string;
   aprovador?: string;
 }
 
-const FIELD_TYPES: { type: FieldType; label: string; icon: React.ElementType }[] = [
-  { type: "texto",           label: "Texto curto",     icon: MessageSquare },
-  { type: "texto_longo",    label: "Texto longo",     icon: AlignLeft     },
-  { type: "numero",         label: "Número",          icon: Hash          },
-  { type: "data",           label: "Data",            icon: CalendarClock },
-  { type: "selecao",        label: "Seleção",         icon: List          },
-  { type: "multipla_escolha", label: "Múltipla escolha", icon: CheckSquare },
-  { type: "foto",           label: "Foto / Arquivo",  icon: Camera        },
-  { type: "assinatura",     label: "Assinatura",      icon: PenTool       },
+/* ─── Constants ──────────────────────────────────────────── */
+const TYPE_LABELS: Record<FieldType, string> = {
+  texto:            "Resposta curta",
+  paragrafo:        "Parágrafo",
+  multipla_escolha: "Múltipla escolha",
+  caixas:           "Caixas de seleção",
+  dropdown:         "Lista suspensa",
+  data:             "Data",
+  numero:           "Número",
+  arquivo:          "Upload de arquivo",
+  assinatura:       "Assinatura",
+};
+
+const ALL_TYPES: FieldType[] = [
+  "texto", "paragrafo", "multipla_escolha",
+  "caixas", "dropdown", "data", "numero",
+  "arquivo", "assinatura",
 ];
 
+function hasOptions(type?: FieldType) {
+  return type === "multipla_escolha" || type === "caixas" || type === "dropdown";
+}
+
+/* ─── Factories ──────────────────────────────────────────── */
 function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function makeField(type: FieldType = "multipla_escolha"): FormItem {
+  return {
+    kind: "field", id: uid(), type, question: "", required: false,
+    options: hasOptions(type) ? [{ id: uid(), label: "Opção 1" }] : undefined,
+  };
+}
+
+function makeSection(): FormItem {
+  return { kind: "section", id: uid(), sectionName: "Nova seção", sectionDesc: "", aprovador: "" };
+}
+
+/* ─── Option bullet ──────────────────────────────────────── */
+function Bullet({ type, index }: { type?: FieldType; index: number }) {
+  if (type === "caixas")           return <span className="text-slate-400 text-base leading-none">☐</span>;
+  if (type === "dropdown")         return <span className="text-sm text-slate-400">{index + 1}.</span>;
+  return <span className="h-4 w-4 rounded-full border-2 border-slate-400 shrink-0 inline-block" />;
+}
+
+/* ─── Toggle switch ──────────────────────────────────────── */
+function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${on ? "bg-blue-600" : "bg-slate-300"}`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-6" : "translate-x-1"}`} />
+    </button>
+  );
+}
 
 /* ─── Page ───────────────────────────────────────────────── */
 export default function NovoTemplatePage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(1);
 
-  const [empresaId, setEmpresaId]     = useState<string | null>(null);
+  /* auth */
+  const [empresaId, setEmpresaId]   = useState<string | null>(null);
   const [usuarioNome, setUsuarioNome] = useState("Usuário");
-  const [dbUsuarios, setDbUsuarios]   = useState<{ nome: string; cargo?: string }[]>([]);
+  const [dbUsuarios, setDbUsuarios] = useState<{ nome: string; cargo?: string }[]>([]);
   const [isCarregando, setIsCarregando] = useState(true);
-  const [isLoading, setIsLoading]     = useState(false);
-  const [erro, setErro]               = useState<string | null>(null);
-  const [sucesso, setSucesso]         = useState(false);
+  const [isSaving, setIsSaving]     = useState(false);
+  const [msg, setMsg]               = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  // Step 1
-  const [titulo, setTitulo]         = useState("");
+  /* form */
+  const [formTitle, setFormTitle]   = useState("Formulário sem título");
+  const [formDesc, setFormDesc]     = useState("");
+  const [items, setItems]           = useState<FormItem[]>([makeField()]);
+  const [activeId, setActiveId]     = useState<string | null>(() => {
+    const first = makeField();
+    return first.id;
+  });
+
+  /* configurações */
+  const [activeTab, setActiveTab]   = useState<ActiveTab>("perguntas");
   const [categoria, setCategoria]   = useState("");
   const [setor, setSetor]           = useState("");
+  const [aprovadores, setAprovadores] = useState<string[]>([]);
+  const [apInput, setApInput]       = useState("");
 
-  // Step 2
-  const [etapas, setEtapas]         = useState<EtapaTemplate[]>([{ id: uid(), numero: 1, nome: "Etapa 1" }]);
-  const [campos, setCampos]         = useState<FormField[]>([]);
-  const [etapaAtiva, setEtapaAtiva] = useState(1);
+  // sync activeId with first item on mount
+  useEffect(() => { setActiveId(items[0]?.id ?? null); }, []); // eslint-disable-line
 
-  // Step 3
-  const [aprovadores, setAprovadores]       = useState<string[]>([]);
-  const [aprovadorInput, setAprovadorInput] = useState("");
-
-  // Step 4
-  const [alvos, setAlvos]           = useState<string[]>([]);
-  const [exigeCiente, setExigeCiente] = useState(false);
-
-  /* ── Session ──────────────────────────────────────────── */
+  /* ── Session ────────────────────────────────────────── */
   useEffect(() => {
     let active = true;
-    const init = async () => {
+    (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/login"); return; }
-
       const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null }>(
         session, "empresa_id, nome"
       );
       if (!active) return;
-      if (!perfil?.empresa_id) {
-        setErro("Empresa não identificada. Verifique seu perfil.");
-        setIsCarregando(false);
-        return;
-      }
+      if (!perfil?.empresa_id) { setIsCarregando(false); return; }
       setEmpresaId(perfil.empresa_id);
       setUsuarioNome(perfil.nome ?? session.user.email ?? "Usuário");
-
-      const { data: uData } = await supabase
-        .from("perfis").select("nome, cargo").eq("empresa_id", perfil.empresa_id).order("nome");
-      if (active) setDbUsuarios(uData ?? []);
-      if (active) setIsCarregando(false);
-    };
-    init();
+      const { data: u } = await supabase.from("perfis").select("nome, cargo").eq("empresa_id", perfil.empresa_id).order("nome");
+      if (active) { setDbUsuarios(u ?? []); setIsCarregando(false); }
+    })();
     return () => { active = false; };
   }, [router]);
 
-  /* ── Helpers ──────────────────────────────────────────── */
-  function addField(type: FieldType) {
-    setCampos((c) => [...c, {
-      id: uid(), type, required: false, etapa: etapaAtiva,
-      label: FIELD_TYPES.find((f) => f.type === type)?.label ?? "Campo",
-      options: type === "selecao" || type === "multipla_escolha" ? ["Opção 1", "Opção 2"] : undefined,
-    }]);
+  /* ── Item helpers ────────────────────────────────────── */
+  function updateItem(id: string, patch: Partial<FormItem>) {
+    setItems((prev) => prev.map((i) => i.id === id ? { ...i, ...patch } : i));
   }
 
-  function addEtapa() {
-    const n = etapas.length + 1;
-    setEtapas((e) => [...e, { id: uid(), numero: n, nome: `Etapa ${n}` }]);
-    setEtapaAtiva(n);
+  function insertAfter(id: string | null, newItem: FormItem) {
+    setItems((prev) => {
+      if (id === null) return [...prev, newItem];
+      const idx = prev.findIndex((i) => i.id === id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, newItem);
+      return next;
+    });
+    setActiveId(newItem.id);
   }
 
-  function addAprovador() {
-    const v = aprovadorInput.trim();
-    if (v && !aprovadores.includes(v)) {
-      setAprovadores((a) => [...a, v]);
-      setAprovadorInput("");
-    }
+  function addField(type: FieldType = "multipla_escolha") {
+    insertAfter(activeId, makeField(type));
   }
 
-  /* ── Save ─────────────────────────────────────────────── */
+  function addSection() {
+    insertAfter(activeId, makeSection());
+  }
+
+  function deleteItem(id: string) {
+    setItems((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      return next.length ? next : [makeField()];
+    });
+    setActiveId(null);
+  }
+
+  function duplicateItem(id: string) {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const dup: FormItem = {
+      ...item, id: uid(),
+      options: item.options?.map((o) => ({ ...o, id: uid() })),
+    };
+    insertAfter(id, dup);
+  }
+
+  function addOption(itemId: string) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const n = (item.options?.length ?? 0) + 1;
+    updateItem(itemId, { options: [...(item.options ?? []), { id: uid(), label: `Opção ${n}` }] });
+  }
+
+  function updateOption(itemId: string, optId: string, label: string) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item?.options) return;
+    updateItem(itemId, { options: item.options.map((o) => o.id === optId ? { ...o, label } : o) });
+  }
+
+  function removeOption(itemId: string, optId: string) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item?.options || item.options.length <= 1) return;
+    updateItem(itemId, { options: item.options.filter((o) => o.id !== optId) });
+  }
+
+  /* ── Save ────────────────────────────────────────────── */
   async function salvar(status: "RASCUNHO" | "EM_APROVACAO") {
-    setErro(null);
-    if (!empresaId) { setErro("Empresa não identificada."); return; }
-    if (!titulo.trim()) { setErro("Informe o título do formulário."); return; }
+    if (!empresaId) return;
+    if (!formTitle.trim()) { setMsg({ type: "err", text: "Informe o título do formulário." }); return; }
 
-    setIsLoading(true);
+    let curEtapa = 1;
+    const etapas: object[] = [{ id: uid(), numero: 1, nome: "Etapa 1", aprovador: "" }];
+    const campos: object[] = [];
+
+    for (const item of items) {
+      if (item.kind === "section") {
+        curEtapa++;
+        etapas.push({ id: item.id, numero: curEtapa, nome: item.sectionName || `Etapa ${curEtapa}`, aprovador: item.aprovador || "" });
+      } else {
+        campos.push({
+          id: item.id, type: item.type,
+          label: item.question || "Campo sem título",
+          required: item.required || false,
+          options: item.options?.map((o) => o.label),
+          etapa: curEtapa,
+        });
+      }
+    }
+
+    setIsSaving(true);
     const { error } = await supabase.from("registros_templates").insert({
       empresa_id: empresaId,
-      titulo: titulo.trim(),
+      titulo: formTitle.trim(),
       categoria: categoria.trim() || "Geral",
       setor: setor.trim() || "Geral",
-      status,
-      campos,
+      status, campos,
       versao_major: 1, versao_minor: 0, versao_patch: 0,
       responsavel: usuarioNome,
       workflow: { engine: "STAGES", etapas, aprovadores_template: aprovadores },
     });
-    setIsLoading(false);
+    setIsSaving(false);
 
-    if (error) { setErro("Não foi possível salvar. Verifique as migrations do banco."); return; }
-    setSucesso(true);
+    if (error) { setMsg({ type: "err", text: "Erro ao salvar. Verifique as migrations." }); return; }
+    setMsg({ type: "ok", text: status === "EM_APROVACAO" ? "Enviado para aprovação!" : "Rascunho salvo!" });
     setTimeout(() => router.push("/gestao-registros"), 1500);
   }
 
-  /* ── Loading ──────────────────────────────────────────── */
+  /* ── Loading ─────────────────────────────────────────── */
   if (isCarregando) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-400 font-bold">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <p>Carregando...</p>
+      <div className="h-screen flex items-center justify-center gap-3 text-slate-400 font-semibold">
+        <Loader2 className="w-7 h-7 animate-spin text-blue-500" /> Carregando...
       </div>
     );
   }
 
-  const etapaAtualObj = etapas.find((e) => e.numero === etapaAtiva);
-  const camposDaEtapa = campos.filter((c) => c.etapa === etapaAtiva);
-
-  /* ── Render ───────────────────────────────────────────── */
+  /* ──────────────────────────────────────────────────────
+     RENDER
+  ────────────────────────────────────────────────────── */
   return (
-    <div className="max-w-5xl mx-auto p-6 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-[#f0f4f9] flex flex-col">
 
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <Link
-          href="/gestao-registros"
-          className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 shadow-sm transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Criar Novo Formulário</h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">Defina campos, etapas e fluxo de aprovação.</p>
+      {/* ── Top bar ────────────────────────────────────── */}
+      <header className="bg-white shadow-sm sticky top-0 z-30">
+        <div className="flex items-center justify-between px-4 h-14 gap-3">
+          {/* Left */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/gestao-registros" className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-full shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+              <ClipboardList className="w-4 h-4 text-white" />
+            </div>
+            <input
+              value={formTitle}
+              onChange={(e) => setFormTitle(e.target.value)}
+              className="text-base font-medium text-slate-800 border-0 border-b-2 border-transparent focus:border-blue-600 outline-none px-1 py-0.5 bg-transparent min-w-0 w-full max-w-xs"
+            />
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full" title="Pré-visualizar">
+              <Eye className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => salvar("RASCUNHO")}
+              disabled={isSaving}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <Save className="w-4 h-4" /> Rascunho
+            </button>
+            <button
+              onClick={() => salvar("EM_APROVACAO")}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm disabled:opacity-60"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              <span className="hidden sm:inline">Enviar para Aprovação</span>
+              <span className="sm:hidden">Enviar</span>
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Alert */}
-      {(erro || sucesso) && (
-        <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 text-sm font-semibold animate-in slide-in-from-top-4 ${erro ? "bg-red-50 border-red-200 text-red-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
-          {erro ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
-          {erro ?? "Salvo com sucesso! Redirecionando..."}
-        </div>
-      )}
-
-      {/* Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[600px]">
 
         {/* Tab bar */}
-        <div className="flex border-b border-slate-100 bg-slate-50 overflow-x-auto">
-          {[
-            { step: 1, icon: <FileText className="w-4 h-4" />,    title: "Identificação" },
-            { step: 2, icon: <LayoutGrid className="w-4 h-4" />,  title: "Construtor"    },
-            { step: 3, icon: <Users className="w-4 h-4" />,       title: "Aprovação"     },
-            { step: 4, icon: <Megaphone className="w-4 h-4" />,   title: "Publicação"    },
-          ].map(({ step, icon, title }) => (
+        <div className="flex justify-center border-t border-slate-100">
+          {(["perguntas", "configuracoes"] as const).map((t) => (
             <button
-              key={step}
-              onClick={() => setActiveTab(step)}
-              className={`flex-1 flex items-center justify-center gap-3 p-5 transition-all border-b-2 font-bold text-sm outline-none ${activeTab === step ? "bg-white border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700"}`}
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`px-8 py-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-2 ${activeTab === t ? "text-blue-600 border-blue-600" : "text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300"}`}
             >
-              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-colors ${activeTab === step ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "bg-slate-200 text-slate-500"}`}>
-                {step}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className={activeTab === step ? "text-blue-600" : "text-slate-400"}>{icon}</span>
-                <span className="hidden md:inline">{title}</span>
-              </div>
+              {t === "perguntas" ? <><ClipboardList className="w-4 h-4" /> Perguntas</> : <><Settings className="w-4 h-4" /> Configurações</>}
             </button>
           ))}
         </div>
+      </header>
 
-        {/* Content */}
-        <div className="p-8 flex-1">
+      {/* ── Message bar ─────────────────────────────────── */}
+      {msg && (
+        <div className={`flex items-center justify-center gap-2 py-2 text-sm font-semibold ${msg.type === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+          {msg.type === "ok" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          {msg.text}
+        </div>
+      )}
 
-          {/* ── ABA 1: Identificação ─────────────────────── */}
-          {activeTab === 1 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <Field label="Título do Formulário" required>
-                    <input
-                      value={titulo}
-                      onChange={(e) => setTitulo(e.target.value)}
-                      placeholder="Ex: Checklist de Inspeção de EPI"
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                    />
-                  </Field>
+      {/* ──────────────────────────────────────────────────
+          TAB: Perguntas
+      ────────────────────────────────────────────────── */}
+      {activeTab === "perguntas" && (
+        <div className="flex flex-1 py-8 px-4 gap-4 justify-center">
+
+          {/* Canvas */}
+          <div className="w-full max-w-2xl space-y-4">
+
+            {/* Form header card */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
+              <div className="h-2.5 bg-blue-600 rounded-t-xl" />
+              <div className="p-6 space-y-3">
+                <input
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="Título do formulário"
+                  className="w-full text-3xl font-normal text-slate-900 border-0 border-b-2 border-slate-200 focus:border-blue-600 outline-none pb-2 bg-transparent transition-colors"
+                />
+                <input
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  placeholder="Descrição do formulário"
+                  className="w-full text-sm text-slate-500 border-0 border-b border-slate-100 focus:border-blue-400 outline-none pb-1 bg-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Item cards */}
+            {items.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                isActive={activeId === item.id}
+                dbUsuarios={dbUsuarios}
+                onActivate={() => setActiveId(item.id)}
+                onUpdate={(patch) => updateItem(item.id, patch)}
+                onDelete={() => deleteItem(item.id)}
+                onDuplicate={() => duplicateItem(item.id)}
+                onAddOption={() => addOption(item.id)}
+                onUpdateOption={(optId, label) => updateOption(item.id, optId, label)}
+                onRemoveOption={(optId) => removeOption(item.id, optId)}
+              />
+            ))}
+          </div>
+
+          {/* Right sidebar */}
+          <div className="hidden md:flex flex-col items-center gap-1 pt-0 sticky top-24 h-fit">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-1.5 flex flex-col gap-1">
+              <SideBtn icon={Plus} label="Adicionar pergunta" onClick={() => addField()} />
+              <SideBtn icon={GitBranch} label="Adicionar aprovação intermediária" onClick={addSection} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────
+          TAB: Configurações
+      ────────────────────────────────────────────────── */}
+      {activeTab === "configuracoes" && (
+        <div className="flex-1 py-8 px-4">
+          <div className="max-w-2xl mx-auto space-y-4">
+
+            {/* Approvers */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <UserCheck className="w-5 h-5 text-blue-600" />
+                <h2 className="text-base font-semibold text-slate-800">Aprovadores do formulário</h2>
+              </div>
+              <p className="text-sm text-slate-500 mb-5">
+                Quem deve aprovar este formulário antes de ser publicado no Repositório.
+              </p>
+              <div className="flex gap-2 mb-4">
+                <select
+                  value={apInput}
+                  onChange={(e) => setApInput(e.target.value)}
+                  className="flex-1 h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-600 bg-white"
+                >
+                  <option value="">Selecione um aprovador...</option>
+                  {dbUsuarios.map((u) => (
+                    <option key={u.nome} value={u.nome}>{u.nome}{u.cargo ? ` — ${u.cargo}` : ""}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    if (apInput && !aprovadores.includes(apInput)) {
+                      setAprovadores((a) => [...a, apInput]);
+                      setApInput("");
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              {aprovadores.length > 0 ? (
+                <div className="space-y-2">
+                  {aprovadores.map((ap) => (
+                    <div key={ap} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                      <span className="text-sm font-medium text-slate-800">{ap}</span>
+                      <button onClick={() => setAprovadores((a) => a.filter((x) => x !== ap))} className="text-slate-400 hover:text-red-500">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <Field label="Categoria">
+              ) : (
+                <p className="text-sm text-slate-400 italic">Nenhum aprovador adicionado. O formulário poderá ser publicado diretamente.</p>
+              )}
+            </div>
+
+            {/* Classification */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <h2 className="text-base font-semibold text-slate-800 mb-5">Classificação</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <CfgField label="Categoria">
                   <input
                     value={categoria}
                     onChange={(e) => setCategoria(e.target.value)}
                     placeholder="Ex: Segurança do Trabalho"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm outline-none focus:border-blue-500 transition-all"
+                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-600"
                   />
-                </Field>
-                <Field label="Setor / Unidade">
+                </CfgField>
+                <CfgField label="Setor / Unidade">
                   <input
                     value={setor}
                     onChange={(e) => setSetor(e.target.value)}
                     placeholder="Ex: Produção"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm outline-none focus:border-blue-500 transition-all"
+                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-600"
                   />
-                </Field>
-              </div>
-
-              <div className="p-5 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-                <p className="font-bold mb-1">Formulários com etapas e aprovações intermediárias</p>
-                <p className="leading-6 text-blue-600">
-                  No próximo passo você pode dividir o formulário em etapas e definir um aprovador entre elas.
-                  A próxima etapa só será liberada após a aprovação do responsável definido.
-                </p>
+                </CfgField>
               </div>
             </div>
-          )}
 
-          {/* ── ABA 2: Construtor ────────────────────────── */}
-          {activeTab === 2 && (
-            <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
-
-              {/* Stage tabs */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {etapas.map((etapa) => (
-                  <button
-                    key={etapa.id}
-                    onClick={() => setEtapaAtiva(etapa.numero)}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${etapaAtiva === etapa.numero ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-                  >
-                    {etapa.nome}
-                  </button>
-                ))}
-                <button
-                  onClick={addEtapa}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold bg-white border border-dashed border-slate-300 text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Nova etapa
-                </button>
-              </div>
-
-              {/* Approver gate (não exibe na etapa 1) */}
-              {etapaAtualObj && etapaAtualObj.numero > 1 && (
-                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <GitBranch className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">Aprovador antes desta etapa</p>
-                    <p className="text-xs text-amber-600 mt-0.5 mb-3">Esta etapa só será liberada após a aprovação abaixo.</p>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <select
-                        value={etapaAtualObj.aprovador ?? ""}
-                        onChange={(e) => setEtapas((prev) => prev.map((et) =>
-                          et.id === etapaAtualObj.id ? { ...et, aprovador: e.target.value } : et
-                        ))}
-                        className="flex-1 h-10 px-3 bg-white border border-amber-200 rounded-lg text-sm outline-none focus:border-amber-400"
-                      >
-                        <option value="">Selecione o aprovador...</option>
-                        {dbUsuarios.map((u) => (
-                          <option key={u.nome} value={u.nome}>
-                            {u.nome}{u.cargo ? ` — ${u.cargo}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={etapaAtualObj.nome}
-                        onChange={(e) => setEtapas((prev) => prev.map((et) =>
-                          et.id === etapaAtualObj.id ? { ...et, nome: e.target.value } : et
-                        ))}
-                        placeholder="Nome desta etapa"
-                        className="w-full sm:w-52 h-10 px-3 bg-white border border-amber-200 rounded-lg text-sm outline-none focus:border-amber-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid gap-5 xl:grid-cols-[1fr_220px]">
-                {/* Field list */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-extrabold uppercase text-slate-400 tracking-widest">
-                    Campos de {etapaAtualObj?.nome ?? `Etapa ${etapaAtiva}`}
-                  </p>
-                  {camposDaEtapa.length === 0 && (
-                    <div className="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center text-sm text-slate-400">
-                      Adicione campos usando os botões ao lado →
-                    </div>
-                  )}
-                  {camposDaEtapa.map((campo, idx) => {
-                    const ft = FIELD_TYPES.find((f) => f.type === campo.type);
-                    return (
-                      <div key={campo.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-                        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-50 text-xs font-bold text-blue-700 shrink-0">
-                          {idx + 1}
-                        </span>
-                        <input
-                          value={campo.label}
-                          onChange={(e) => setCampos((prev) => prev.map((f) =>
-                            f.id === campo.id ? { ...f, label: e.target.value } : f
-                          ))}
-                          className="flex-1 text-sm font-semibold outline-none bg-transparent"
-                        />
-                        {ft && (
-                          <span className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-full text-xs text-slate-500 font-medium shrink-0">
-                            <ft.icon className="w-3 h-3" /> {ft.label}
-                          </span>
-                        )}
-                        <button
-                          onClick={() => setCampos((prev) => prev.map((f) =>
-                            f.id === campo.id ? { ...f, required: !f.required } : f
-                          ))}
-                          className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${campo.required ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}
-                        >
-                          {campo.required ? "Obrigatório" : "Opcional"}
-                        </button>
-                        <button
-                          onClick={() => setCampos((prev) => prev.filter((f) => f.id !== campo.id))}
-                          className="text-slate-300 hover:text-red-500 shrink-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Field type buttons */}
-                <aside className="space-y-2">
-                  <p className="text-[10px] font-extrabold uppercase text-slate-400 tracking-widest">Adicionar campo</p>
-                  {FIELD_TYPES.map(({ type, label, icon: Icon }) => (
-                    <button
-                      key={type}
-                      onClick={() => addField(type)}
-                      className="flex items-center gap-2.5 w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-all shadow-sm"
-                    >
-                      <Icon className="w-4 h-4 shrink-0" /> {label}
-                    </button>
-                  ))}
-                </aside>
-              </div>
-            </div>
-          )}
-
-          {/* ── ABA 3: Aprovação do Template ─────────────── */}
-          {activeTab === 3 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-1">
-                  <UserCheck className="w-4 h-4 text-blue-500" /> Aprovadores do Formulário
-                </h3>
-                <p className="text-sm text-slate-500 mb-6">
-                  Estas pessoas precisam aprovar o formulário antes que ele fique disponível no Repositório.
-                </p>
-
-                <div className="flex flex-col md:flex-row gap-3 items-end mb-4">
-                  <div className="flex-1">
-                    <Field label="Selecionar aprovador">
-                      <select
-                        value={aprovadorInput}
-                        onChange={(e) => setAprovadorInput(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="">Selecione...</option>
-                        {dbUsuarios.map((u) => (
-                          <option key={u.nome} value={u.nome}>
-                            {u.nome}{u.cargo ? ` — ${u.cargo}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  </div>
-                  <button
-                    onClick={addAprovador}
-                    className="w-full md:w-auto px-5 py-2.5 bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition-colors font-bold rounded-lg text-sm flex items-center justify-center gap-2 h-[42px]"
-                  >
-                    <Plus className="w-4 h-4" /> Adicionar
-                  </button>
-                </div>
-
-                {aprovadores.length > 0 ? (
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-black text-slate-600 tracking-widest">
-                        <tr>
-                          <th className="p-4">Aprovador</th>
-                          <th className="p-4 text-right">Remover</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {aprovadores.map((ap) => (
-                          <tr key={ap} className="hover:bg-slate-50">
-                            <td className="p-4 font-bold text-slate-800">{ap}</td>
-                            <td className="p-4 text-right">
-                              <button
-                                onClick={() => setAprovadores((prev) => prev.filter((a) => a !== ap))}
-                                className="text-red-400 hover:text-red-600 p-1"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400 italic">
-                    Nenhum aprovador adicionado. O formulário poderá ser publicado diretamente.
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── ABA 4: Publicação ────────────────────────── */}
-          {activeTab === 4 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-800 mb-4">Público alvo do formulário</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {["Apenas o Setor de Origem", "Todo o Corpo Clínico", "Toda a Liderança", "Área Administrativa", "Comitê da Qualidade"].map((alvo) => (
-                      <label
-                        key={alvo}
-                        className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${alvos.includes(alvo) ? "bg-blue-50 border-blue-300" : "bg-white border-slate-200 hover:border-blue-200"}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={alvos.includes(alvo)}
-                          onChange={() => setAlvos((prev) => prev.includes(alvo) ? prev.filter((x) => x !== alvo) : [...prev, alvo])}
-                          className="w-4 h-4 accent-blue-600"
-                        />
-                        <span className="text-sm font-bold text-slate-700">{alvo}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100">
-                  <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={exigeCiente}
-                      onChange={() => setExigeCiente(!exigeCiente)}
-                      className="w-5 h-5 accent-blue-600"
-                    />
-                    <div>
-                      <span className="block text-sm font-bold text-slate-800">Exigir confirmação de leitura</span>
-                      <span className="block text-xs font-medium text-slate-500 mt-0.5">
-                        Os responsáveis pelo preenchimento deverão confirmar ciência antes de iniciar.
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Resumo */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm space-y-2 text-slate-600">
-                <p><strong className="text-slate-800">Formulário:</strong> {titulo || "—"}</p>
-                <p><strong className="text-slate-800">Categoria:</strong> {categoria || "Geral"}</p>
-                <p><strong className="text-slate-800">Setor:</strong> {setor || "Geral"}</p>
-                <p><strong className="text-slate-800">Etapas:</strong> {etapas.length}</p>
-                <p><strong className="text-slate-800">Campos:</strong> {campos.length}</p>
-                <p><strong className="text-slate-800">Aprovadores:</strong> {aprovadores.length > 0 ? aprovadores.join(", ") : "Nenhum"}</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex gap-3 w-full md:w-auto">
-            <button
-              disabled={activeTab === 1}
-              onClick={() => setActiveTab((s) => Math.max(1, s - 1))}
-              className="px-5 py-2.5 bg-white border border-slate-300 text-slate-600 font-bold rounded-lg text-sm shadow-sm hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              Voltar
-            </button>
-            <button
-              onClick={() => salvar("RASCUNHO")}
-              disabled={isLoading}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg text-sm shadow-sm hover:bg-slate-100 transition-all"
-            >
-              <Save className="w-4 h-4 text-slate-500" /> Salvar como Rascunho
-            </button>
-          </div>
-
-          <div className="flex gap-3 w-full md:w-auto">
-            {activeTab < 4 ? (
+            {/* Save buttons */}
+            <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setActiveTab((s) => Math.min(4, s + 1))}
-                className="w-full md:w-auto px-6 py-2.5 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-900 shadow-md transition-colors"
+                onClick={() => salvar("RASCUNHO")}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-5 py-2.5 border border-slate-200 bg-white rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
-                Próxima Etapa
+                <Save className="w-4 h-4" /> Salvar Rascunho
               </button>
-            ) : (
               <button
                 onClick={() => salvar("EM_APROVACAO")}
-                disabled={isLoading}
-                className="w-full md:w-auto px-8 py-2.5 bg-blue-600 text-white font-bold rounded-lg text-sm shadow-lg hover:bg-blue-700 flex items-center justify-center gap-2 transition-all disabled:opacity-70"
+                disabled={isSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm disabled:opacity-60"
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {isLoading ? "Enviando..." : "Enviar para Aprovação"}
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Enviar para Aprovação
               </button>
-            )}
+            </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── ItemCard ───────────────────────────────────────────── */
+interface ItemCardProps {
+  item: FormItem;
+  isActive: boolean;
+  dbUsuarios: { nome: string; cargo?: string }[];
+  onActivate: () => void;
+  onUpdate: (patch: Partial<FormItem>) => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onAddOption: () => void;
+  onUpdateOption: (optId: string, label: string) => void;
+  onRemoveOption: (optId: string) => void;
+}
+
+function ItemCard({
+  item, isActive, dbUsuarios,
+  onActivate, onUpdate, onDelete, onDuplicate,
+  onAddOption, onUpdateOption, onRemoveOption,
+}: ItemCardProps) {
+
+  /* ── Section card ──────────────────────────────────── */
+  if (item.kind === "section") {
+    return (
+      <div
+        onClick={onActivate}
+        className={`bg-white rounded-xl shadow-sm overflow-hidden border transition-all cursor-pointer ${isActive ? "border-blue-500 shadow-md" : "border-slate-200 hover:border-slate-300"}`}
+      >
+        <div className={`h-1.5 ${isActive ? "bg-blue-600" : "bg-slate-300"}`} />
+        <div className="p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <GitBranch className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Aprovação intermediária</span>
+          </div>
+          {isActive ? (
+            <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+              <input
+                value={item.sectionName ?? ""}
+                onChange={(e) => onUpdate({ sectionName: e.target.value })}
+                placeholder="Nome da seção"
+                className="w-full text-lg font-medium border-0 border-b-2 border-slate-200 focus:border-blue-600 outline-none pb-1 bg-transparent transition-colors"
+              />
+              <input
+                value={item.sectionDesc ?? ""}
+                onChange={(e) => onUpdate({ sectionDesc: e.target.value })}
+                placeholder="Descrição (opcional)"
+                className="w-full text-sm text-slate-500 border-0 border-b border-slate-100 focus:border-blue-400 outline-none pb-1 bg-transparent"
+              />
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block mb-1.5">
+                  Aprovador antes desta seção
+                </label>
+                <select
+                  value={item.aprovador ?? ""}
+                  onChange={(e) => onUpdate({ aprovador: e.target.value })}
+                  className="w-full sm:w-80 h-10 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-600 bg-white"
+                >
+                  <option value="">Selecione o aprovador...</option>
+                  {dbUsuarios.map((u) => (
+                    <option key={u.nome} value={u.nome}>{u.nome}{u.cargo ? ` — ${u.cargo}` : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end pt-2 border-t border-slate-100">
+                <button
+                  onClick={onDelete}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Remover seção
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-base font-medium text-slate-700">{item.sectionName || "Seção sem nome"}</p>
+              {item.aprovador
+                ? <p className="text-sm text-slate-500 mt-0.5">Aprovador: <strong>{item.aprovador}</strong></p>
+                : <p className="text-sm text-slate-400 mt-0.5 italic">Sem aprovador definido</p>
+              }
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Field card ────────────────────────────────────── */
+  const showOptions = hasOptions(item.type);
+
+  return (
+    <div
+      onClick={onActivate}
+      className={`bg-white rounded-xl shadow-sm overflow-hidden border transition-all cursor-pointer ${isActive ? "border-blue-500 shadow-md" : "border-slate-200 hover:border-slate-300"}`}
+    >
+      {isActive && <div className="h-1.5 bg-blue-600 rounded-t-xl" />}
+
+      <div className="p-5 sm:p-6">
+        {isActive ? (
+          /* ─ EDIT MODE ─ */
+          <div onClick={(e) => e.stopPropagation()}>
+            {/* Question + Type selector */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-5">
+              <input
+                value={item.question ?? ""}
+                onChange={(e) => onUpdate({ question: e.target.value })}
+                placeholder="Pergunta"
+                autoFocus
+                className="flex-1 bg-slate-50 border border-slate-200 focus:border-blue-600 outline-none rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
+              />
+              <div className="relative shrink-0">
+                <select
+                  value={item.type ?? "multipla_escolha"}
+                  onChange={(e) => {
+                    const t = e.target.value as FieldType;
+                    onUpdate({
+                      type: t,
+                      options: hasOptions(t)
+                        ? (item.options?.length ? item.options : [{ id: Math.random().toString(36).slice(2), label: "Opção 1" }])
+                        : undefined,
+                    });
+                  }}
+                  className="h-10 pl-3 pr-8 border border-slate-200 rounded-lg text-sm font-medium outline-none focus:border-blue-600 bg-white appearance-none cursor-pointer w-full sm:w-48"
+                >
+                  {ALL_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
+            </div>
+
+            {/* Options */}
+            {showOptions && item.options && (
+              <div className="space-y-2 mb-4 pl-1">
+                {item.options.map((opt, oi) => (
+                  <div key={opt.id} className="flex items-center gap-2">
+                    <Bullet type={item.type} index={oi} />
+                    <input
+                      value={opt.label}
+                      onChange={(e) => onUpdateOption(opt.id, e.target.value)}
+                      className="flex-1 border-0 border-b border-slate-200 focus:border-blue-600 outline-none text-sm pb-0.5 bg-transparent"
+                    />
+                    {item.options!.length > 1 && (
+                      <button onClick={() => onRemoveOption(opt.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                        <span className="text-base leading-none">×</span>
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={onAddOption}
+                  className="flex items-center gap-2 text-sm text-slate-400 hover:text-blue-600 pl-1 mt-1 transition-colors"
+                >
+                  <Bullet type={item.type} index={item.options.length} />
+                  <span className="text-blue-600 font-medium">Adicionar opção</span>
+                </button>
+              </div>
+            )}
+
+            {/* Non-option preview */}
+            {!showOptions && (
+              <div className="mb-4 pl-1">
+                {item.type === "texto"      && <div className="border-b border-slate-300 pb-1 text-sm text-slate-400 w-48">Resposta curta</div>}
+                {item.type === "paragrafo"  && <div className="border-b border-slate-300 pb-1 text-sm text-slate-400 w-full">Resposta longa</div>}
+                {item.type === "data"       && <div className="text-sm text-slate-400">📅 DD/MM/AAAA</div>}
+                {item.type === "numero"     && <div className="border-b border-slate-300 pb-1 text-sm text-slate-400 w-28">Número</div>}
+                {item.type === "arquivo"    && <div className="text-sm text-slate-400">📎 Arquivo</div>}
+                {item.type === "assinatura" && <div className="text-sm text-slate-400">✍️ Assinatura digital</div>}
+              </div>
+            )}
+
+            {/* Footer actions */}
+            <div className="flex items-center justify-end gap-1 pt-3 border-t border-slate-100">
+              <button onClick={onDuplicate} title="Duplicar" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
+                <Copy className="w-4 h-4" />
+              </button>
+              <button onClick={onDelete} title="Excluir" className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <div className="w-px h-5 bg-slate-200 mx-2" />
+              <span className="text-sm text-slate-600 mr-2">Obrigatória</span>
+              <Toggle on={item.required ?? false} onChange={() => onUpdate({ required: !item.required })} />
+            </div>
+          </div>
+        ) : (
+          /* ─ READ MODE ─ */
+          <div>
+            <p className="text-sm font-medium text-slate-800">
+              {item.question || <span className="text-slate-400 italic">Pergunta sem título</span>}
+              {item.required && <span className="text-red-500 ml-1">*</span>}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">{TYPE_LABELS[item.type ?? "texto"]}</p>
+            {showOptions && item.options && (
+              <div className="mt-2.5 space-y-1.5">
+                {item.options.slice(0, 3).map((opt, oi) => (
+                  <div key={opt.id} className="flex items-center gap-2 text-sm text-slate-500">
+                    <Bullet type={item.type} index={oi} />
+                    {opt.label}
+                  </div>
+                ))}
+                {item.options.length > 3 && (
+                  <p className="text-xs text-slate-400 pl-6">+{item.options.length - 3} opção(ões)...</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ─── Helper ─────────────────────────────────────────────── */
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+/* ─── Helpers ────────────────────────────────────────────── */
+function SideBtn({ icon: Icon, label, onClick }: { icon: React.ElementType; label: string; onClick: () => void }) {
   return (
-    <div className="w-full">
-      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-1">
-        {label} {required && <span className="text-red-500 text-sm leading-none">*</span>}
-      </label>
+    <button
+      title={label}
+      onClick={onClick}
+      className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+    >
+      <Icon className="w-5 h-5" />
+    </button>
+  );
+}
+
+function CfgField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">{label}</label>
       {children}
     </div>
   );
