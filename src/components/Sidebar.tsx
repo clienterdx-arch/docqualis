@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   LogOut,
   Settings,
-  ShieldAlert,
   Target,
   TriangleAlert,
 } from "lucide-react";
@@ -44,7 +43,6 @@ export default function Sidebar() {
       activeFor: ["/documento", "/editar-documento", "/novo-documento"],
     },
     { label: "Gestão de Processos", icon: GitMerge, href: "/processos" },
-    { label: "Gestão de Riscos", icon: ShieldAlert, href: "/riscos" },
     { label: "Gestão de Ocorrências", icon: TriangleAlert, href: "/ocorrencias" },
     { label: "Gestão de Registros", icon: ClipboardSignature, href: "/gestao-registros" },
     { label: "Gestão de Indicadores", icon: BarChart3, href: "/indicadores" },
