@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { carregarPerfilUsuario } from "@/lib/perfil";
 
 type MenuItem = {
   label: string;
@@ -23,9 +24,67 @@ type MenuItem = {
   activeFor?: string[];
 };
 
+type PerfilSidebar = {
+  nome?: string | null;
+  cargo?: string | null;
+  perfil_acesso?: string | null;
+  empresa?: { nome?: string | null } | null;
+};
+
+function iniciais(nome?: string | null) {
+  const partes = String(nome ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (partes.length === 0) return "DQ";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return `${partes[0][0]}${partes[partes.length - 1][0]}`.toUpperCase();
+}
+
+function rotuloPerfil(perfil: PerfilSidebar | null) {
+  const funcao = perfil?.cargo || perfil?.perfil_acesso || "Usuário";
+  const empresa = perfil?.empresa?.nome || "Workspace";
+  return `${funcao} - ${empresa}`;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [perfil, setPerfil] = useState<PerfilSidebar | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregar() {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return;
+
+      const perfilComEmpresa = await carregarPerfilUsuario<PerfilSidebar>(
+        data.session,
+        "nome, cargo, perfil_acesso, empresa:empresa_id(nome)"
+      );
+
+      if (!ativo) return;
+
+      if (perfilComEmpresa) {
+        setPerfil(perfilComEmpresa);
+        return;
+      }
+
+      const perfilSemEmpresa = await carregarPerfilUsuario<PerfilSidebar>(
+        data.session,
+        "nome, cargo, perfil_acesso"
+      );
+
+      if (ativo) setPerfil(perfilSemEmpresa);
+    }
+
+    void carregar();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   if (pathname === "/login") return null;
 
@@ -59,35 +118,41 @@ export default function Sidebar() {
   const isSettingsActive = pathname === "/configuracoes" || pathname.startsWith("/configuracoes/");
 
   return (
-    <aside className="w-72 h-screen bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 z-30">
+    <aside className="z-30 flex h-screen w-72 shrink-0 flex-col justify-between border-r border-slate-200 bg-white">
       <div className="flex-1 overflow-y-auto pb-4">
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-9 h-9 bg-[#2655e8] rounded-lg flex items-center justify-center text-white font-bold shadow-sm shrink-0">
+        <div className="flex items-center gap-3 p-6">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#2655e8] font-bold text-white shadow-sm">
             DQ
           </div>
 
           <div>
-            <h1 className="text-sm font-bold text-slate-800 leading-tight">DocQualis</h1>
-            <h2 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+            <h1 className="text-sm font-bold leading-tight text-slate-800">DocQualis</h1>
+            <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
               Gestão ISO 9001
             </h2>
           </div>
         </div>
 
-        <div className="flex flex-col items-center pb-6 border-b border-slate-100">
-          <div className="w-16 h-16 rounded-full bg-slate-100 border-2 border-white shadow-sm flex items-center justify-center text-slate-600 font-bold text-xl mb-2">
-            CEO
+        <div className="flex flex-col items-center border-b border-slate-100 px-5 pb-6 text-center">
+          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-lg font-black text-[#2655e8] shadow-sm">
+            {iniciais(perfil?.nome)}
           </div>
 
-          <h3 className="font-bold text-slate-800 text-sm">Diretoria Executiva</h3>
+          <h3 className="max-w-full truncate text-sm font-bold text-slate-800">
+            {perfil?.nome || "Carregando usuário"}
+          </h3>
 
-          <span className="text-[10px] text-emerald-600 font-black bg-emerald-50 px-2 py-0.5 rounded-full mt-1 uppercase">
+          <p className="mt-1 max-w-full text-balance text-xs font-semibold leading-snug text-slate-500">
+            {rotuloPerfil(perfil)}
+          </p>
+
+          <span className="mt-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-600">
             Online
           </span>
         </div>
 
-        <nav className="flex flex-col gap-1 px-3 mt-6">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">
+        <nav className="mt-6 flex flex-col gap-1 px-3">
+          <p className="mb-2 px-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
             Módulos Master
           </p>
 
@@ -97,14 +162,14 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
                   active
                     ? "bg-[#eef2ff] text-[#2655e8]"
                     : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 <item.icon
-                  className={`w-5 h-5 shrink-0 ${
+                  className={`h-5 w-5 shrink-0 ${
                     active ? "text-[#2655e8]" : "text-slate-400"
                   }`}
                 />
@@ -116,21 +181,24 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div className="p-4 border-t border-slate-100 shrink-0">
+      <div className="shrink-0 border-t border-slate-100 p-4">
         <Link
           href="/configuracoes"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
             isSettingsActive
               ? "bg-slate-100 text-slate-900"
               : "text-slate-600 hover:bg-slate-50"
           }`}
         >
-          <Settings className="w-5 h-5 shrink-0" />
+          <Settings className="h-5 w-5 shrink-0" />
           Configurações
         </Link>
 
-        <button onClick={handleLogout} className="mt-2 w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all">
-          <LogOut className="w-5 h-5 shrink-0" />
+        <button
+          onClick={handleLogout}
+          className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500 transition-all hover:bg-red-50 hover:text-red-500"
+        >
+          <LogOut className="h-5 w-5 shrink-0" />
           Sair
         </button>
       </div>
