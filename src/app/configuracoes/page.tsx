@@ -64,6 +64,10 @@ export default function ConfiguracoesPage() {
   const [novoPinAssinatura, setNovoPinAssinatura] = useState("");
   const [confirmacaoPinAssinatura, setConfirmacaoPinAssinatura] = useState("");
   const [salvandoPinAssinatura, setSalvandoPinAssinatura] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmacaoNovaSenha, setConfirmacaoNovaSenha] = useState("");
+  const [salvandoSenha, setSalvandoSenha] = useState(false);
 
   function notify(message: string) {
     setNotice(message);
@@ -125,6 +129,53 @@ export default function ConfiguracoesPage() {
     setConfirmacaoPinAssinatura("");
     setPinAssinaturaConfigurado(true);
       notify("PIN de assinatura atualizado.");
+  }
+
+  async function handleRedefinirSenha() {
+    if (!senhaAtual) {
+      notify("Informe sua senha atual.");
+      return;
+    }
+
+    if (novaSenha.length < 6) {
+      notify("A nova senha deve ter no minimo 6 caracteres.");
+      return;
+    }
+
+    if (novaSenha !== confirmacaoNovaSenha) {
+      notify("A confirmacao da nova senha nao confere.");
+      return;
+    }
+
+    setSalvandoSenha(true);
+    const { data } = await supabase.auth.getSession();
+    const email = data.session?.user.email ?? perfilUsuario.email;
+
+    if (!email) {
+      setSalvandoSenha(false);
+      notify("Nao foi possivel identificar o e-mail da conta.");
+      return;
+    }
+
+    const login = await supabase.auth.signInWithPassword({ email, password: senhaAtual });
+    if (login.error) {
+      setSalvandoSenha(false);
+      notify("Senha atual incorreta.");
+      return;
+    }
+
+    const update = await supabase.auth.updateUser({ password: novaSenha });
+    setSalvandoSenha(false);
+
+    if (update.error) {
+      notify("Nao foi possivel redefinir a senha.");
+      return;
+    }
+
+    setSenhaAtual("");
+    setNovaSenha("");
+    setConfirmacaoNovaSenha("");
+    notify("Senha redefinida com sucesso.");
   }
 
   // ─── RENDERIZADORES DE ABAS ───────────────────────────────────────────────
@@ -204,6 +255,67 @@ export default function ConfiguracoesPage() {
       <div className="flex justify-end">
         <button onClick={() => notify("Perfil atualizado localmente. Integração com banco pendente.")} className="bg-[#2655e8] hover:bg-[#1e40af] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2">
           <Save className="w-4 h-4" /> Atualizar Perfil
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderPasswordResetTab = () => (
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 max-w-3xl animate-in fade-in">
+      <div className="flex items-start gap-4 border-b border-slate-100 pb-6">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-[#2655e8]">
+          <KeyRound className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Redefinir senha</h2>
+          <p className="mt-1 text-sm text-slate-500">Atualize a senha da sua conta de acesso ao sistema.</p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-5">
+        <label>
+          <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Senha atual</span>
+          <input
+            type="password"
+            value={senhaAtual}
+            onChange={(event) => setSenhaAtual(event.target.value)}
+            autoComplete="current-password"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#2655e8] focus:bg-white"
+          />
+        </label>
+
+        <label>
+          <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nova senha</span>
+          <input
+            type="password"
+            value={novaSenha}
+            onChange={(event) => setNovaSenha(event.target.value)}
+            autoComplete="new-password"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#2655e8] focus:bg-white"
+          />
+        </label>
+
+        <label>
+          <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Confirmar nova senha</span>
+          <input
+            type="password"
+            value={confirmacaoNovaSenha}
+            onChange={(event) => setConfirmacaoNovaSenha(event.target.value)}
+            autoComplete="new-password"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-[#2655e8] focus:bg-white"
+          />
+        </label>
+      </div>
+
+      <div className="mt-7 flex justify-end">
+        <button
+          type="button"
+          onClick={handleRedefinirSenha}
+          disabled={salvandoSenha}
+          className="inline-flex items-center gap-2 rounded-xl bg-[#2655e8] px-6 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#1e40af] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <KeyRound className="h-4 w-4" />
+          {salvandoSenha ? "Redefinindo..." : "Redefinir senha"}
         </button>
       </div>
     </div>
@@ -714,7 +826,10 @@ export default function ConfiguracoesPage() {
   const MENUS = [
     {
       section: "Sua Conta",
-      items: [{ id: "profile", label: "Meu Perfil", icon: User }],
+      items: [
+        { id: "profile", label: "Meu Perfil", icon: User },
+        { id: "password", label: "Redefinir senha", icon: KeyRound },
+      ],
     },
     {
       section: "Organização",
@@ -808,6 +923,7 @@ export default function ConfiguracoesPage() {
       {/* ÁREA DE CONTEÚDO (DETAIL) */}
       <div className="flex-1 min-w-0 p-8 overflow-hidden flex flex-col">
         {activeTab === "profile" && renderProfile()}
+        {activeTab === "password" && renderPasswordResetTab()}
         {activeTab === "users" && renderUsersTab()}
         {activeTab === "roles" && renderRolesTab()}
         {activeTab === "departments" && renderDepartmentsTab()}

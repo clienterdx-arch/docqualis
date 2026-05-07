@@ -177,27 +177,34 @@ export default function OcorrenciasPage() {
           ))}
         </section>
 
-        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <Link
-            href="/ocorrencias/templates"
-            className="group flex min-h-[156px] flex-col justify-between rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <span className={`grid h-10 w-10 place-items-center rounded-lg border ${TONS.emerald}`}>
-                <FileText className="h-5 w-5" />
-              </span>
-              <span className="text-3xl font-semibold tabular-nums text-slate-950">
-                {isLoading ? "..." : templatesCount}
-              </span>
-            </div>
+        <Link
+          href="/ocorrencias/templates"
+          className="group flex min-h-[132px] items-center justify-between gap-6 rounded-lg border border-blue-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md"
+        >
+          <div className="flex items-center gap-5">
+            <span className={`grid h-12 w-12 place-items-center rounded-lg border ${TONS.emerald}`}>
+              <FileText className="h-6 w-6" />
+            </span>
             <div>
-              <h2 className="text-xs font-extrabold uppercase leading-snug tracking-normal text-slate-950">
-                Cadastro de Template
+              <h2 className="text-sm font-extrabold uppercase leading-snug tracking-normal text-slate-950">
+                Cadastro de Templates
               </h2>
-              <p className="mt-1 text-xs leading-snug text-slate-500">Modelos de formulários para registros de ocorrência.</p>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                Crie modelos de formularios para ocorrencias, aprove templates e gere QR Code para registro externo.
+              </p>
             </div>
-          </Link>
+          </div>
+          <div className="flex shrink-0 items-center gap-4">
+            <span className="text-3xl font-semibold tabular-nums text-slate-950">
+              {isLoading ? "..." : templatesCount}
+            </span>
+            <span className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition group-hover:bg-blue-700">
+              Acessar templates
+            </span>
+          </div>
+        </Link>
 
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {MODULOS.map((key) => {
             const modulo = OCORRENCIA_MODULES[key];
             const count = contaModulo(registros, key);
