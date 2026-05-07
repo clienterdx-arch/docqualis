@@ -1140,6 +1140,9 @@ export default function ProcessosPage() {
 
       if (!res.ok) {
         console.error("Erro ao criar processo:", res.status);
+        if (module === "BPMN") {
+          router.push("/modelagem?novo=1");
+        }
         return;
       }
 
@@ -1156,6 +1159,9 @@ export default function ProcessosPage() {
       setViewState("sipoc");
     } catch (error) {
       console.error("Erro ao criar processo:", error);
+      if (module === "BPMN") {
+        router.push("/modelagem?novo=1");
+      }
     }
   }
 
@@ -1643,7 +1649,7 @@ export default function ProcessosPage() {
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2655e8] px-5 text-sm font-bold text-white shadow-md transition hover:bg-[#1e40af]"
           >
             <Plus className="h-4 w-4" />
-            Novo BPMN
+            Criar novo fluxo
           </button>
         </div>
       </div>
@@ -1795,7 +1801,7 @@ export default function ProcessosPage() {
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2655e8] px-5 text-sm font-bold text-white shadow-md transition hover:bg-[#1e40af]"
             >
               <Plus className="h-4 w-4" />
-              Novo fluxo
+              Criar novo fluxo
             </button>
           </div>
         </div>

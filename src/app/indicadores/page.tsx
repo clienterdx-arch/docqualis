@@ -34,7 +34,7 @@ import type {
   IndicadorTipoCalculo,
 } from "@/types/indicadores";
 
-type ViewMode = "tabela" | "setores" | "kanban" | "estrategico" | "risco";
+type ViewMode = "tabela" | "diagrama" | "setores" | "kanban" | "estrategico" | "risco";
 
 type PerfilIndicadores = {
   empresa_id?: string | null;
@@ -409,7 +409,7 @@ export default function GestaoIndicadoresPage() {
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
             >
               <Plus className="h-4 w-4" />
-              Novo KPI
+              Cadastrar ficha
             </button>
           </div>
         </header>
@@ -487,6 +487,7 @@ export default function GestaoIndicadoresPage() {
                 <div className="flex flex-wrap gap-2">
                   {([
                     ["tabela", "Tabela"],
+                    ["diagrama", "Diagrama"],
                     ["setores", "Setores"],
                     ["kanban", "Kanban"],
                     ["estrategico", "Mapa"],
@@ -565,6 +566,90 @@ export default function GestaoIndicadoresPage() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+
+                  {viewMode === "diagrama" && (
+                    <div className="space-y-5">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+                        <div className="grid gap-4 xl:grid-cols-[1fr_240px_1fr]">
+                          <div className="space-y-3">
+                            {["ESTRUTURA", "PROCESSO"].map((categoria) => (
+                              <section key={categoria} className="rounded-lg border border-slate-200 bg-white p-4">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-sm font-extrabold uppercase tracking-normal text-slate-600">{categoria}</h3>
+                                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
+                                    {(indicadoresPorBsc[categoria] ?? []).length}
+                                  </span>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                  {(indicadoresPorBsc[categoria] ?? []).slice(0, 5).map((indicador) => (
+                                    <button
+                                      key={indicador.id}
+                                      type="button"
+                                      onClick={() => router.push(`/indicadores/${indicador.id}`)}
+                                      className="flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50"
+                                    >
+                                      <span className="truncate">{indicador.nome}</span>
+                                      <span className={`ml-3 shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusStyles[indicador.status]}`}>
+                                        {statusLabel(indicador.status)}
+                                      </span>
+                                    </button>
+                                  ))}
+                                  {(indicadoresPorBsc[categoria] ?? []).length === 0 && (
+                                    <p className="rounded-lg bg-slate-50 px-3 py-4 text-sm font-semibold text-slate-400">Sem indicadores.</p>
+                                  )}
+                                </div>
+                              </section>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center gap-4">
+                            <div className="grid h-28 w-28 place-items-center rounded-full border border-blue-200 bg-white text-center shadow-sm">
+                              <div>
+                                <BarChart3 className="mx-auto h-7 w-7 text-blue-600" />
+                                <strong className="mt-2 block text-2xl text-slate-950">{kpis.saude}%</strong>
+                                <span className="text-xs font-bold text-slate-500">saude</span>
+                              </div>
+                            </div>
+                            <div className="h-px w-full bg-slate-200" />
+                            <p className="text-center text-xs font-semibold leading-5 text-slate-500">
+                              Diagrama executivo por categoria, com acesso direto a ficha, dados, grafico e analise de cada indicador.
+                            </p>
+                          </div>
+
+                          <div className="space-y-3">
+                            {["RESULTADO", "ESTRATEGICO"].map((categoria) => (
+                              <section key={categoria} className="rounded-lg border border-slate-200 bg-white p-4">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-sm font-extrabold uppercase tracking-normal text-slate-600">{categoria}</h3>
+                                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
+                                    {(indicadoresPorBsc[categoria] ?? []).length}
+                                  </span>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                  {(indicadoresPorBsc[categoria] ?? []).slice(0, 5).map((indicador) => (
+                                    <button
+                                      key={indicador.id}
+                                      type="button"
+                                      onClick={() => router.push(`/indicadores/${indicador.id}`)}
+                                      className="flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50"
+                                    >
+                                      <span className="truncate">{indicador.nome}</span>
+                                      <span className={`ml-3 shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusStyles[indicador.status]}`}>
+                                        {statusLabel(indicador.status)}
+                                      </span>
+                                    </button>
+                                  ))}
+                                  {(indicadoresPorBsc[categoria] ?? []).length === 0 && (
+                                    <p className="rounded-lg bg-slate-50 px-3 py-4 text-sm font-semibold text-slate-400">Sem indicadores.</p>
+                                  )}
+                                </div>
+                              </section>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -683,7 +768,7 @@ export default function GestaoIndicadoresPage() {
           <form onSubmit={handleCreateIndicador} className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
               <div>
-                <h2 className="text-xl font-semibold text-slate-950">Novo KPI</h2>
+                <h2 className="text-xl font-semibold text-slate-950">Cadastrar ficha do indicador</h2>
                 <p className="mt-1 text-sm text-slate-500">Cadastre a ficha minima para iniciar a gestao do indicador.</p>
               </div>
               <button type="button" onClick={() => setIsCreateOpen(false)} className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">

@@ -33,6 +33,7 @@ interface FormField {
   label: string;
   required: boolean;
   etapa: number;
+  options?: string[];
 }
 
 interface EtapaTemplate {
@@ -64,6 +65,7 @@ interface Registro {
   status: RegistroStatus;
   preenchido_por: string;
   etapa_atual: number;
+  dados: Record<string, unknown>;
   historico: { etapa: number; acao: string; por: string; em: string }[];
   created_at: string;
 }
@@ -86,6 +88,13 @@ function fmt(value: string): string {
   if (!value) return "-";
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
+}
+
+function normalizarTexto(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function normalizeTemplateStatus(raw: unknown): TemplateStatus {
@@ -132,6 +141,7 @@ function mapRegistro(row: Record<string, unknown>, templateMap: Map<string, Temp
     status: normalizeRegistroStatus(row.status),
     preenchido_por: String(row.preenchido_por ?? ""),
     etapa_atual: typeof dados._etapa_atual === "number" ? dados._etapa_atual : 1,
+    dados,
     historico: Array.isArray(row.historico) ? (row.historico as Registro["historico"]) : [],
     created_at: String(row.created_at ?? ""),
   };
@@ -141,6 +151,7 @@ export default function GestaoRegistrosPage() {
   const router = useRouter();
   const [tab, setTab] = useState<MainTab>("templates");
   const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [perfilAcesso, setPerfilAcesso] = useState("");
   const [usuarioNome, setUsuarioNome] = useState("Usuário");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
@@ -149,6 +160,10 @@ export default function GestaoRegistrosPage() {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedRegistro, setExpandedRegistro] = useState<string | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
+  const [fillTemplate, setFillTemplate] = useState<Template | null>(null);
+  const [fillRegistroId, setFillRegistroId] = useState<string | null>(null);
+  const [fillValues, setFillValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -159,9 +174,9 @@ export default function GestaoRegistrosPage() {
         return;
       }
 
-      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null }>(
+      const perfil = await carregarPerfilUsuario<{ empresa_id?: string | null; nome?: string | null; perfil_acesso?: string | null }>(
         data.session,
-        "empresa_id, nome"
+        "empresa_id, nome, perfil_acesso"
       );
 
       if (!active) return;
@@ -172,6 +187,7 @@ export default function GestaoRegistrosPage() {
       }
 
       setEmpresaId(perfil.empresa_id);
+      setPerfilAcesso(perfil.perfil_acesso ?? "");
       setUsuarioNome(perfil.nome ?? data.session.user.email ?? "Usuário");
     });
 
@@ -231,7 +247,24 @@ export default function GestaoRegistrosPage() {
     setRefreshKey((key) => key + 1);
   }
 
-  async function startRecord(templateId: string) {
+  const podeGerenciarTemplates = useMemo(() => {
+    const perfil = normalizarTexto(perfilAcesso);
+    return perfil.includes("qualidade") || perfil.includes("admin") || perfil.includes("super") || perfil.includes("nqsp");
+  }, [perfilAcesso]);
+
+  function openFillTemplate(template: Template, registro?: Registro) {
+    const initialValues: Record<string, string> = {};
+    template.campos.forEach((field) => {
+      const existing = registro?.dados?.[field.id] ?? registro?.dados?.[field.label];
+      initialValues[field.id] = String(existing ?? "");
+    });
+
+    setFillTemplate(template);
+    setFillRegistroId(registro?.id ?? null);
+    setFillValues(initialValues);
+  }
+
+  async function startRecord(templateId: string, valores: Record<string, string>) {
     if (!empresaId) return;
     const template = templates.find((item) => item.id === templateId);
     if (!template) return;
@@ -242,7 +275,7 @@ export default function GestaoRegistrosPage() {
       template_titulo: template.titulo,
       status: "EM_PREENCHIMENTO",
       preenchido_por: usuarioNome,
-      dados: { _etapa_atual: 1 },
+      dados: { _etapa_atual: 1, ...valores },
       historico: [{ etapa: 1, acao: "Registro iniciado", por: usuarioNome, em: new Date().toISOString() }],
       risk_score: 0,
       flag_revisao_humana: false,
@@ -254,8 +287,56 @@ export default function GestaoRegistrosPage() {
     }
 
     setMessage({ type: "success", text: "Registro iniciado. Continue pela aba Registros cadastrados." });
+    setFillTemplate(null);
+    setFillRegistroId(null);
+    setFillValues({});
     setTab("registros");
     setRefreshKey((key) => key + 1);
+  }
+
+  async function updateRecordFill(registroId: string, valores: Record<string, string>) {
+    if (!empresaId) return;
+    const registro = registros.find((item) => item.id === registroId);
+    if (!registro) return;
+
+    const dados = { ...registro.dados, ...valores };
+    const historico = [
+      ...(registro.historico ?? []),
+      { etapa: registro.etapa_atual ?? 1, acao: "Registro preenchido pelo usuário", por: usuarioNome, em: new Date().toISOString() },
+    ];
+
+    const { error } = await supabase
+      .from("registros_preenchidos")
+      .update({ dados, snapshot: dados, historico, updated_at: new Date().toISOString() })
+      .eq("empresa_id", empresaId)
+      .eq("id", registroId);
+
+    if (error) {
+      setMessage({ type: "error", text: "Não foi possível salvar o preenchimento." });
+      return;
+    }
+
+    setMessage({ type: "success", text: "Preenchimento salvo com sucesso." });
+    setFillTemplate(null);
+    setFillRegistroId(null);
+    setFillValues({});
+    setRefreshKey((key) => key + 1);
+  }
+
+  function submitFill() {
+    if (!fillTemplate) return;
+    const missing = fillTemplate.campos.filter((field) => field.required && !String(fillValues[field.id] ?? "").trim());
+    if (missing.length > 0) {
+      setMessage({ type: "error", text: `Preencha os campos obrigatórios: ${missing.map((field) => field.label).join(", ")}.` });
+      return;
+    }
+
+    if (fillRegistroId) {
+      void updateRecordFill(fillRegistroId, fillValues);
+      return;
+    }
+
+    void startRecord(fillTemplate.id, fillValues);
   }
 
   async function concludeRecord(id: string) {
@@ -353,8 +434,18 @@ export default function GestaoRegistrosPage() {
             <p className="mt-1 text-sm text-slate-500">Crie formulários, aprove templates e acompanhe registros com rastreabilidade ponta a ponta.</p>
           </div>
           <button
-            onClick={() => router.push("/novo-template")}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
+            onClick={() => {
+              if (!podeGerenciarTemplates) {
+                setMessage({ type: "error", text: "Apenas a Qualidade pode criar ou editar templates." });
+                return;
+              }
+              router.push("/novo-template");
+            }}
+            className={`inline-flex h-11 items-center gap-2 rounded-lg px-5 text-sm font-semibold shadow-sm transition ${
+              podeGerenciarTemplates
+                ? "bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-700"
+                : "bg-slate-200 text-slate-500"
+            }`}
           >
             <Plus className="h-4 w-4" /> Criar template
           </button>
@@ -411,7 +502,7 @@ export default function GestaoRegistrosPage() {
                 filteredTemplates.length === 0 ? (
                   <Empty icon={FileText} title="Nenhum template encontrado" description="Crie o primeiro modelo de formulário para começar." />
                 ) : (
-                  <TemplateGrid templates={filteredTemplates} />
+                  <TemplateGrid templates={filteredTemplates} onPreview={setPreviewTemplate} canManage={podeGerenciarTemplates} />
                 )
               )}
 
@@ -427,7 +518,7 @@ export default function GestaoRegistrosPage() {
                 filteredRepositorio.length === 0 ? (
                   <Empty icon={Archive} title="Nenhum template aprovado" description="Aprove templates no pipeline para liberá-los para preenchimento." />
                 ) : (
-                  <RepositoryGrid templates={filteredRepositorio} onStart={startRecord} onQrCode={showQrCode} />
+                  <RepositoryGrid templates={filteredRepositorio} onFill={openFillTemplate} onQrCode={showQrCode} onPreview={setPreviewTemplate} />
                 )
               )}
 
@@ -441,7 +532,14 @@ export default function GestaoRegistrosPage() {
                     expandedRegistro={expandedRegistro}
                     onToggleTrace={setExpandedRegistro}
                     onConclude={concludeRecord}
-                    onMessage={setMessage}
+                    onContinue={(registro) => {
+                      const template = templates.find((item) => item.id === registro.template_id);
+                      if (!template) {
+                        setMessage({ type: "error", text: "Template do registro não localizado." });
+                        return;
+                      }
+                      openFillTemplate(template, registro);
+                    }}
                   />
                 )
               )}
@@ -449,6 +547,24 @@ export default function GestaoRegistrosPage() {
           )}
         </section>
       </div>
+
+      {previewTemplate && (
+        <TemplatePreviewModal template={previewTemplate} onClose={() => setPreviewTemplate(null)} />
+      )}
+
+      {fillTemplate && (
+        <FillTemplateModal
+          template={fillTemplate}
+          values={fillValues}
+          onChange={(fieldId, value) => setFillValues((current) => ({ ...current, [fieldId]: value }))}
+          onSubmit={submitFill}
+          onClose={() => {
+            setFillTemplate(null);
+            setFillRegistroId(null);
+            setFillValues({});
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -494,7 +610,7 @@ function ModuleCard({
   );
 }
 
-function TemplateGrid({ templates }: { templates: Template[] }) {
+function TemplateGrid({ templates, onPreview, canManage }: { templates: Template[]; onPreview: (template: Template) => void; canManage: boolean }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {templates.map((template) => {
@@ -511,9 +627,13 @@ function TemplateGrid({ templates }: { templates: Template[] }) {
               <span className="flex items-center gap-1"><LayoutGrid className="h-3.5 w-3.5" /> {template.campos.length} campos</span>
               <span className="flex items-center gap-1"><GitBranch className="h-3.5 w-3.5" /> {template.etapas.length} etapa(s)</span>
             </div>
-            <div className="mt-4 border-t border-slate-100 pt-4 text-xs text-slate-400">
-              Criado por {template.responsavel || "-"} · {fmt(template.created_at)}
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs text-slate-400">
+              <span>Criado por {template.responsavel || "-"} · {fmt(template.created_at)}</span>
+              <button onClick={() => onPreview(template)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                Visualizar
+              </button>
             </div>
+            {!canManage && <p className="mt-3 text-[11px] font-semibold text-slate-400">Template somente leitura para usuários.</p>}
           </article>
         );
       })}
@@ -591,12 +711,14 @@ function PipelineTable({
 
 function RepositoryGrid({
   templates,
-  onStart,
+  onFill,
   onQrCode,
+  onPreview,
 }: {
   templates: Template[];
-  onStart: (templateId: string) => void;
+  onFill: (template: Template) => void;
   onQrCode: (template: Template) => void;
+  onPreview: (template: Template) => void;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -614,10 +736,10 @@ function RepositoryGrid({
             <span className="flex items-center gap-1"><GitBranch className="h-3.5 w-3.5" /> {template.etapas.length} etapa(s)</span>
           </div>
           <div className="mt-auto grid grid-cols-[1fr_1fr_auto] gap-2 border-t border-slate-100 pt-3">
-            <button className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+            <button onClick={() => onPreview(template)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
               <Eye className="h-3.5 w-3.5" /> Visualizar
             </button>
-            <button onClick={() => onStart(template.id)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700">
+            <button onClick={() => onFill(template)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700">
               <PenLine className="h-3.5 w-3.5" /> Preencher
             </button>
             <button onClick={() => onQrCode(template)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" title="Gerar QR Code">
@@ -636,14 +758,14 @@ function RegistrosTable({
   expandedRegistro,
   onToggleTrace,
   onConclude,
-  onMessage,
+  onContinue,
 }: {
   registros: Registro[];
   templates: Template[];
   expandedRegistro: string | null;
   onToggleTrace: (id: string | null) => void;
   onConclude: (id: string) => void;
-  onMessage: (message: { type: "success" | "error"; text: string }) => void;
+  onContinue: (registro: Registro) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -680,7 +802,7 @@ function RegistrosTable({
                       </button>
                       {registro.status === "EM_PREENCHIMENTO" && (
                         <>
-                          <button onClick={() => onMessage({ type: "success", text: "Preenchimento retomado. Editor do registro será aberto na próxima etapa." })} className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100">
+                          <button onClick={() => onContinue(registro)} className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100">
                             <PenLine className="h-3.5 w-3.5" /> Continuar
                           </button>
                           <button onClick={() => onConclude(registro.id)} className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
@@ -725,6 +847,181 @@ function RegistrosTable({
       </table>
     </div>
   );
+}
+
+const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50";
+
+function TemplatePreviewModal({ template, onClose }: { template: Template; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">{template.titulo}</h2>
+            <p className="mt-1 text-sm text-slate-500">{template.categoria} · {template.setor}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+            Fechar
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto p-6">
+          <div className="grid gap-4">
+            {template.campos.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-400">
+                Nenhum campo cadastrado neste template.
+              </p>
+            ) : (
+              template.campos.map((field, index) => (
+                <div key={field.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Campo {index + 1} · Etapa {field.etapa}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-950">{field.label}{field.required ? " *" : ""}</p>
+                  <p className="mt-1 text-xs text-slate-500">{labelTipoCampo(field.type)}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FillTemplateModal({
+  template,
+  values,
+  onChange,
+  onSubmit,
+  onClose,
+}: {
+  template: Template;
+  values: Record<string, string>;
+  onChange: (fieldId: string, value: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">{template.titulo}</h2>
+            <p className="mt-1 text-sm text-slate-500">Preenchimento em modo usuário. O template não pode ser editado aqui.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+            Fechar
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid gap-5">
+            {template.campos.map((field) => (
+              <div key={field.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <label className="mb-2 block text-sm font-semibold text-slate-900">
+                  {field.label}{field.required && <span className="text-red-500"> *</span>}
+                </label>
+                <RenderField field={field} value={values[field.id] ?? ""} onChange={(value) => onChange(field.id, value)} />
+              </div>
+            ))}
+            {template.campos.length === 0 && (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-400">
+                Este template ainda não tem campos.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+          <button onClick={onClose} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+            Cancelar
+          </button>
+          <button onClick={onSubmit} className="h-10 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700">
+            Enviar preenchimento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function labelTipoCampo(type: string) {
+  const labels: Record<string, string> = {
+    texto: "Resposta curta",
+    paragrafo: "Parágrafo",
+    multipla_escolha: "Múltipla escolha",
+    caixas: "Caixas de seleção",
+    dropdown: "Lista suspensa",
+    data: "Data",
+    numero: "Número",
+    arquivo: "Upload de arquivo",
+    assinatura: "Assinatura",
+  };
+  return labels[type] ?? type;
+}
+
+function RenderField({ field, value, onChange }: { field: FormField; value: string; onChange: (value: string) => void }) {
+  const options = field.options ?? [];
+
+  if (field.type === "paragrafo") {
+    return <textarea value={value} onChange={(event) => onChange(event.target.value)} rows={4} className={inputClass} />;
+  }
+
+  if (field.type === "data") {
+    return <input type="date" value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
+  }
+
+  if (field.type === "numero") {
+    return <input type="number" value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
+  }
+
+  if (field.type === "dropdown") {
+    return (
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+        <option value="">Selecione...</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    );
+  }
+
+  if (field.type === "multipla_escolha") {
+    return (
+      <div className="grid gap-2">
+        {options.map((option) => (
+          <label key={option} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+            <input type="radio" name={field.id} checked={value === option} onChange={() => onChange(option)} className="accent-blue-600" />
+            {option}
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  if (field.type === "caixas") {
+    const selected = value ? value.split("|") : [];
+    return (
+      <div className="grid gap-2">
+        {options.map((option) => (
+          <label key={option} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={selected.includes(option)}
+              onChange={(event) => {
+                const next = event.target.checked
+                  ? [...selected, option]
+                  : selected.filter((item) => item !== option);
+                onChange(next.join("|"));
+              }}
+              className="accent-blue-600"
+            />
+            {option}
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  if (field.type === "arquivo" || field.type === "assinatura") {
+    return <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={field.type === "arquivo" ? "Link ou identificação do arquivo" : "Nome/assinatura"} className={inputClass} />;
+  }
+
+  return <input value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
 }
 
 function Empty({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {

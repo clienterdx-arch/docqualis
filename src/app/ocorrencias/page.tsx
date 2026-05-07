@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  FileText,
   FileWarning,
   HeartHandshake,
   Lightbulb,
@@ -48,6 +49,7 @@ const TONS: Record<string, string> = {
   violet: "bg-violet-50 text-violet-600 border-violet-100",
   rose: "bg-rose-50 text-rose-600 border-rose-100",
   sky: "bg-sky-50 text-sky-600 border-sky-100",
+  emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
 };
 
 function contaModulo(registros: Registro[], key: OcorrenciaModuloKey) {
@@ -59,6 +61,7 @@ function contaModulo(registros: Registro[], key: OcorrenciaModuloKey) {
 export default function OcorrenciasPage() {
   const router = useRouter();
   const [registros, setRegistros] = useState<Registro[]>([]);
+  const [templatesCount, setTemplatesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -84,19 +87,30 @@ export default function OcorrenciasPage() {
         return;
       }
 
-      const response = await supabase
-        .from("registros_preenchidos")
-        .select("*")
-        .eq("empresa_id", perfil.empresa_id)
-        .order("created_at", { ascending: false });
+      const [registrosResponse, templatesResponse] = await Promise.all([
+        supabase
+          .from("registros_preenchidos")
+          .select("*")
+          .eq("empresa_id", perfil.empresa_id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("registros_templates")
+          .select("id, categoria, workflow, schema_json")
+          .eq("empresa_id", perfil.empresa_id)
+          .order("created_at", { ascending: false }),
+      ]);
 
       if (!ativo) return;
 
-      if (response.error) {
+      if (registrosResponse.error) {
         setErro("Não foi possível carregar ocorrências.");
         setRegistros([]);
       } else {
-        setRegistros((response.data ?? []).map((row) => mapRegistroDb(row as Record<string, unknown>)));
+        setRegistros((registrosResponse.data ?? []).map((row) => mapRegistroDb(row as Record<string, unknown>)));
+      }
+
+      if (!templatesResponse.error) {
+        setTemplatesCount((templatesResponse.data ?? []).filter(isTemplateOcorrencias).length);
       }
 
       setIsLoading(false);
@@ -163,7 +177,27 @@ export default function OcorrenciasPage() {
           ))}
         </section>
 
-        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <Link
+            href="/ocorrencias/templates"
+            className="group flex min-h-[156px] flex-col justify-between rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <span className={`grid h-10 w-10 place-items-center rounded-lg border ${TONS.emerald}`}>
+                <FileText className="h-5 w-5" />
+              </span>
+              <span className="text-3xl font-semibold tabular-nums text-slate-950">
+                {isLoading ? "..." : templatesCount}
+              </span>
+            </div>
+            <div>
+              <h2 className="text-xs font-extrabold uppercase leading-snug tracking-normal text-slate-950">
+                Cadastro de Template
+              </h2>
+              <p className="mt-1 text-xs leading-snug text-slate-500">Modelos de formulários para registros de ocorrência.</p>
+            </div>
+          </Link>
+
           {MODULOS.map((key) => {
             const modulo = OCORRENCIA_MODULES[key];
             const count = contaModulo(registros, key);
@@ -201,4 +235,17 @@ export default function OcorrenciasPage() {
       </div>
     </main>
   );
+}
+
+function isTemplateOcorrencias(row: Record<string, unknown>) {
+  const categoria = String(row.categoria ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const workflow = typeof row.workflow === "object" && row.workflow !== null ? row.workflow as Record<string, unknown> : {};
+  const schema = typeof row.schema_json === "object" && row.schema_json !== null ? row.schema_json as Record<string, unknown> : {};
+
+  return categoria.includes("ocorr") ||
+    String(workflow.modulo ?? "").toLowerCase() === "ocorrencias" ||
+    String(schema.modulo ?? "").toLowerCase() === "ocorrencias";
 }

@@ -84,6 +84,7 @@ function makeField(etapa = 1, type: FieldType = "multipla_escolha"): FormField {
 
 export default function NovoTemplatePage() {
   const router = useRouter();
+  const [contextoOcorrencias, setContextoOcorrencias] = useState(false);
   const [activeStep, setActiveStep] = useState<ActiveStep>(1);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [usuarioNome, setUsuarioNome] = useState("Usuário");
@@ -104,6 +105,15 @@ export default function NovoTemplatePage() {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [aprovadoresPublicacao, setAprovadoresPublicacao] = useState<string[]>([]);
   const [aprovadorAtual, setAprovadorAtual] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isOcorrencias = params.get("modulo") === "ocorrencias";
+    setContextoOcorrencias(isOcorrencias);
+    if (isOcorrencias) {
+      setCategoria((current) => current || "Ocorrências & Eventos");
+    }
+  }, []);
 
   useEffect(() => {
     setSelectedFieldId((current) => current ?? fields[0]?.id ?? null);
@@ -244,12 +254,12 @@ export default function NovoTemplatePage() {
     }));
 
     const [major, minor] = versao.split(".").map((part) => Number(part) || 0);
-    const { error } = await supabase.from("registros_templates").insert({
+    const payload: Record<string, unknown> = {
       empresa_id: empresaId,
       titulo: titulo.trim(),
       descricao: descricao.trim(),
       codigo: codigo.trim(),
-      categoria: categoria.trim() || "Geral",
+      categoria: categoria.trim() || (contextoOcorrencias ? "Ocorrências & Eventos" : "Geral"),
       setor: setor.trim() || "Geral",
       status,
       campos,
@@ -257,8 +267,16 @@ export default function NovoTemplatePage() {
       versao_minor: minor || 0,
       versao_patch: 0,
       responsavel: usuarioNome,
-      workflow: { engine: "STAGES", etapas, aprovadores_template: aprovadoresPublicacao },
-    });
+      workflow: {
+        engine: "STAGES",
+        etapas,
+        aprovadores_template: aprovadoresPublicacao,
+        ...(contextoOcorrencias ? { modulo: "ocorrencias" } : {}),
+      },
+      ...(contextoOcorrencias ? { schema_json: { modulo: "ocorrencias", origem: "ocorrencias" } } : {}),
+    };
+
+    const { error } = await supabase.from("registros_templates").insert(payload);
     setIsSaving(false);
 
     if (error) {
@@ -267,7 +285,7 @@ export default function NovoTemplatePage() {
     }
 
     setMsg({ type: "ok", text: status === "EM_APROVACAO" ? "Template enviado para aprovação." : "Rascunho salvo." });
-    setTimeout(() => router.push("/gestao-registros"), 1200);
+    setTimeout(() => router.push(contextoOcorrencias ? "/ocorrencias/templates" : "/gestao-registros"), 1200);
   }
 
   if (isCarregando) {
@@ -282,11 +300,11 @@ export default function NovoTemplatePage() {
     <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="mb-8 flex items-center gap-4">
-          <Link href="/gestao-registros" className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:bg-slate-50">
+          <Link href={contextoOcorrencias ? "/ocorrencias/templates" : "/gestao-registros"} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:bg-slate-50">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Criar template de registro</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{contextoOcorrencias ? "Criar template de ocorrência" : "Criar template de registro"}</h1>
             <p className="mt-1 text-sm text-slate-500">Monte o formulário, defina etapas e envie para aprovação.</p>
           </div>
         </div>
