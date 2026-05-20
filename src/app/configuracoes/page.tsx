@@ -68,6 +68,7 @@ export default function ConfiguracoesPage() {
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmacaoNovaSenha, setConfirmacaoNovaSenha] = useState("");
   const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const [enviandoResetSenha, setEnviandoResetSenha] = useState(false);
 
   function notify(message: string) {
     setNotice(message);
@@ -176,6 +177,27 @@ export default function ConfiguracoesPage() {
     setNovaSenha("");
     setConfirmacaoNovaSenha("");
     notify("Senha redefinida com sucesso.");
+  }
+
+  async function handleEnviarRecuperacaoSenha() {
+    const email = perfilUsuario.email.trim();
+    if (!email) {
+      notify("Nao foi possivel identificar o e-mail da conta.");
+      return;
+    }
+
+    setEnviandoResetSenha(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login?reset=1`,
+    });
+    setEnviandoResetSenha(false);
+
+    if (error) {
+      notify("Nao foi possivel enviar o e-mail de recuperacao.");
+      return;
+    }
+
+    notify("Enviamos um link de recuperacao para seu e-mail.");
   }
 
   // ─── RENDERIZADORES DE ABAS ───────────────────────────────────────────────
@@ -316,6 +338,22 @@ export default function ConfiguracoesPage() {
         >
           <KeyRound className="h-4 w-4" />
           {salvandoSenha ? "Redefinindo..." : "Redefinir senha"}
+        </button>
+      </div>
+
+      <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <h3 className="text-sm font-bold text-amber-900">Esqueci minha senha atual</h3>
+        <p className="mt-1 text-sm leading-6 text-amber-800">
+          Envie um link de recuperacao para o e-mail cadastrado e cadastre uma nova senha sem precisar informar a senha atual.
+        </p>
+        <button
+          type="button"
+          onClick={handleEnviarRecuperacaoSenha}
+          disabled={enviandoResetSenha || !perfilUsuario.email}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Mail className="h-4 w-4" />
+          {enviandoResetSenha ? "Enviando..." : "Enviar link de recuperacao"}
         </button>
       </div>
     </div>

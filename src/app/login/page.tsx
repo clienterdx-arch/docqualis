@@ -1,21 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, Loader2, Building2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<"login" | "forgot" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (params.get("reset") === "1" || params.get("type") === "recovery" || hash.get("type") === "recovery") {
+      setMode("reset");
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       // 1. Autenticação no Supabase
@@ -37,6 +50,58 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/login?reset=1`,
+    });
+
+    setLoading(false);
+
+    if (resetError) {
+      setError("Nao foi possivel enviar o link de recuperacao. Confira o e-mail informado.");
+      return;
+    }
+
+    setSuccess("Enviamos um link de recuperacao para seu e-mail.");
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    if (resetPassword.length < 6) {
+      setLoading(false);
+      setError("A nova senha deve ter no minimo 6 caracteres.");
+      return;
+    }
+
+    if (resetPassword !== resetPasswordConfirm) {
+      setLoading(false);
+      setError("A confirmacao da nova senha nao confere.");
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: resetPassword });
+    setLoading(false);
+
+    if (updateError) {
+      setError("Link de recuperacao invalido ou expirado. Solicite um novo link.");
+      return;
+    }
+
+    setResetPassword("");
+    setResetPasswordConfirm("");
+    setSuccess("Senha atualizada com sucesso. Voce ja pode entrar.");
+    setMode("login");
   };
 
   return (
@@ -107,7 +172,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={mode === "login" ? handleLogin : mode === "forgot" ? handleForgotPassword : handleUpdatePassword} className="space-y-5">
             {error && (
               <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-sm font-bold text-red-600 flex items-start gap-3 animate-in fade-in">
                 <AlertCircle className="w-5 h-5 shrink-0" />
@@ -115,7 +180,15 @@ export default function LoginPage() {
               </div>
             )}
 
+            {success && (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-sm font-bold text-emerald-700 flex items-start gap-3 animate-in fade-in">
+                <ShieldCheck className="w-5 h-5 shrink-0" />
+                <p>{success}</p>
+              </div>
+            )}
+
             <div className="space-y-4">
+              {mode !== "reset" && (
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
                   E-mail Corporativo
@@ -132,15 +205,17 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
+              )}
 
+              {mode === "login" && (
               <div>
                 <div className="flex items-center justify-between mb-2 pl-1 pr-2">
                   <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500">
                     Senha
                   </label>
-                  <a href="#" className="text-xs font-bold text-[#2655e8] hover:underline">
+                  <button type="button" onClick={() => { setMode("forgot"); setError(null); setSuccess(null); }} className="text-xs font-bold text-[#2655e8] hover:underline">
                     Esqueceu a senha?
-                  </a>
+                  </button>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -154,25 +229,79 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
+              )}
+
+              {mode === "reset" && (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
+                      Nova senha
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="password"
+                        required
+                        value={resetPassword}
+                        onChange={(e) => setResetPassword(e.target.value)}
+                        placeholder="Nova senha"
+                        className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
+                      Confirmar nova senha
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="password"
+                        required
+                        value={resetPasswordConfirm}
+                        onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                        placeholder="Confirme a nova senha"
+                        className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={loading || !email || !password}
+              disabled={
+                loading ||
+                (mode === "login" && (!email || !password)) ||
+                (mode === "forgot" && !email) ||
+                (mode === "reset" && (!resetPassword || !resetPasswordConfirm))
+              }
               className="w-full h-14 mt-4 bg-[#2655e8] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#2655e8]/30 hover:bg-[#1e40af] hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2 group"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Autenticando...
+                  {mode === "forgot" ? "Enviando..." : mode === "reset" ? "Atualizando..." : "Autenticando..."}
                 </>
               ) : (
                 <>
-                  Entrar no Workspace
+                  {mode === "forgot" ? "Enviar link de recuperacao" : mode === "reset" ? "Salvar nova senha" : "Entrar no Workspace"}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
+
+            {mode !== "login" && (
+              <button
+                type="button"
+                onClick={() => { setMode("login"); setError(null); setSuccess(null); }}
+                className="w-full text-center text-xs font-bold text-slate-500 hover:text-[#2655e8]"
+              >
+                Voltar para login
+              </button>
+            )}
           </form>
 
           <div className="mt-10 pt-8 border-t border-slate-100 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
