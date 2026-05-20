@@ -3,18 +3,47 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, Loader2, Building2 } from "lucide-react";
+import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, Loader2, Building2, Phone, UserRound } from "lucide-react";
+
+type LoginMode = "login" | "forgot" | "reset" | "forgotEmail";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "forgot" | "reset">("login");
+  const [mode, setMode] = useState<LoginMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetPassword, setResetPassword] = useState("");
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [emailHelp, setEmailHelp] = useState({
+    nome: "",
+    documento: "",
+    empresa: "",
+    setor: "",
+    telefone: "",
+    observacao: "",
+  });
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const screenCopy: Record<LoginMode, { title: string; description: string }> = {
+    login: {
+      title: "Acessar Sistema",
+      description: "Insira suas credenciais corporativas para entrar no seu ambiente (workspace).",
+    },
+    forgot: {
+      title: "Recuperar senha",
+      description: "Informe seu e-mail corporativo para receber o link de recuperacao.",
+    },
+    reset: {
+      title: "Cadastrar nova senha",
+      description: "Digite e confirme sua nova senha de acesso.",
+    },
+    forgotEmail: {
+      title: "Recuperar e-mail de acesso",
+      description: "Preencha os dados para o administrador localizar sua conta.",
+    },
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,6 +133,49 @@ export default function LoginPage() {
     setMode("login");
   };
 
+  const updateEmailHelp = (key: keyof typeof emailHelp, value: string) => {
+    setEmailHelp((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleForgotEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    if (!emailHelp.nome.trim() || !emailHelp.empresa.trim() || !emailHelp.telefone.trim()) {
+      setLoading(false);
+      setError("Informe nome completo, empresa/workspace e telefone para contato.");
+      return;
+    }
+
+    const protocolo = `DQ-${Date.now().toString(36).toUpperCase()}`;
+    const body = [
+      `Protocolo: ${protocolo}`,
+      "Solicitacao: usuario nao lembra o e-mail de acesso",
+      `Nome completo: ${emailHelp.nome.trim()}`,
+      `Documento/matricula: ${emailHelp.documento.trim() || "Nao informado"}`,
+      `Empresa/workspace: ${emailHelp.empresa.trim()}`,
+      `Setor: ${emailHelp.setor.trim() || "Nao informado"}`,
+      `Telefone/WhatsApp: ${emailHelp.telefone.trim()}`,
+      `Observacao: ${emailHelp.observacao.trim() || "Nao informado"}`,
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(body);
+    } catch {
+      // O mailto abaixo ainda leva os dados para envio manual.
+    }
+
+    const mailto = `mailto:suporte@docqualis.com.br?subject=${encodeURIComponent(
+      `[${protocolo}] Recuperacao de e-mail de acesso`,
+    )}&body=${encodeURIComponent(body)}`;
+
+    setLoading(false);
+    setSuccess(`Solicitacao ${protocolo} gerada. Os dados foram preparados para envio ao suporte e copiados para a area de transferencia.`);
+    window.location.href = mailto;
+  };
+
   return (
     <div className="min-h-screen flex font-sans bg-white">
       
@@ -166,13 +238,13 @@ export default function LoginPage() {
         <div className="w-full max-w-[420px] animate-in fade-in slide-in-from-bottom-8 duration-700">
           
           <div className="mb-10 text-center lg:text-left">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Acessar Sistema</h2>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">{screenCopy[mode].title}</h2>
             <p className="text-sm font-medium text-slate-500">
-              Insira suas credenciais corporativas para entrar no seu ambiente (workspace).
+              {screenCopy[mode].description}
             </p>
           </div>
 
-          <form onSubmit={mode === "login" ? handleLogin : mode === "forgot" ? handleForgotPassword : handleUpdatePassword} className="space-y-5">
+          <form onSubmit={mode === "login" ? handleLogin : mode === "forgot" ? handleForgotPassword : mode === "reset" ? handleUpdatePassword : handleForgotEmail} className="space-y-5">
             {error && (
               <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-sm font-bold text-red-600 flex items-start gap-3 animate-in fade-in">
                 <AlertCircle className="w-5 h-5 shrink-0" />
@@ -188,7 +260,7 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-4">
-              {mode !== "reset" && (
+              {(mode === "login" || mode === "forgot") && (
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
                   E-mail Corporativo
@@ -229,6 +301,86 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
+              )}
+
+              {mode === "forgotEmail" && (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
+                      Nome completo
+                    </label>
+                    <div className="relative">
+                      <UserRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        value={emailHelp.nome}
+                        onChange={(e) => updateEmailHelp("nome", e.target.value)}
+                        placeholder="Seu nome completo"
+                        className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
+                      Empresa / workspace
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        value={emailHelp.empresa}
+                        onChange={(e) => updateEmailHelp("empresa", e.target.value)}
+                        placeholder="Ex: Hospital Santa Maria"
+                        className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <input
+                      type="text"
+                      value={emailHelp.documento}
+                      onChange={(e) => updateEmailHelp("documento", e.target.value)}
+                      placeholder="CPF ou matricula"
+                      className="h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition-all focus:border-[#2655e8] focus:bg-white focus:ring-4 focus:ring-[#2655e8]/10"
+                    />
+                    <input
+                      type="text"
+                      value={emailHelp.setor}
+                      onChange={(e) => updateEmailHelp("setor", e.target.value)}
+                      placeholder="Setor"
+                      className="h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition-all focus:border-[#2655e8] focus:bg-white focus:ring-4 focus:ring-[#2655e8]/10"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-1">
+                      Telefone / WhatsApp
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="tel"
+                        required
+                        value={emailHelp.telefone}
+                        onChange={(e) => updateEmailHelp("telefone", e.target.value)}
+                        placeholder="(00) 00000-0000"
+                        className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-[#2655e8] focus:ring-4 focus:ring-[#2655e8]/10 transition-all text-slate-900 placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={emailHelp.observacao}
+                    onChange={(e) => updateEmailHelp("observacao", e.target.value)}
+                    placeholder="Observacao para ajudar o administrador a localizar sua conta"
+                    rows={3}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none transition-all focus:border-[#2655e8] focus:bg-white focus:ring-4 focus:ring-[#2655e8]/10"
+                  />
+                </>
               )}
 
               {mode === "reset" && (
@@ -276,22 +428,33 @@ export default function LoginPage() {
                 loading ||
                 (mode === "login" && (!email || !password)) ||
                 (mode === "forgot" && !email) ||
-                (mode === "reset" && (!resetPassword || !resetPasswordConfirm))
+                (mode === "reset" && (!resetPassword || !resetPasswordConfirm)) ||
+                (mode === "forgotEmail" && (!emailHelp.nome || !emailHelp.empresa || !emailHelp.telefone))
               }
               className="w-full h-14 mt-4 bg-[#2655e8] text-white rounded-2xl text-sm font-bold shadow-lg shadow-[#2655e8]/30 hover:bg-[#1e40af] hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2 group"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  {mode === "forgot" ? "Enviando..." : mode === "reset" ? "Atualizando..." : "Autenticando..."}
+                  {mode === "forgot" || mode === "forgotEmail" ? "Enviando..." : mode === "reset" ? "Atualizando..." : "Autenticando..."}
                 </>
               ) : (
                 <>
-                  {mode === "forgot" ? "Enviar link de recuperacao" : mode === "reset" ? "Salvar nova senha" : "Entrar no Workspace"}
+                  {mode === "forgot" ? "Enviar link de recuperacao" : mode === "reset" ? "Salvar nova senha" : mode === "forgotEmail" ? "Solicitar localizacao da conta" : "Entrar no Workspace"}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
+
+            {(mode === "login" || mode === "forgot") && (
+              <button
+                type="button"
+                onClick={() => { setMode("forgotEmail"); setError(null); setSuccess(null); }}
+                className="w-full text-center text-xs font-bold text-[#2655e8] hover:underline"
+              >
+                Nao lembro meu e-mail
+              </button>
+            )}
 
             {mode !== "login" && (
               <button
