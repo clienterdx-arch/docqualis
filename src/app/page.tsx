@@ -640,6 +640,21 @@ export default function PainelExecutivoPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const carregarPainel = useCallback(async () => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const isAuthReturn =
+      params.has("error") ||
+      params.has("error_code") ||
+      params.get("type") === "recovery" ||
+      hash.has("error") ||
+      hash.has("error_code") ||
+      hash.get("type") === "recovery";
+
+    if (isAuthReturn) {
+      router.replace(`/login${window.location.search}${window.location.hash}`);
+      return;
+    }
+
     setIsLoading(true);
     setLoadError(null);
 

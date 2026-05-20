@@ -187,8 +187,10 @@ export default function ConfiguracoesPage() {
     }
 
     setEnviandoResetSenha(true);
+    const configuredUrl = process.env.NEXT_PUBLIC_PASSWORD_RESET_REDIRECT_URL || process.env.NEXT_PUBLIC_APP_URL;
+    const baseUrl = (configuredUrl || window.location.origin).replace(/\/$/, "");
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login?reset=1`,
+      redirectTo: `${baseUrl}/login?reset=1`,
     });
     setEnviandoResetSenha(false);
 

@@ -7,6 +7,12 @@ import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, Loader2, Building2, Phon
 
 type LoginMode = "login" | "forgot" | "reset" | "forgotEmail";
 
+function passwordRecoveryRedirectUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_PASSWORD_RESET_REDIRECT_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const baseUrl = (configuredUrl || window.location.origin).replace(/\/$/, "");
+  return `${baseUrl}/login?reset=1`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<LoginMode>("login");
@@ -48,6 +54,23 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const errorCode = params.get("error_code") || hash.get("error_code");
+    const errorDescription = params.get("error_description") || hash.get("error_description");
+
+    if (errorCode === "otp_expired") {
+      setMode("forgot");
+      setError("Esse link de redefinicao expirou ou ja foi usado. Informe seu e-mail para enviar um novo link.");
+      window.history.replaceState(null, "", "/login");
+      return;
+    }
+
+    if (errorCode) {
+      setMode("forgot");
+      setError(errorDescription || "Nao foi possivel validar o link de redefinicao. Solicite um novo link.");
+      window.history.replaceState(null, "", "/login");
+      return;
+    }
+
     if (params.get("reset") === "1" || params.get("type") === "recovery" || hash.get("type") === "recovery") {
       setMode("reset");
     }
@@ -88,7 +111,7 @@ export default function LoginPage() {
     setSuccess(null);
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/login?reset=1`,
+      redirectTo: passwordRecoveryRedirectUrl(),
     });
 
     setLoading(false);
